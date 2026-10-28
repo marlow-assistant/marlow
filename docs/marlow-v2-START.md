@@ -147,7 +147,8 @@ you finish something, mark it done there as well as here.
 - **Feature ideas:** `side-chats.md` is parked (Mike, 2026-10-12: not while
   the ideas panel is one tap away). `same-turn-store-validation.md` is parked
   (2026-10-19): a PostToolUse hook is proven to reach Marlow in the same turn,
-  but nothing is built.
+  but nothing is built. `readme-demo-clip.md` is a maybe (Mike, 2026-10-28):
+  a short clip of the transparency pane for the README.
 - **Deliberately not priorities:**
   - `nightly-consolidation.md` piece 3 (read `memory-file-shape.md` first);
   - `deferred-cron-review-findings.md` (don't self-assign);

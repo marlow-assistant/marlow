@@ -22,6 +22,13 @@ What it does:
 - **Asks before acting.** Anything outside what it is allowed to do on its
   own comes to your phone as a question you approve or decline.
 
+<p align="center">
+  <img src="docs/images/screenshot-chat.png" width="190" alt="A chat: Marlow compares three insurance quotes in a table">
+  <img src="docs/images/screenshot-approval.png" width="190" alt="An approval card: Marlow asks to edit a memory file, with Deny and Allow">
+  <img src="docs/images/screenshot-activity.png" width="190" alt="The Activity pane: what each run read, searched and changed">
+  <img src="docs/images/screenshot-settings.png" width="190" alt="Settings: appearance, effort, location sharing and voice">
+</p>
+
 It has three parts:
 
 - **A persistent server** (Python) on an always-on Linux box. Every request,
@@ -32,8 +39,18 @@ It has three parts:
 - **A web app** for Android, iPhone and desktop browsers, installable to the
   home screen, with push notifications.
 
-To set up your own, follow [`deploy/INSTALL.md`](deploy/INSTALL.md). Phones
-reach the box over [Tailscale](https://tailscale.com) by default.
+To set up your own, follow [`deploy/INSTALL.md`](deploy/INSTALL.md). You need:
+
+- an always-on machine running Ubuntu 24.04, with about 2 GB of RAM (an old
+  laptop, a mini PC or a small cloud VM);
+- a Claude Pro or Max subscription;
+- a free [Tailscale](https://tailscale.com) account, which is how your phone
+  reaches the box;
+- about 15 minutes.
+
+Marlow's use counts against your Claude plan, like your own use of Claude
+Code. Light everyday use, a morning briefing and some chat, makes almost no
+difference to a Pro plan.
 
 Marlow was written with Claude Code, and it uses the official `claude` CLI
 unmodified, under each user's own subscription and

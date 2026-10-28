@@ -71,6 +71,23 @@ export function pickVoice(
 const norm = (l: string) => l.replace("_", "-").toLowerCase();
 const isEnglish = (v: SpeechSynthesisVoice) => norm(v.lang).startsWith("en");
 
+const ACCENTS: Record<string, string> = {
+  gb: "British",
+  us: "American",
+  au: "Australian",
+  ca: "Canadian",
+  ie: "Irish",
+  in: "Indian",
+  nz: "New Zealand",
+  za: "South African",
+};
+
+/** Settings' label for an English voice's tag, "British" for en-GB: people
+ * know accents, not BCP 47 (Mike, 2026-10-28). */
+export function accentOf(lang: string): string {
+  return ACCENTS[norm(lang).split("-")[1] ?? ""] ?? "English";
+}
+
 function tier(v: SpeechSynthesisVoice): number {
   const id = `${v.voiceURI} ${v.name}`.toLowerCase();
   return id.includes("premium") ? 2 : id.includes("enhanced") ? 1 : 0;

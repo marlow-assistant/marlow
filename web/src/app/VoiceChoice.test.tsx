@@ -226,10 +226,13 @@ describe("Settings › Voice", () => {
       const rows = within(phonon).getAllByRole("radio");
       expect(rows).toHaveLength(25);
       expect(rows[0].textContent).toContain("Alfie");
-      expect(rows[0].textContent).toContain("British");
-      expect(within(phonon).getByRole("radio", { name: /Zoey/ }).textContent).toContain("American");
+      expect(rows[0].textContent).toContain("British (Phonon, HQ)");
+      expect(within(phonon).getByRole("radio", { name: /Zoey/ }).textContent).toContain("American (Phonon, HQ)");
       const device = within(group()).getByRole("group", { name: "This device" });
-      expect(within(device).getAllByRole("radio").map((r) => r.textContent)).toEqual([expect.stringContaining("Samantha")]);
+      expect(within(device).getAllByRole("radio").map((r) => r.textContent)).toEqual([
+        expect.stringContaining("Samantha"),
+      ]);
+      expect(within(device).getByRole("radio", { name: /Samantha/ }).textContent).toContain("American (Device voice)");
       expect(phonon.compareDocumentPosition(device) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BrowserSpeech, choosableVoices, pickVoice, previewVoice, voiceKey, type BrowserSpeechDeps } from "./browserSpeech";
+import { accentOf, BrowserSpeech, choosableVoices, pickVoice, previewVoice, voiceKey, type BrowserSpeechDeps } from "./browserSpeech";
 
 class FakeUtterance {
   voice: SpeechSynthesisVoice | null = null;
@@ -258,5 +258,16 @@ describe("previewVoice", () => {
     expect(synth.queue[0].voice?.name).toBe("Daniel");
     expect(synth.queue[0].lang).toBe("en-GB");
     expect(synth.queue[0].text.length).toBeGreaterThan(0);
+  });
+});
+
+describe("accentOf", () => {
+  it("names the accent from the voice's region, as a list label", () => {
+    expect(accentOf("en-GB")).toBe("British");
+    expect(accentOf("en_US")).toBe("American");
+    expect(accentOf("en-AU")).toBe("Australian");
+    expect(accentOf("en-IN")).toBe("Indian");
+    expect(accentOf("en")).toBe("English");
+    expect(accentOf("en-XX")).toBe("English");
   });
 });

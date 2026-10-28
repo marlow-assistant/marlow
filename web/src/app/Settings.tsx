@@ -13,7 +13,7 @@ import {
 import type { Face } from "../lib/faces";
 import type { LocationSharing, LocationStatus } from "../lib/location";
 import { capitalizedModelName } from "../lib/modelName";
-import { browserVoiceEngine, choosableVoices, previewVoice, voiceKey, type VoiceEngine } from "../lib/browserSpeech";
+import { accentOf, browserVoiceEngine, choosableVoices, previewVoice, voiceKey, type VoiceEngine } from "../lib/browserSpeech";
 import {
   loadPhonon,
   phononCanRun,
@@ -409,10 +409,13 @@ function VoiceSection({ engine }: { engine: VoiceEngine | null }) {
     : phonon && PHONON_VOICES.some((v) => phononVoiceKey(v.name) === chosen)
       ? chosen
       : null;
+  // Each row says what it is, "British (Phonon, HQ)", since the list is long
+  // and the group titles scroll away (Mike, 2026-10-28).
   const phononSecondary = (v: PhononVoice) => {
-    if (chosen !== phononVoiceKey(v.name) || load === null) return v.accent;
+    const label = `${v.accent} (Phonon, HQ)`;
+    if (chosen !== phononVoiceKey(v.name) || load === null) return label;
     if (load.state === "loading") return load.fraction === null ? "Loading…" : `Downloading ${Math.round(load.fraction * 100)}%`;
-    return load.state === "failed" ? "Couldn't download" : v.accent;
+    return load.state === "failed" ? "Couldn't download" : label;
   };
 
   return (
@@ -460,7 +463,7 @@ function VoiceSection({ engine }: { engine: VoiceEngine | null }) {
                 onClick={() => choose(v)}
               >
                 <span>{v.name}</span>
-                <span className="voice-option-lang">{v.lang}</span>
+                <span className="voice-option-lang">{accentOf(v.lang)} (Device voice)</span>
               </button>
             ))}
           </div>

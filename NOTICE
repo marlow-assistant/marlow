@@ -19,7 +19,8 @@ license as the rest of the project (Apache-2.0). It covers:
         app-*-maskable-512.png)
   - the web app icons, which are crops of face 1:
       web/public/icon-192.png, icon-512.png, icon-maskable-512.png
-  - marlow-icon-square.png (the original of face 1)
+  - marlow-icon-square.png (the original of face 1), and its README copy,
+      docs/images/marlow-portrait-400.jpg
 
 
 Third-party data

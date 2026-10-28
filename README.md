@@ -1,5 +1,7 @@
 # Marlow
 
+<img src="marlow-icon-square.png" alt="Marlow's portrait: a man in a dark Victorian coat with a glowing monocle, Big Ben behind him" width="200" align="right">
+
 Marlow is a personal assistant that runs on a machine you control and talks to
 you from your phone. It is built on Claude Code and runs under your own Claude
 subscription (Pro or Max); there is no API key and no service in between.

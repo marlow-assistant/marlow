@@ -197,9 +197,9 @@ fetch_failure_hint() {
     if [[ $auth == 1 && "$url" == https://* ]]; then
         echo "GitHub refused this box's token for $url."
         echo "Fine-grained tokens expire, so it has most likely lapsed or been revoked."
-        echo "Make a new read-only token for the repo (Contents: read), put it in"
-        echo "${MARLOW_USER:-the instance user}'s git credentials in place of the old one,"
-        echo "and run update.sh again. (GitHub gives the same answer for a wrong"
+        echo "Make a new read-only token for the repo (Contents: read), put it in place"
+        echo "of the old one in /home/${MARLOW_USER:-marlow}/.git-credentials, where install.sh"
+        echo "stored it, and run update.sh again. (GitHub gives the same answer for a wrong"
         echo "repo URL, so check origin's URL if the token is new.)"
     elif [[ $auth == 1 ]]; then
         echo "GitHub refused this box's deploy key for $url."

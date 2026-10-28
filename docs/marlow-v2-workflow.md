@@ -42,10 +42,10 @@ One consequence changes what you do:
 
 ## CI — OFF since 2026-08-11. The suite is local only.
 
-**Both workflows are `disabled_manually`** (confirmed 2026-08-16 via
-`gh api /repos/mikemason/marlow-server/actions/workflows` — `state` on each).
-The `ios` macOS job ran the account out of Actions minutes and `ci` was switched
-off alongside it. Nothing has run since 2026-08-11.
+**Both workflows stay `disabled_manually` until CI is turned back on** (check
+with `gh api /repos/marlow-assistant/marlow/actions/workflows` — `state` on
+each). The `ios` macOS job ran the account out of Actions minutes on
+2026-08-11 and `ci` was switched off alongside it.
 
 **What this means in practice, and the mistake to avoid:** a PR now shows **no
 checks at all**. `gh pr checks` says "no checks reported" and

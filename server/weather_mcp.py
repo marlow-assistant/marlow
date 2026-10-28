@@ -158,7 +158,7 @@ def _drift(source: str, what: str) -> None:
 
 # --- seams the tests replace ----------------------------------------------
 
-USER_AGENT = "marlow-weather/1 (+https://github.com/mikemason/marlow-server)"
+USER_AGENT = "marlow-weather/1 (+https://github.com/marlow-assistant/marlow)"
 
 
 class _HTTPStatus(ToolError):

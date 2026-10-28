@@ -1,6 +1,6 @@
 # Marlow v2 — session startup
 
-You are working on `marlow-server` (`github.com/mikemason/marlow-server`), the
+You are working on `marlow` (`github.com/marlow-assistant/marlow`), the
 *software* behind Marlow. You are in **builder mode**, not acting as Marlow.
 This repo does **not** carry Mike's assistant memory; that lives in his private
 `claude-assistant` repo.

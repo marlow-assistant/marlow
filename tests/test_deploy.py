@@ -979,6 +979,84 @@ def test_install_smoke_test_is_not_a_substring_match() -> None:
     assert "*ok*" not in install
 
 
+# --- install.sh over HTTPS (2026-10-28) ----------------------------------------
+#
+# A public repo clones with no key. While it is private, an invited box reads it
+# with a read-only fine-grained token its owner makes, kept by git's store
+# helper so update.sh's fetch needs nothing more. store_github_token runs here
+# against a throwaway HOME, with as_marlow as a plain call.
+
+FAKE_TOKEN = "github_pat_" + "A1b2C3d4E5" * 4
+
+
+def _store_token(home: Path, token: str):
+    fn = subprocess.run(
+        ["sed", "-n", "/^store_github_token()/,/^}/p", str(INSTALL)],
+        capture_output=True, text=True, check=True,
+    ).stdout
+    assert fn.strip(), "store_github_token not found in install.sh — did it get renamed?"
+    env = {**os.environ, "HOME": str(home), "GIT_CONFIG_NOSYSTEM": "1"}
+    return subprocess.run(
+        ["bash", "-c", f'as_marlow() {{ "$@"; }}\n{fn}\nstore_github_token "$1"', "_", token],
+        capture_output=True, text=True, env=env,
+    )
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git required")
+def test_install_keeps_the_token_where_git_fetches_find_it(tmp_path) -> None:
+    r = _store_token(tmp_path, FAKE_TOKEN)
+    assert r.returncode == 0, r.stderr
+    creds = tmp_path / ".git-credentials"
+    assert creds.read_text() == f"https://x-access-token:{FAKE_TOKEN}@github.com\n"
+    assert creds.stat().st_mode & 0o777 == 0o600
+    fill = subprocess.run(
+        ["git", "credential", "fill"],
+        input="protocol=https\nhost=github.com\npath=example-org/marlow.git\n\n",
+        capture_output=True, text=True, check=True,
+        env={**os.environ, "HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1",
+             "GIT_TERMINAL_PROMPT": "0"},
+    )
+    assert f"password={FAKE_TOKEN}" in fill.stdout
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git required")
+def test_install_replaces_an_old_token_rather_than_adding_one(tmp_path) -> None:
+    """The same call renews a lapsed token, so a second one must not sit
+    behind the first, which git would keep trying."""
+    _store_token(tmp_path, FAKE_TOKEN)
+    newer = "github_pat_" + "Z9y8X7w6V5" * 4
+    assert _store_token(tmp_path, newer).returncode == 0
+    assert (tmp_path / ".git-credentials").read_text() == (
+        f"https://x-access-token:{newer}@github.com\n")
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="git required")
+@pytest.mark.parametrize("token", [
+    "",
+    "not a token",
+    "ghp_short",
+    # git's credential protocol is line-based: a newline is a second field.
+    FAKE_TOKEN + "\nhost=evil.example",
+])
+def test_install_refuses_a_token_that_is_not_plain(tmp_path, token) -> None:
+    r = _store_token(tmp_path, token)
+    assert r.returncode != 0
+    assert not (tmp_path / ".git-credentials").exists()
+
+
+def test_install_clones_the_new_repo_over_https_by_default() -> None:
+    install = INSTALL.read_text()
+    assert 'REPO_URL="https://github.com/marlow-assistant/marlow.git"' in install
+    # An anonymous probe of a private repo must fail, not stop at a Username
+    # prompt that reads as the installer's own question.
+    probes = [l for l in install.splitlines() if "git ls-remote" in l]
+    assert probes and all("GIT_TERMINAL_PROMPT=0" in l for l in probes), probes
+    # Read without echo, and never put into a URL, where .git/config and every
+    # git error would show it.
+    assert "read -r -s" in install
+    assert "x-access-token:" not in install.replace("username=x-access-token", "")
+
+
 # --- the web client build step (deploy/build-web.sh, called by update.sh) -----
 #
 # update.sh itself needs root and sudo, so the step lives in build-web.sh and is
@@ -1653,6 +1731,7 @@ def test_fetch_hint_names_an_expired_token_over_https(stderr) -> None:
     hint = _fetch_hint(HTTPS, stderr)
     assert "token" in hint
     assert "new" in hint and "read-only" in hint
+    assert ".git-credentials" in hint, "where install.sh put the token"
     assert "Nothing on this box has changed" in hint
 
 

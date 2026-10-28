@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { HttpError, type Api } from "../lib/api";
 import type { Effort } from "../lib/chatStore";
 import {
@@ -10,7 +10,7 @@ import {
   isClockTime,
   type DayTimes,
 } from "../lib/dayFormat";
-import type { Face } from "../lib/faces";
+import { faceLabel, type Face } from "../lib/faces";
 import type { LocationSharing, LocationStatus } from "../lib/location";
 import { capitalizedModelName } from "../lib/modelName";
 import { accentOf, browserVoiceEngine, choosableVoices, previewVoice, voiceKey, type VoiceEngine } from "../lib/browserSpeech";
@@ -30,7 +30,7 @@ import {
 } from "../lib/phononVoices";
 import { KV_TEXT_SIZE, KV_VOICE, kvDelete, kvGet, kvSet } from "../lib/storage";
 import { applyTextSize, currentTextSize, TEXT_SIZES } from "../lib/textSize";
-import { FaceGrid } from "./Face";
+import { FaceGrid, FaceImage } from "./Face";
 import { enablePush, usePushState } from "./push";
 import type { WhatsNewModel } from "./useWhatsNew";
 import { ChangeRow } from "./WhatsNew";
@@ -105,15 +105,7 @@ export function Settings(p: SettingsProps) {
           </dl>
         </section>
 
-        {/* Shown large, as the avatar's own crop: monocle against glasses is
-            part of the choice, and at the header's 52px it is hard to see.
-            iOS puts this one level down (Settings > Appearance); a sheet here has
-            the room to show the grid inline. No icon footer: a web app's
-            home-screen icon is fixed by its manifest. */}
-        <section className="settings-section" aria-label="Marlow">
-          <h3 className="view-day">Marlow</h3>
-          <FaceGrid face={p.face} onFace={p.onFace} />
-        </section>
+        <FaceSection face={p.face} onFace={p.onFace} />
 
         <TextSizeSection />
 
@@ -227,6 +219,55 @@ export function Settings(p: SettingsProps) {
   );
 }
 
+/** A row naming the current choice that opens its picker in place, as iOS
+ * puts a picker one level down. Inline, the face grid and the voice list
+ * each took a screen of scrolling (Mike, 2026-10-28). */
+function Disclosure(p: { label: string; value: ReactNode; open: boolean; onToggle: () => void; children: ReactNode }) {
+  return (
+    <div className="settings-group">
+      <button type="button" className="settings-disclosure" aria-expanded={p.open} onClick={p.onToggle}>
+        <span>{p.label}</span>
+        <span className="settings-disclosure-value">{p.value}</span>
+      </button>
+      {p.open && p.children}
+    </div>
+  );
+}
+
+/** Shown large, as the avatar's own crop: monocle against glasses is part of
+ * the choice, and at the header's 52px it is hard to see. A pick closes it,
+ * being the whole errand. No icon footer: a web app's home-screen icon is
+ * fixed by its manifest. */
+function FaceSection({ face, onFace }: { face: Face; onFace: (f: Face) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="settings-section" aria-label="Marlow">
+      <h3 className="view-day">Marlow</h3>
+      <Disclosure
+        label="Appearance"
+        value={
+          <>
+            <span className="face-circle face-circle-small">
+              <FaceImage face={face} size={28} crop="large" />
+            </span>
+            {faceLabel(face)}
+          </>
+        }
+        open={open}
+        onToggle={() => setOpen((o) => !o)}
+      >
+        <FaceGrid
+          face={face}
+          onFace={(f) => {
+            onFace(f);
+            setOpen(false);
+          }}
+        />
+      </Disclosure>
+    </section>
+  );
+}
+
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="settings-row">
@@ -299,6 +340,7 @@ function VoiceSection({ engine }: { engine: VoiceEngine | null }) {
   // A tap before the stored choice has loaded wins over it.
   const tapped = useRef(false);
   const phonon = useMemo(() => phononCanRun(), []);
+  const [open, setOpen] = useState(false);
   // The preview's PhononSpeech, made in the first Phonon tap: the tap is when
   // the AudioContext has to be made for iOS (PhononSpeech.unlock).
   const speech = useRef<PhononSpeech | null>(null);
@@ -418,57 +460,67 @@ function VoiceSection({ engine }: { engine: VoiceEngine | null }) {
     return load.state === "failed" ? "Couldn't download" : label;
   };
 
+  // The list stays open after a pick, so voices can be heard one after another.
+  const device = voices.find((v) => voiceKey(v) === current);
+  const phononChoice = PHONON_VOICES.find((v) => phononVoiceKey(v.name) === current);
+  const automatic = phonon && usesPhonon(chosen) ? `Phonon, ${phononVoiceFor(null).name}` : "Device voice";
+  const summary = device
+    ? `${device.name}, ${accentOf(device.lang)} (Device voice)`
+    : phononChoice
+      ? `${phononChoice.name}, ${phononChoice.accent} (Phonon, HQ)`
+      : `Automatic (${automatic})`;
+
   return (
     <section className="settings-section" aria-label="Voice">
       <h3 className="view-day">Voice</h3>
-      <div className="settings-group" role="radiogroup" aria-label="Voice">
-        <button type="button" role="radio" aria-checked={current === null} className="voice-option" onClick={() => choose(null)}>
-          <span>Automatic</span>
-          <span className="voice-option-lang">
-            {phonon && usesPhonon(chosen) ? `Phonon, ${phononVoiceFor(null).name}` : "Device voice"}
-          </span>
-        </button>
-        {phonon && (
-          <div role="group" aria-label="Phonon">
-            <p className="voice-group-title" aria-hidden="true">
-              Phonon
-            </p>
-            {PHONON_VOICES.map((v) => (
-              <button
-                key={v.id}
-                type="button"
-                role="radio"
-                aria-checked={current === phononVoiceKey(v.name)}
-                className="voice-option"
-                onClick={() => choose(v)}
-              >
-                <span>{v.name}</span>
-                <span className="voice-option-lang">{phononSecondary(v)}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        {voices.length > 0 && (
-          <div role="group" aria-label="This device">
-            <p className="voice-group-title" aria-hidden="true">
-              This device
-            </p>
-            {voices.map((v) => (
-              <button
-                key={voiceKey(v)}
-                type="button"
-                role="radio"
-                aria-checked={current === voiceKey(v)}
-                className="voice-option"
-                onClick={() => choose(v)}
-              >
-                <span>{v.name}</span>
-                <span className="voice-option-lang">{accentOf(v.lang)} (Device voice)</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <Disclosure label="Voice" value={summary} open={open} onToggle={() => setOpen((o) => !o)}>
+        <div role="radiogroup" aria-label="Voice">
+          <button type="button" role="radio" aria-checked={current === null} className="voice-option" onClick={() => choose(null)}>
+            <span>Automatic</span>
+            <span className="voice-option-lang">{automatic}</span>
+          </button>
+          {phonon && (
+            <div role="group" aria-label="Phonon">
+              <p className="voice-group-title" aria-hidden="true">
+                Phonon
+              </p>
+              {PHONON_VOICES.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={current === phononVoiceKey(v.name)}
+                  className="voice-option"
+                  onClick={() => choose(v)}
+                >
+                  <span>{v.name}</span>
+                  <span className="voice-option-lang">{phononSecondary(v)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {voices.length > 0 && (
+            <div role="group" aria-label="This device">
+              <p className="voice-group-title" aria-hidden="true">
+                This device
+              </p>
+              {voices.map((v) => (
+                <button
+                  key={voiceKey(v)}
+                  type="button"
+                  role="radio"
+                  aria-checked={current === voiceKey(v)}
+                  className="voice-option"
+                  onClick={() => choose(v)}
+                >
+                  <span>{v.name}</span>
+                  <span className="voice-option-lang">{accentOf(v.lang)} (Device voice)</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Disclosure>
       <p className="settings-footer">
         {phonon
           ? "Phonon voices are made on this device; the others are the browser's own."

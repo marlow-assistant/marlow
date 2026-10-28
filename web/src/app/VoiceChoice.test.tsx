@@ -152,7 +152,14 @@ function open(engine: VoiceEngine | null = { synth: synth as unknown as VoiceEng
   );
 }
 
-const group = () => screen.getByRole("radiogroup", { name: "Voice" });
+/** The list, opened from its row if it is closed. */
+const group = () => {
+  const list = screen.queryByRole("radiogroup", { name: "Voice" });
+  if (list) return list;
+  fireEvent.click(voiceRow());
+  return screen.getByRole("radiogroup", { name: "Voice" });
+};
+const voiceRow = () => screen.getByRole("button", { name: /^Voice/ });
 
 describe("Settings › Voice", () => {
   it("lists the English voices, not the novelty ones, under Automatic", () => {
@@ -190,9 +197,35 @@ describe("Settings › Voice", () => {
 
   it("fills in when the engine's list arrives late, as Android Chrome's does", () => {
     open();
-    expect(screen.queryByRole("radiogroup", { name: "Voice" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Voice" })).toBeNull();
     act(() => synth.voicesChanged([voice("Daniel", "en-GB")]));
     expect(within(group()).getByRole("radio", { name: /Daniel/ })).toBeTruthy();
+  });
+
+  it("is one row naming the choice until tapped, and stays open for the next tap", async () => {
+    phononCanRun();
+    synth.voices = [voice("Daniel", "en-GB")];
+    load.mockResolvedValue(new FakeEngine());
+    await kvSet(KV_VOICE, "phonon:Zoey");
+    open();
+    await waitFor(() => expect(voiceRow().textContent).toContain("Zoey, American (Phonon, HQ)"));
+    expect(voiceRow().getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("radiogroup", { name: "Voice" })).toBeNull();
+
+    fireEvent.click(voiceRow());
+    expect(voiceRow().getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(within(group()).getByRole("radio", { name: /Daniel/ }));
+    expect(screen.getByRole("radiogroup", { name: "Voice" })).toBeTruthy();
+    expect(voiceRow().textContent).toContain("Daniel, British (Device voice)");
+
+    fireEvent.click(voiceRow());
+    expect(screen.queryByRole("radiogroup", { name: "Voice" })).toBeNull();
+  });
+
+  it("names Automatic on the row when nothing is chosen", () => {
+    phononCanRun();
+    open();
+    expect(voiceRow().textContent).toContain("Automatic (Phonon, Alfie)");
   });
 
   it("is left out where the browser can't speak", () => {

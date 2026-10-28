@@ -1682,6 +1682,52 @@ button {
   color: var(--red);
 }
 
+/* A row naming the current choice; tapped, its picker opens below it. */
+.settings-disclosure {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.settings-disclosure-value {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-2);
+  text-align: right;
+}
+
+.settings-disclosure::after {
+  content: "›";
+  color: var(--text-2);
+  transition: transform 0.15s;
+}
+
+.settings-disclosure[aria-expanded="true"]::after {
+  transform: rotate(90deg);
+}
+
+.settings-disclosure + * {
+  border-top: 1px solid var(--bg-3);
+}
+
+.face-circle.face-circle-small {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  box-shadow: 0 0 0 0.5px rgba(128, 128, 128, 0.4);
+}
+
 /* Settings › Voice: one row per voice, a check on the chosen one. */
 .voice-option {
   display: flex;

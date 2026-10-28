@@ -36,8 +36,9 @@ def _assert_security_headers(resp):
 
 def test_csp_is_the_documented_policy():
     assert CONTENT_SECURITY_POLICY == (
-        "default-src 'self'; script-src 'self'; style-src 'self'; "
-        "img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; "
+        "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; "
+        "img-src 'self' blob: data:; "
+        "connect-src 'self' https://huggingface.co https://*.hf.co; object-src 'none'; "
         "base-uri 'none'; frame-ancestors 'none'"
     )
 

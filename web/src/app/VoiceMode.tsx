@@ -4,6 +4,8 @@ import { BrowserSpeech } from "../lib/browserSpeech";
 import type { ChatStore } from "../lib/chatStore";
 import { VoiceDictation } from "../lib/dictation";
 import { Microphone } from "../lib/segmentRecorder";
+import { loadPhonon, PhononSpeech, usesPhonon } from "../lib/phononSpeech";
+import { isPhononKey, phononVoiceFor } from "../lib/phononVoices";
 import { KV_VOICE, kvGet } from "../lib/storage";
 import { VoiceDebugLog } from "../lib/voiceDebug";
 import { VoiceModeController, type VoicePhase } from "../lib/voiceMode";
@@ -31,7 +33,9 @@ export function VoiceMode({ store, api, onClose }: { store: ChatStore; api: Api;
   const [controller, setController] = useState<VoiceModeController | null>(null);
   // Outlives a StrictMode remount on purpose: it holds only timings.
   const debugLog = useRef(new VoiceDebugLog());
-  const speechRef = useRef<BrowserSpeech | null>(null);
+  const speechRef = useRef<PhononSpeech | null>(null);
+  // The download's progress, 0 to 1, while there is one to show.
+  const [download, setDownload] = useState<number | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const state = useChatState(store);
 
@@ -40,14 +44,30 @@ export function VoiceMode({ store, api, onClose }: { store: ChatStore; api: Api;
     // once and nothing from before it.
     const microphone = new Microphone();
     const log = debugLog.current;
-    const speech = new BrowserSpeech();
+    const browser = new BrowserSpeech();
+    const speech = new PhononSpeech({
+      fallback: browser,
+      load: loadPhonon,
+      makeContext: () => new AudioContext(),
+      now: () => performance.now(),
+    });
     speechRef.current = speech;
     speech.onSpeak = () => log.latest?.spoke();
+    speech.onSynthesized = (ms, seconds) => log.latest?.synthesized(ms, seconds);
+    speech.onLoad = (status) => setDownload(status.state === "loading" ? status.fraction : null);
     // The voice picked in Settings. Read long before the first reply, which
-    // needs a press, a recording and a turn first.
+    // needs a press, a recording and a turn first. Phonon is only started,
+    // and its model only fetched, for someone who reads with it; until then,
+    // and for everyone else, replies are the browser's voice.
     void kvGet<string>(KV_VOICE)
-      .then((v) => speech.setChosenVoice(v ?? null))
-      .catch(() => {});
+      .catch(() => null)
+      .then((v) => {
+        const stored = v ?? null;
+        // A Phonon voice is no voiceURI; the browser's voice stays its default.
+        if (!isPhononKey(stored)) browser.setChosenVoice(stored);
+        speech.setVoice(phononVoiceFor(stored).name);
+        if (usesPhonon(stored)) speech.start();
+      });
     const recorder = new VoiceDictation(
       api,
       microphone,
@@ -162,10 +182,18 @@ export function VoiceMode({ store, api, onClose }: { store: ChatStore; api: Api;
           </span>
           {phase === "recording" && <LevelMeter level={level} />}
         </button>
-        {error && (
+        {error ? (
           <p className="voice-notice" role="status">
             {error}
           </p>
+        ) : (
+          // Quiet, and only while there is a download to show. Nothing when it
+          // fails: the debug report says why (it reads in the browser's voice).
+          download !== null && (
+            <p className="voice-notice" role="status">
+              Downloading Marlow's voice… {Math.round(download * 100)}%
+            </p>
+          )
         )}
       </div>
       {/* For a user to paste back to whoever looks after their box: cuts,

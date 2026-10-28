@@ -20,9 +20,16 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # One constant so the one edit the task doc anticipates (`'unsafe-inline'` on
 # style-src, if React style props turn out to need it) is one line.
+# Voice mode's Phonon voice (phonon-tts, 2026-10-28): 'wasm-unsafe-eval' is what
+# compiling its WebAssembly needs (not JS eval); huggingface.co serves the model
+# lookup and the small files; the large ones redirect to a CDN under hf.co, which
+# was us.aws.cdn.hf.co from one machine and has been cas-bridge.xethub.hf.co,
+# so the region and bridge host are not pinned. The worker and .wasm are
+# same-origin files under 'self'.
 CONTENT_SECURITY_POLICY = (
-    "default-src 'self'; script-src 'self'; style-src 'self'; "
-    "img-src 'self' blob: data:; connect-src 'self'; object-src 'none'; "
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; "
+    "img-src 'self' blob: data:; "
+    "connect-src 'self' https://huggingface.co https://*.hf.co; object-src 'none'; "
     "base-uri 'none'; frame-ancestors 'none'"
 )
 

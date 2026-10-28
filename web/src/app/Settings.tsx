@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { HttpError, type Api } from "../lib/api";
 import type { Effort } from "../lib/chatStore";
 import {
@@ -10,13 +10,27 @@ import {
   isClockTime,
   type DayTimes,
 } from "../lib/dayFormat";
-import type { Face } from "../lib/faces";
+import { faceLabel, type Face } from "../lib/faces";
 import type { LocationSharing, LocationStatus } from "../lib/location";
 import { capitalizedModelName } from "../lib/modelName";
-import { browserVoiceEngine, choosableVoices, previewVoice, voiceKey, type VoiceEngine } from "../lib/browserSpeech";
+import { accentOf, browserVoiceEngine, choosableVoices, previewVoice, voiceKey, type VoiceEngine } from "../lib/browserSpeech";
+import {
+  loadPhonon,
+  phononCanRun,
+  PhononSpeech,
+  usesPhonon,
+  type LoadStatus,
+  type SpeechFallback,
+} from "../lib/phononSpeech";
+import {
+  PHONON_VOICES,
+  phononVoiceFor,
+  phononVoiceKey,
+  type PhononVoice,
+} from "../lib/phononVoices";
 import { KV_TEXT_SIZE, KV_VOICE, kvDelete, kvGet, kvSet } from "../lib/storage";
 import { applyTextSize, currentTextSize, TEXT_SIZES } from "../lib/textSize";
-import { FaceGrid } from "./Face";
+import { FaceGrid, FaceImage } from "./Face";
 import { enablePush, usePushState } from "./push";
 import type { WhatsNewModel } from "./useWhatsNew";
 import { ChangeRow } from "./WhatsNew";
@@ -91,15 +105,7 @@ export function Settings(p: SettingsProps) {
           </dl>
         </section>
 
-        {/* Shown large, as the avatar's own crop: monocle against glasses is
-            part of the choice, and at the header's 52px it is hard to see.
-            iOS puts this one level down (Settings > Appearance); a sheet here has
-            the room to show the grid inline. No icon footer: a web app's
-            home-screen icon is fixed by its manifest. */}
-        <section className="settings-section" aria-label="Marlow">
-          <h3 className="view-day">Marlow</h3>
-          <FaceGrid face={p.face} onFace={p.onFace} />
-        </section>
+        <FaceSection face={p.face} onFace={p.onFace} />
 
         <TextSizeSection />
 
@@ -213,6 +219,55 @@ export function Settings(p: SettingsProps) {
   );
 }
 
+/** A row naming the current choice that opens its picker in place, as iOS
+ * puts a picker one level down. Inline, the face grid and the voice list
+ * each took a screen of scrolling (Mike, 2026-10-28). */
+function Disclosure(p: { label: string; value: ReactNode; open: boolean; onToggle: () => void; children: ReactNode }) {
+  return (
+    <div className="settings-group">
+      <button type="button" className="settings-disclosure" aria-expanded={p.open} onClick={p.onToggle}>
+        <span>{p.label}</span>
+        <span className="settings-disclosure-value">{p.value}</span>
+      </button>
+      {p.open && p.children}
+    </div>
+  );
+}
+
+/** Shown large, as the avatar's own crop: monocle against glasses is part of
+ * the choice, and at the header's 52px it is hard to see. A pick closes it,
+ * being the whole errand. No icon footer: a web app's home-screen icon is
+ * fixed by its manifest. */
+function FaceSection({ face, onFace }: { face: Face; onFace: (f: Face) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="settings-section" aria-label="Marlow">
+      <h3 className="view-day">Marlow</h3>
+      <Disclosure
+        label="Appearance"
+        value={
+          <>
+            <span className="face-circle face-circle-small">
+              <FaceImage face={face} size={28} crop="large" />
+            </span>
+            {faceLabel(face)}
+          </>
+        }
+        open={open}
+        onToggle={() => setOpen((o) => !o)}
+      >
+        <FaceGrid
+          face={face}
+          onFace={(f) => {
+            onFace(f);
+            setOpen(false);
+          }}
+        />
+      </Disclosure>
+    </section>
+  );
+}
+
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="settings-row">
@@ -254,19 +309,45 @@ function TextSizeSection() {
   );
 }
 
-/** Voice mode's reading voice, from the browser's own voices. The native app
- * has its own picker, over Phonon's neural voices
- * (docs/tasks/voice-mode-tts-engines.md); a browser can't run Phonon, so this
- * one lists `speechSynthesis` voices instead. On iOS Safari those are only the
- * basic built-in voices, all of which sounded bad to Mike (2026-10-25): this
- * picks the least bad there. On Android it is Google's voices. Kept on this
- * device only, like text size: the voices are this device's. Hidden until the
- * engine lists any, which on Android Chrome is seconds after load. */
+const PREVIEW_TEXT = "Hi, this is how I'll sound in voice mode.";
+
+/** Settings previews Phonon's voices only, so PhononSpeech's browser-voice
+ * fallback is never wanted: a preview is spoken once the model is ready. */
+const NO_BROWSER_VOICE: SpeechFallback = {
+  onUtteranceFinished: null,
+  onSpeak: null,
+  voiceName: "",
+  englishVoices: "",
+  speak() {},
+  stopSpeaking() {},
+  unlock() {},
+  close() {},
+};
+
+/** Voice mode's reading voice: Automatic, which is Phonon's Alfie wherever it
+ * can run (Mike, 2026-10-28), one of Phonon's 25 voices, or one of the
+ * browser's own `speechSynthesis` voices. Phonon is the default because the
+ * built-in voices sounded bad on an iPhone (Mike, 2026-10-25) and on Android
+ * (the Android user, 2026-10-28). Choosing a Phonon voice previews it, which
+ * starts the 65 MB model download if this is the first use; Automatic isn't
+ * previewed, so nothing downloads for someone who only looks. Kept on this
+ * device only, like text size: the voices are this device's. The device voices
+ * are hidden until the engine lists any, which on Android Chrome is seconds
+ * after load; where Phonon can run, its voices keep the section up. */
 function VoiceSection({ engine }: { engine: VoiceEngine | null }) {
   const [voices, setVoices] = useState(() => (engine ? choosableVoices(engine.synth.getVoices()) : []));
   const [chosen, setChosen] = useState<string | null>(null);
   // A tap before the stored choice has loaded wins over it.
   const tapped = useRef(false);
+  const phonon = useMemo(() => phononCanRun(), []);
+  const [open, setOpen] = useState(false);
+  // The preview's PhononSpeech, made in the first Phonon tap: the tap is when
+  // the AudioContext has to be made for iOS (PhononSpeech.unlock).
+  const speech = useRef<PhononSpeech | null>(null);
+  const ready = useRef(false);
+  // A preview waiting for the model to finish downloading.
+  const waiting = useRef(false);
+  const [load, setLoad] = useState<LoadStatus | null>(null);
 
   useEffect(() => {
     if (!engine) return;
@@ -288,47 +369,163 @@ function VoiceSection({ engine }: { engine: VoiceEngine | null }) {
     };
   }, []);
 
-  if (!engine || voices.length === 0) return null;
+  // Safari caps the AudioContexts a page holds.
+  useEffect(
+    () => () => {
+      speech.current?.close();
+      speech.current = null;
+    },
+    [],
+  );
 
-  const choose = (voice: SpeechSynthesisVoice | null) => {
-    tapped.current = true;
-    setChosen(voice ? voiceKey(voice) : null);
-    if (voice) {
-      previewVoice(engine, voice);
-      void kvSet(KV_VOICE, voiceKey(voice)).catch(() => {});
+  if (voices.length === 0 && !phonon) return null;
+
+  const stopPreviews = () => {
+    waiting.current = false;
+    speech.current?.stopSpeaking();
+    engine?.synth.cancel();
+  };
+
+  const previewPhonon = (voice: PhononVoice) => {
+    let s = speech.current;
+    if (!s) {
+      s = new PhononSpeech({
+        fallback: NO_BROWSER_VOICE,
+        load: loadPhonon,
+        makeContext: () => new AudioContext(),
+        now: () => performance.now(),
+      });
+      const mine = s;
+      mine.onLoad = (status) => {
+        setLoad(status);
+        if (status.state === "ready") {
+          ready.current = true;
+          if (waiting.current) {
+            waiting.current = false;
+            mine.speak(PREVIEW_TEXT);
+          }
+        } else if (status.state === "failed") {
+          // The next tap starts a fresh try.
+          mine.close();
+          speech.current = null;
+          waiting.current = false;
+        }
+      };
+      speech.current = s;
+    }
+    stopPreviews();
+    s.setVoice(voice.name);
+    s.unlock();
+    if (ready.current) {
+      s.speak(PREVIEW_TEXT);
     } else {
-      engine.synth.cancel();
+      waiting.current = true;
+      s.start();
+    }
+  };
+
+  const choose = (voice: SpeechSynthesisVoice | PhononVoice | null) => {
+    tapped.current = true;
+    if (voice === null) {
+      stopPreviews();
+      setChosen(null);
       void kvDelete(KV_VOICE).catch(() => {});
+    } else if ("accent" in voice) {
+      setChosen(phononVoiceKey(voice.name));
+      void kvSet(KV_VOICE, phononVoiceKey(voice.name)).catch(() => {});
+      previewPhonon(voice);
+    } else {
+      setChosen(voiceKey(voice));
+      void kvSet(KV_VOICE, voiceKey(voice)).catch(() => {});
+      speech.current?.stopSpeaking();
+      waiting.current = false;
+      if (engine) previewVoice(engine, voice);
     }
   };
   // A stored voice since uninstalled reads as Automatic, which is what
-  // pickVoice falls back to.
-  const current = voices.some((v) => voiceKey(v) === chosen) ? chosen : null;
+  // pickVoice falls back to. Voice mode still counts it a device voice, so
+  // Automatic says so rather than claim Phonon. A Phonon name since dropped
+  // from the list is Alfie, as it is in voice mode.
+  const current = voices.some((v) => voiceKey(v) === chosen)
+    ? chosen
+    : phonon && PHONON_VOICES.some((v) => phononVoiceKey(v.name) === chosen)
+      ? chosen
+      : null;
+  // Each row says what it is, "British (Phonon, HQ)", since the list is long
+  // and the group titles scroll away (Mike, 2026-10-28).
+  const phononSecondary = (v: PhononVoice) => {
+    const label = `${v.accent} (Phonon, HQ)`;
+    if (chosen !== phononVoiceKey(v.name) || load === null) return label;
+    if (load.state === "loading") return load.fraction === null ? "Loading…" : `Downloading ${Math.round(load.fraction * 100)}%`;
+    return load.state === "failed" ? "Couldn't download" : label;
+  };
+
+  // The list stays open after a pick, so voices can be heard one after another.
+  const device = voices.find((v) => voiceKey(v) === current);
+  const phononChoice = PHONON_VOICES.find((v) => phononVoiceKey(v.name) === current);
+  const automatic = phonon && usesPhonon(chosen) ? `Phonon, ${phononVoiceFor(null).name}` : "Device voice";
+  const summary = device
+    ? `${device.name}, ${accentOf(device.lang)} (Device voice)`
+    : phononChoice
+      ? `${phononChoice.name}, ${phononChoice.accent} (Phonon, HQ)`
+      : `Automatic (${automatic})`;
 
   return (
     <section className="settings-section" aria-label="Voice">
       <h3 className="view-day">Voice</h3>
-      <div className="settings-group" role="radiogroup" aria-label="Voice">
-        <button type="button" role="radio" aria-checked={current === null} className="voice-option" onClick={() => choose(null)}>
-          <span>Automatic</span>
-          <span className="voice-option-lang" />
-        </button>
-        {voices.map((v) => (
-          <button
-            key={voiceKey(v)}
-            type="button"
-            role="radio"
-            aria-checked={current === voiceKey(v)}
-            className="voice-option"
-            onClick={() => choose(v)}
-          >
-            <span>{v.name}</span>
-            <span className="voice-option-lang">{v.lang}</span>
+      <Disclosure label="Voice" value={summary} open={open} onToggle={() => setOpen((o) => !o)}>
+        <div role="radiogroup" aria-label="Voice">
+          <button type="button" role="radio" aria-checked={current === null} className="voice-option" onClick={() => choose(null)}>
+            <span>Automatic</span>
+            <span className="voice-option-lang">{automatic}</span>
           </button>
-        ))}
-      </div>
+          {phonon && (
+            <div role="group" aria-label="Phonon">
+              <p className="voice-group-title" aria-hidden="true">
+                Phonon
+              </p>
+              {PHONON_VOICES.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={current === phononVoiceKey(v.name)}
+                  className="voice-option"
+                  onClick={() => choose(v)}
+                >
+                  <span>{v.name}</span>
+                  <span className="voice-option-lang">{phononSecondary(v)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {voices.length > 0 && (
+            <div role="group" aria-label="This device">
+              <p className="voice-group-title" aria-hidden="true">
+                This device
+              </p>
+              {voices.map((v) => (
+                <button
+                  key={voiceKey(v)}
+                  type="button"
+                  role="radio"
+                  aria-checked={current === voiceKey(v)}
+                  className="voice-option"
+                  onClick={() => choose(v)}
+                >
+                  <span>{v.name}</span>
+                  <span className="voice-option-lang">{accentOf(v.lang)} (Device voice)</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </Disclosure>
       <p className="settings-footer">
-How voice mode reads replies on this device. Tap a voice to hear it.</p>
+        {phonon
+          ? "Phonon voices are made on this device; the others are the browser's own."
+          : "How voice mode reads replies on this device. Tap a voice to hear it."}
+      </p>
     </section>
   );
 }

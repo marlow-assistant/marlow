@@ -206,6 +206,12 @@ describe("settings", () => {
 
   it("Face: every face is offered, the current one is checked, a tap calls onFace", () => {
     const { props } = settings({ face: FACES[3] });
+    // One row until asked: the grid took a screen of its own (Mike, 2026-10-28).
+    const row = screen.getByRole("button", { name: /^Appearance/ });
+    expect(row.textContent).toContain("Face 4, glasses");
+    expect(screen.queryByRole("radiogroup", { name: "Appearance" })).toBeNull();
+    fireEvent.click(row);
+    expect(row.getAttribute("aria-expanded")).toBe("true");
     const group = screen.getByRole("radiogroup", { name: "Appearance" });
     expect(within(group).getAllByRole("radio")).toHaveLength(FACES.length);
     expect(within(group).getByRole("radio", { name: "Face 4, glasses" }).getAttribute("aria-checked")).toBe("true");
@@ -214,6 +220,7 @@ describe("settings", () => {
     expect(tile.style.transform).toBe(`scale(${FACES[3].large.zoom})`);
     fireEvent.click(within(group).getByRole("radio", { name: "Face 9, monocle" }));
     expect(props.onFace).toHaveBeenCalledWith(FACES[8]);
+    expect(screen.queryByRole("radiogroup", { name: "Appearance" })).toBeNull();
   });
 
   it("Location footer says so when the browser has blocked it, or has no location at all", () => {

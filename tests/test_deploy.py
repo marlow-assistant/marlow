@@ -979,6 +979,21 @@ def test_install_smoke_test_is_not_a_substring_match() -> None:
     assert "*ok*" not in install
 
 
+# --- install.sh over HTTPS (2026-10-28) ----------------------------------------
+#
+# The repository is public, so a box clones it over HTTPS with no key or token.
+
+def test_install_clones_the_public_repo_over_https_by_default() -> None:
+    install = INSTALL.read_text()
+    assert 'REPO_URL="https://github.com/marlow-assistant/marlow.git"' in install
+    # A wrong URL makes GitHub ask for credentials; git must fail rather than
+    # stop at a Username prompt that reads as the installer's own question.
+    calls = [l for l in install.splitlines()
+             if ("git ls-remote" in l or "git clone" in l) and not l.lstrip().startswith("#")]
+    assert any("git clone" in l for l in calls), "the clone line moved"
+    assert all("GIT_TERMINAL_PROMPT=0" in l for l in calls), calls
+
+
 # --- the web client build step (deploy/build-web.sh, called by update.sh) -----
 #
 # update.sh itself needs root and sudo, so the step lives in build-web.sh and is
@@ -1610,10 +1625,10 @@ def test_the_speech_model_goes_to_the_units_data_dir() -> None:
 
 # --- update.sh's fetch failure (2026-10-28) ----------------------------------
 #
-# An invited box fetches over HTTPS with a fine-grained token, and those
-# expire. git's own error for that ("could not read Username", "Repository not
-# found") reads like a network blip or a moved repo, so the box owner retries
-# and gets nowhere. The hint names the cause and the fix; these pin which
+# git's error for a refused credential, or for a wrong URL on a public repo
+# ("could not read Username", "Repository not found"), reads like a network
+# blip, so the box owner retries and gets nowhere. The hint names the likely
+# cause and the fix; these pin which
 # errors get which hint, since a wrong guess sends someone to fix the wrong
 # thing.
 
@@ -1653,6 +1668,10 @@ def test_fetch_hint_names_an_expired_token_over_https(stderr) -> None:
     hint = _fetch_hint(HTTPS, stderr)
     assert "token" in hint
     assert "new" in hint and "read-only" in hint
+    # Marlow's repo is public, so a refusal is most likely a wrong URL; the
+    # token is the private-fork case.
+    assert "needs no credentials" in hint
+    assert hint.index("origin") < hint.index("token")
     assert "Nothing on this box has changed" in hint
 
 

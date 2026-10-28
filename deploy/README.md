@@ -74,7 +74,7 @@ the wrong home (a trap we hit for real, twice).
 per-repo **deploy key** (an SSH key registered to this one repo), not an
 account-wide token. Generate one as `marlow` and register its public half
 (GitHub → repo → Settings → Deploy keys, **read-only** — or from a machine with
-`gh`: `gh repo deploy-key add <pubkey> --repo mikemason/marlow-server`):
+`gh`: `gh repo deploy-key add <pubkey> --repo marlow-assistant/marlow`):
 
 ```sh
 sudo -iu marlow bash -c '
@@ -96,7 +96,7 @@ service will use for future memory commits.)
 sudo -iu marlow bash -c '
   git config --global user.name "Marlow"
   git config --global user.email "marlow@marlow.<tailnet>.ts.net"
-  git clone git@github.com:mikemason/marlow-server.git ~/marlow-server
+  git clone git@github.com:marlow-assistant/marlow.git ~/marlow-server
   cd ~/marlow-server
   python3 -m venv ~/.venvs/marlow-server
   ~/.venvs/marlow-server/bin/pip install -r server/requirements.txt

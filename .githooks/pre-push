@@ -202,7 +202,7 @@ else
     # gate being off, not the gate passing.
     echo "pre-push: no pytest (.venv/bin/pytest, the primary worktree's .venv," >&2
     echo "pre-push: or PATH) — push blocked." >&2
-    echo "pre-push: the suite is the only gate (CI is off), so a missing" >&2
+    echo "pre-push: a branch push gets no CI, so this is its only gate, and a missing" >&2
     echo "pre-push: runner cannot be treated as a pass." >&2
     echo "pre-push: arm it with:  python3 -m venv .venv && .venv/bin/pip install \\" >&2
     echo "pre-push:                 -r server/requirements.txt -r server/requirements-dev.txt" >&2

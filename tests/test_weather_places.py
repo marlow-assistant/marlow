@@ -135,13 +135,18 @@ def test_nearest():
 
 # --- the polyline decoder ------------------------------------------------------
 
+def _flat(points):
+    # pytest 9 refuses approx on nested sequences, so compare coordinates flat.
+    return [c for p in points for c in p]
+
+
 def test_decode_polyline_google_example():
     points = w._decode_polyline("_p~iF~ps|U_ulLnnqC_mqNvxq`@", precision=5)
-    assert points == pytest.approx([(38.5, -120.2), (40.7, -120.95), (43.252, -126.453)])
+    assert _flat(points) == pytest.approx(_flat([(38.5, -120.2), (40.7, -120.95), (43.252, -126.453)]))
 
 
 def test_decode_polyline_defaults_to_precision_6():
-    assert w._decode_polyline("_p~iF~ps|U") == pytest.approx([(3.85, -12.02)])
+    assert _flat(w._decode_polyline("_p~iF~ps|U")) == pytest.approx([3.85, -12.02])
 
 
 @pytest.mark.parametrize("encoded", ["_p~iF~ps|U_ulL", "_p~iF~ps|U_", "_p~iF~ps|"])

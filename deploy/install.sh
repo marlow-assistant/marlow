@@ -5,7 +5,7 @@
 #       --email priya@example.com
 #
 # Idempotent: every step checks before it acts, so the answer to any stop --
-# the deploy key is not registered yet, Claude is not logged in yet -- is to do
+# the repository isn't readable yet, Claude is not logged in yet -- is to do
 # the one thing it asks and run the same command again. Run from a terminal, it
 # waits at those two points instead of stopping, and stops only if the wait
 # didn't fix it (a friend's install, 2026-10-25: copying the login command out
@@ -33,7 +33,7 @@
 # that user's own Claude login, and leaves the first instance alone.
 set -euo pipefail
 
-REPO_URL="git@github.com:mikemason/marlow-server.git"
+REPO_URL="https://github.com/marlow-assistant/marlow.git"
 REF=main
 USER_NAME=""
 TIMEZONE=""
@@ -53,7 +53,8 @@ usage: sudo deploy/install.sh --user-name NAME --email ADDRESS [--timezone ZONE]
                 Mozilla's) as the contact for this box's notifications; asked for
                 if left off
   --timezone    your home IANA zone (default: this box's zone, unless that is UTC)
-  --repo        where to clone the software from (default: the private GitHub repo over SSH)
+  --repo        where to clone the software from (default: Marlow's public GitHub repo
+                over HTTPS; a git@ URL reads a private one with a deploy key)
   --ref         branch to install (default: main)
   --instance    a second instance's Linux user (its own Claude login, its own port)
   --public-port that instance's tailnet port (not 8443, which the first one has)
@@ -278,7 +279,7 @@ else
         if ! grep -q '^github.com ' "$HOME_DIR/.ssh/known_hosts" 2>/dev/null; then
             echo "$GITHUB_HOST_KEY" | as_marlow tee -a "$HOME_DIR/.ssh/known_hosts" >/dev/null
         fi
-        if ! as_marlow git ls-remote "$REPO_URL" >/dev/null 2>&1; then
+        if ! as_marlow env GIT_TERMINAL_PROMPT=0 git ls-remote "$REPO_URL" >/dev/null 2>&1; then
             cat <<EOF
 
 This box can't read the repository yet.
@@ -290,7 +291,7 @@ read-only deploy key on the repository:
 
 EOF
             if [[ -t 0 && -t 1 ]]; then
-                until as_marlow git ls-remote "$REPO_URL" >/dev/null 2>&1; do
+                until as_marlow env GIT_TERMINAL_PROMPT=0 git ls-remote "$REPO_URL" >/dev/null 2>&1; do
                     read -r -p "Press Enter once they've added it (Ctrl-C to stop; running the install again resumes here): " _ || exit 3
                     echo "   checking..."
                 done
@@ -301,7 +302,10 @@ EOF
             fi
         fi
     fi
-    as_marlow git clone --branch "$REF" "$REPO_URL" "$REPO_DIR"
+    # A public repo over HTTPS needs no credential. A wrong URL there makes
+    # GitHub ask for one, and git would stop at a Username prompt that reads
+    # as the installer's own question.
+    as_marlow env GIT_TERMINAL_PROMPT=0 git clone --branch "$REF" "$REPO_URL" "$REPO_DIR"
 fi
 
 step "installing Python dependencies"

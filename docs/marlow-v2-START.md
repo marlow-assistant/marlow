@@ -1,6 +1,6 @@
 # Marlow v2 — session startup
 
-You are working on `marlow-server` (`github.com/mikemason/marlow-server`), the
+You are working on `marlow` (`github.com/marlow-assistant/marlow`), the
 *software* behind Marlow. You are in **builder mode**, not acting as Marlow.
 This repo does **not** carry Mike's assistant memory; that lives in his private
 `claude-assistant` repo.
@@ -213,8 +213,9 @@ Their task docs hold the detail.
 
 ## Facts that bite
 
-- **CI is OFF.** A PR shows no checks at all, which is neither a pass nor a
-  failure. `.githooks/pre-push` is the only gate.
+- **CI runs on PRs and `main` only.** A pushed branch with no PR has no
+  checks, which is neither a pass nor a failure; `.githooks/pre-push` is the
+  gate there.
 - **The iOS simulator lies about the transcript view.** Changes to
   `ChatView`'s scroll or layout need a device run (`xcrun devicectl`), and
   instrument rather than argue.

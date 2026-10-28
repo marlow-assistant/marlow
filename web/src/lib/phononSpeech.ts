@@ -2,8 +2,8 @@
 // `phonon-tts` (WebAssembly in a worker) and played through an AudioContext,
 // as the native app does (docs/tasks/voice-mode-tts-engines.md). Mike heard
 // the package's own demo on his iPhone and it beat Safari's built-in voices
-// by a distance (2026-10-28). It is the default only on iPhone and iPad;
-// Android's built-in Google voice is decent, so there it is a Settings choice.
+// by a distance (2026-10-28). It is the default everywhere: first on iPhone
+// only, but the Android user found Google's voices poor too (Mike, 2026-10-28).
 //
 // Until the model is loaded (the first time is a ~65 MB download), or if it
 // can't be (no WebAssembly SIMD, offline, a CSP that blocks it), each
@@ -13,18 +13,11 @@
 
 import type { SpeechOutput } from "./voiceMode";
 
-/** Stored in `KV_VOICE` for "Phonon". A `voiceURI` is never this. */
-export const PHONON_VOICE = "phonon";
-
-/** Whether voice mode reads with Phonon: a stored choice of it, or no choice
- * on an iPhone or iPad. Any device voice the person picked stays the browser's. */
-export function usesPhonon(stored: string | null, ios: boolean): boolean {
-  return stored === PHONON_VOICE || (stored === null && ios);
-}
-
-/** An iPad in desktop mode reports itself as a Mac with a touch screen. */
-export function isIOS(nav: Pick<Navigator, "userAgent" | "platform" | "maxTouchPoints"> = navigator): boolean {
-  return /iPhone|iPad|iPod/.test(nav.userAgent) || (nav.platform === "MacIntel" && nav.maxTouchPoints > 1);
+/** Whether voice mode reads with Phonon: when no device voice was picked in
+ * Settings, wherever it can run. Any device voice the person picked stays the
+ * browser's. */
+export function usesPhonon(stored: string | null): boolean {
+  return stored === null;
 }
 
 /** Can this browser run it at all: module workers and WebAssembly SIMD, which
@@ -50,7 +43,7 @@ export interface PhononEngine {
 
 export type AudioOut = Pick<
   AudioContext,
-  "currentTime" | "state" | "resume" | "createBuffer" | "createBufferSource" | "destination"
+  "currentTime" | "state" | "resume" | "close" | "createBuffer" | "createBufferSource" | "destination"
 >;
 
 /** What the browser's voice (`BrowserSpeech`) provides. */
@@ -246,6 +239,9 @@ export class PhononSpeech implements SpeechOutput {
   close(): void {
     this.closed = true;
     this.stopSpeaking();
+    // Safari caps the AudioContexts a page holds, and each visit makes one.
+    void this.ctx?.close().catch(() => {});
+    this.ctx = null;
     this.onUtteranceFinished = null;
     this.onLoad = null;
     this.fallback.close();

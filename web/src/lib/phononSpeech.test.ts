@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  isIOS,
-  PHONON_VOICE,
   PhononSpeech,
   usesPhonon,
   type AudioOut,
@@ -39,7 +37,11 @@ class FakeContext {
   state = "running";
   sources: FakeSource[] = [];
   destination = {};
+  closes = 0;
   resume = async () => {};
+  close = async () => {
+    this.closes++;
+  };
   createBuffer(_channels: number, length: number, rate: number) {
     return { duration: length / rate, copyToChannel() {} };
   }
@@ -366,6 +368,13 @@ describe("PhononSpeech fallback", () => {
     t.speech.unlock();
     expect(t.contexts()).toBe(1);
   });
+
+  it("closes its audio context on leaving, since Safari caps how many a page holds", () => {
+    const t = setup();
+    t.speech.unlock();
+    t.speech.close();
+    expect(t.ctx.closes).toBe(1);
+  });
 });
 
 describe("PhononSpeech status", () => {
@@ -398,34 +407,9 @@ describe("PhononSpeech when the choice is a device voice", () => {
   });
 });
 
-const nav = (userAgent: string, platform = "", maxTouchPoints = 0) => ({ userAgent, platform, maxTouchPoints });
-const IPHONE = nav("Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 Version/18.7 Mobile/15E148 Safari/604.1");
-const IPAD_AS_MAC = nav("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.7 Safari/605.1.15", "MacIntel", 5);
-const MAC = nav("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.7 Safari/605.1.15", "MacIntel", 0);
-const ANDROID = nav("Mozilla/5.0 (Linux; Android 16; Pixel 10) AppleWebKit/537.36 Chrome/149.0 Mobile Safari/537.36", "Linux armv81", 5);
-
 describe("usesPhonon", () => {
-  it("is the default on iOS and only there", () => {
-    expect(usesPhonon(null, true)).toBe(true);
-    expect(usesPhonon(null, false)).toBe(false);
-  });
-
-  it("follows an explicit choice anywhere", () => {
-    expect(usesPhonon(PHONON_VOICE, false)).toBe(true);
-    expect(usesPhonon(PHONON_VOICE, true)).toBe(true);
-    expect(usesPhonon("com.apple.voice.compact.en-GB.Daniel", true)).toBe(false);
-    expect(usesPhonon("com.apple.voice.compact.en-GB.Daniel", false)).toBe(false);
-  });
-});
-
-describe("isIOS", () => {
-  it("knows an iPhone, and an iPad that says it is a Mac", () => {
-    expect(isIOS(IPHONE)).toBe(true);
-    expect(isIOS(IPAD_AS_MAC)).toBe(true);
-  });
-
-  it("leaves a Mac without a touch screen and Android out", () => {
-    expect(isIOS(MAC)).toBe(false);
-    expect(isIOS(ANDROID)).toBe(false);
+  it("is the default anywhere, and a device voice someone picked stays theirs", () => {
+    expect(usesPhonon(null)).toBe(true);
+    expect(usesPhonon("com.apple.voice.compact.en-GB.Daniel")).toBe(false);
   });
 });

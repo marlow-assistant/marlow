@@ -4,7 +4,7 @@ import { BrowserSpeech } from "../lib/browserSpeech";
 import type { ChatStore } from "../lib/chatStore";
 import { VoiceDictation } from "../lib/dictation";
 import { Microphone } from "../lib/segmentRecorder";
-import { isIOS, loadPhonon, PHONON_VOICE, PhononSpeech, usesPhonon } from "../lib/phononSpeech";
+import { loadPhonon, PhononSpeech, usesPhonon } from "../lib/phononSpeech";
 import { KV_VOICE, kvGet } from "../lib/storage";
 import { VoiceDebugLog } from "../lib/voiceDebug";
 import { VoiceModeController, type VoicePhase } from "../lib/voiceMode";
@@ -62,8 +62,8 @@ export function VoiceMode({ store, api, onClose }: { store: ChatStore; api: Api;
       .catch(() => null)
       .then((v) => {
         const stored = v ?? null;
-        browser.setChosenVoice(stored === PHONON_VOICE ? null : stored);
-        if (usesPhonon(stored, isIOS())) speech.start();
+        browser.setChosenVoice(stored);
+        if (usesPhonon(stored)) speech.start();
       });
     const recorder = new VoiceDictation(
       api,

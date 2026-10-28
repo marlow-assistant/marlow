@@ -9,7 +9,6 @@ import type { Api } from "../lib/api";
 import type { VoiceEngine } from "../lib/browserSpeech";
 import { DEFAULT_FACE } from "../lib/faces";
 import { kvGet, kvSet, KV_VOICE, resetDbForTests } from "../lib/storage";
-import { PHONON_VOICE } from "../lib/phononSpeech";
 import { Settings } from "./Settings";
 
 class FakeUtterance {
@@ -65,8 +64,6 @@ afterEach(() => {
 
 /** Phonon needs a Worker (and WebAssembly SIMD, which Node has); jsdom has no Worker. */
 const phononCanRun = () => vi.stubGlobal("Worker", class {});
-const onIPhone = () =>
-  vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Mozilla/5.0 (iPhone; CPU iPhone OS 18_7 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148");
 
 function open(engine: VoiceEngine | null = { synth: synth as unknown as VoiceEngine["synth"], makeUtterance: (t) => new FakeUtterance(t) as unknown as SpeechSynthesisUtterance }) {
   return render(
@@ -143,56 +140,44 @@ describe("Settings › Voice", () => {
   });
 
   describe("Phonon", () => {
-    it("is offered under Automatic where it can run, with no preview and no download from Settings", async () => {
+    it("is what Automatic means where it can run, with no preview and no download from Settings", async () => {
       phononCanRun();
       synth.voices = [voice("Samantha", "en-US")];
+      await kvSet(KV_VOICE, "Samantha");
       open();
-      const radios = within(group()).getAllByRole("radio");
-      expect(radios[0].textContent).toContain("Automatic");
-      expect(radios[1].textContent).toContain("Phonon");
-      expect(radios[1].textContent).toContain("Natural voice, 65 MB download");
+      const automatic = () => within(group()).getByRole("radio", { name: /Automatic/ });
+      expect(automatic().textContent).toContain("Phonon, 65 MB download");
+      expect(within(group()).getAllByRole("radio")).toHaveLength(2);
 
-      fireEvent.click(radios[1]);
-      expect(within(group()).getByRole("radio", { name: /Phonon/ }).getAttribute("aria-checked")).toBe("true");
-      await waitFor(async () => expect(await kvGet(KV_VOICE)).toBe(PHONON_VOICE));
-      expect(synth.spoken).toHaveLength(0);
-      expect(synth.cancels).toBeGreaterThan(0);
-
-      fireEvent.click(within(group()).getByRole("radio", { name: /Automatic/ }));
+      fireEvent.click(automatic());
+      expect(automatic().getAttribute("aria-checked")).toBe("true");
       await waitFor(async () => expect(await kvGet(KV_VOICE)).toBeUndefined());
-    });
-
-    it("says what Automatic means: the device voice here, Phonon on an iPhone", () => {
-      phononCanRun();
-      synth.voices = [voice("Samantha", "en-US")];
-      open();
-      expect(within(group()).getByRole("radio", { name: /Automatic/ }).textContent).toContain("Device voice");
-      cleanup();
-      onIPhone();
-      open();
-      expect(within(group()).getByRole("radio", { name: /Automatic/ }).textContent).toContain("Phonon");
-    });
-
-    it("shows the stored choice when it opens", async () => {
-      phononCanRun();
-      synth.voices = [voice("Samantha", "en-US")];
-      await kvSet(KV_VOICE, PHONON_VOICE);
-      open();
-      await waitFor(() =>
-        expect(within(group()).getByRole("radio", { name: /Phonon/ }).getAttribute("aria-checked")).toBe("true"),
-      );
+      expect(synth.spoken).toHaveLength(0);
     });
 
     it("keeps the section when the browser lists no voices, since Phonon doesn't need them", () => {
       phononCanRun();
       open(null);
-      expect(within(group()).getAllByRole("radio")).toHaveLength(2);
+      expect(within(group()).getAllByRole("radio")).toHaveLength(1);
     });
 
-    it("is not offered where it can't run", () => {
+    it("labels Automatic as the device voice when a stored voice has gone, as voice mode reads it", async () => {
+      // A stored key is a device voice to voice mode (usesPhonon), even once
+      // the engine stops listing it, so Automatic must not claim Phonon.
+      phononCanRun();
+      synth.voices = [voice("Samantha", "en-US")];
+      await kvSet(KV_VOICE, "gone-voice");
+      open();
+      await waitFor(() =>
+        expect(within(group()).getByRole("radio", { name: /Automatic/ }).textContent).toContain("Device voice"),
+      );
+    });
+
+    it("is not mentioned where it can't run", () => {
       synth.voices = [voice("Samantha", "en-US")];
       open();
-      expect(within(group()).queryByRole("radio", { name: /Phonon/ })).toBeNull();
+      expect(screen.getByRole("region", { name: "Voice" }).textContent).not.toContain("Phonon");
+      expect(within(group()).getByRole("radio", { name: /Automatic/ }).textContent).toContain("Device voice");
     });
   });
 });

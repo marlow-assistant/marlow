@@ -381,9 +381,10 @@ iPhone and it sounded great, so web voice mode can now read with Phonon 31m
 (`web/src/lib/phononSpeech.ts`): the package in a worker, CPU, q8, **one thread**
 (the page isn't cross-origin isolated, so no threads). The model comes from
 Hugging Face (~65 MB, pinned by the package) and is cached in the Cache API; the
-CSP allows `huggingface.co` and `*.hf.co` for it. **Default only on iPhone and
-iPad** (Automatic); on Android the default stays Google's built-in voice, which
-is decent (Mike), and Phonon is a choice in Settings → Voice. Until it loads, or
+CSP allows `huggingface.co` and `*.hf.co` for it. **The default everywhere**
+(Automatic in Settings → Voice): first planned for iPhone only, but the Android
+user found Google's voices poor too (Mike, 2026-10-28). A device voice someone
+picked earlier stays theirs until they choose Automatic. Until it loads, or
 if it can't (no SIMD, offline), each utterance falls back to `speechSynthesis`.
 **Not yet heard** on Mike's iPhone through Marlow, or on an Android phone, and the
 real-time factor on a phone is unmeasured (the debug report now records it).

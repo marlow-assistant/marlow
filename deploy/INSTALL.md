@@ -5,16 +5,18 @@ you through an iPhone app, or through a web app you add to your phone's home
 screen (iPhone or Android) or open in a browser on your computer. It runs on **your** Claude subscription through the
 Claude Code CLI, keeps its memory as plain files on your box, and can run
 scheduled jobs (a morning briefing, reminders) while you're away from it.
-Nothing of yours passes through anyone else's server.
+There's no Marlow service in between: your box talks to Claude directly.
 
 **On an iPhone, the web app is the easy way in.** Add it to your home screen
 from Safari and it works like an app, notifications included, with nothing to
 install from a Mac. It's less polished than the native iPhone app but quite
-usable, with everything working. The native app needs whoever invited you to install it from
-their Mac.
+usable, with everything working. The native app you build yourself, on a Mac
+with Xcode and a paid Apple developer account: see
+[`ios/README.md`](../ios/README.md).
 
-This is an early, friends-only release. Expect rough edges, and tell whoever
-invited you when you hit one.
+This is an early release. Expect rough edges, and
+[open an issue](https://github.com/marlow-assistant/marlow/issues) when you
+hit one.
 
 ## How your phone reaches Marlow
 
@@ -65,8 +67,8 @@ nothing else about your Marlow changes.
   security certificate come from these, whichever option you pick.
 - **A device for talking with Marlow.** The web app added to the home screen of
   an iPhone (Safari) or Android phone (Chrome or Firefox), or Chrome, Firefox or
-  Safari on a computer. Or the native iPhone app, installed from a Mac by
-  whoever invited you.
+  Safari on a computer. Or the native iPhone app, which you build and install
+  yourself ([`ios/README.md`](../ios/README.md)).
 - Optional: in claude.ai, connect **Gmail** and **Google Calendar**
   (Settings → Connectors). Marlow uses whatever your Claude account has
   connected, and the morning briefing gets much better with them.
@@ -96,18 +98,16 @@ It prints a login link and then waits, which is normal. Open the link in a
 browser on any device and sign in to your Tailscale account; the command
 finishes on its own.
 
-**2. Get the installer.** Whoever invited you sends two files, `install.sh`
-and `lib.sh`. Put both in a folder called `deploy`, and run the next step from
-the folder *containing* `deploy`:
+**2. Get the installer.** Clone this repository, and run the next step from
+inside it:
 
 ```bash
-mkdir -p ~/marlow-install/deploy && cd ~/marlow-install
+git clone https://github.com/marlow-assistant/marlow.git ~/marlow-install && cd ~/marlow-install
 ```
 
-Copy the two files into `~/marlow-install/deploy/` (for example with `scp`
-from your computer: `scp install.sh lib.sh you@your-box:marlow-install/deploy/`).
-You don't need a GitHub account: the box gets the rest itself, with a key of
-its own, in step 3.
+No GitHub account is needed. This copy only runs the installer: it makes
+Marlow's own copy, owned by `marlow`, in `~marlow/marlow-server`, and updates
+use that one. You can delete `~/marlow-install` once the install has finished.
 
 **3. Run it.**
 
@@ -148,8 +148,9 @@ and the installer carries on.
 
 If the login doesn't finish, the installer stops and says so. Run **the same command again** (up-arrow,
 Enter); it picks up where it stopped. Any other stop is a problem rather than
-a step: send whoever invited you the last 20 or so lines it printed. Running
-the command again is always safe.
+a step: [open an issue](https://github.com/marlow-assistant/marlow/issues)
+with the last 20 or so lines it printed. Running the command again is always
+safe.
 
 **4. Set up your phone for Tailscale.** Install Tailscale on the phone and
 sign in to the same account, then check the settings under
@@ -280,8 +281,9 @@ assistant stays well within.
 Not built yet. It would suit a cloud server, or a home box with a fixed
 address or dynamic DNS and a router you can forward a port on: the box would
 answer on a public port directly, with its own certificate for a domain you
-own, and no Tailscale on the phone. If that's your setup, tell whoever invited
-you; until then, use Tailscale on every device or Funnel.
+own, and no Tailscale on the phone. If that's your setup, say so in an
+[issue](https://github.com/marlow-assistant/marlow/issues); until then, use
+Tailscale on every device or Funnel.
 
 ## What it sets up
 
@@ -332,10 +334,3 @@ and its home directory. Back up `~marlow/marlow-identity` first if you want
 to keep what Marlow learned. Revoke its Claude login from your account
 settings. If you used Funnel, remove the permission from your tailnet's
 policy too.
-
-## If you're the one inviting
-
-1. Send `deploy/install.sh`, `deploy/lib.sh` and a link to this page.
-2. iPhone users: point them to the web app on the home screen (step 5).
-   The native app can only be installed from your Mac with Xcode, with
-   their phone in developer mode.

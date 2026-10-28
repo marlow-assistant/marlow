@@ -27,21 +27,38 @@ It has three parts:
 - **A persistent server** (Python) on an always-on Linux box. Every request,
   from a client or a scheduled job, goes through it to a headless `claude -p`,
   one at a time.
-- **An iOS app,** native SwiftUI.
-- **A web app** for Android and desktop browsers, installable to the home
-  screen, with push notifications.
+- **An iOS app,** native SwiftUI, which you build and install yourself
+  ([`ios/README.md`](ios/README.md)).
+- **A web app** for Android, iPhone and desktop browsers, installable to the
+  home screen, with push notifications.
 
-Phones reach the box over [Tailscale](https://tailscale.com) by default. To
-install one, see [`deploy/INSTALL.md`](deploy/INSTALL.md).
+To set up your own, follow [`deploy/INSTALL.md`](deploy/INSTALL.md). Phones
+reach the box over [Tailscale](https://tailscale.com) by default.
 
 Marlow was written with Claude Code, and it uses the official `claude` CLI
-unmodified, under each user's own subscription and its terms.
+unmodified, under each user's own subscription and
+[Anthropic's terms](https://www.anthropic.com/legal/consumer-terms).
 
-This is standalone, installable software. It ships **no personal identity** —
-the assistant's `SOUL.md` / `CLAUDE.md` / `USER.md` / `memory/` are *data you
-seed at deploy time* (`deploy/seed-identity.sh`), living in the runtime working
-dir and diverging independently from there. The program and the personality are
-deliberately separate things.
+Marlow starts out knowing nothing about you, with only a template of a
+personality, and learns who you are by talking with you. Its character and
+memory live in their own git repository on your box, separate from the
+software, so updating Marlow never touches them.
+
+## What leaves your box
+
+There is no Marlow service in between. The box talks to:
+
+- **Anthropic,** because each request is a Claude Code run: your messages and
+  whatever Claude reads to answer them, as with your own use of Claude Code.
+  Gmail and Calendar, if you connect them, are reached through your Claude
+  account's connectors.
+- **Weather and routing services** (Open-Meteo, MET Norway, Environment
+  Canada, the US National Weather Service, OSRM), sent a location rounded to
+  about 1 km when you ask about the weather or a drive.
+- **Your phone's push service** (Apple's, Google's or Mozilla's), for a wake-up
+  with no message text in it. The phone then fetches the reply from the box.
+- **Tailscale,** which connects your phone to the box.
+- **Web pages** Marlow reads for you.
 
 ## Where this came from
 
@@ -50,32 +67,62 @@ Marlow was built in a private repository from July to October 2026: just over
 Code. This repository starts from a snapshot of that work, so its history
 begins with a single commit.
 
+## How it works
+
+Each request, whether a message from your phone or a scheduled job, becomes
+one headless `claude -p` run on the box, in Marlow's own working directory.
+One queue on the server runs them one at a time, and a conversation carries on
+by resuming its Claude session. When Claude wants to do something outside what
+Marlow may do on its own, a hook holds the tool call and the server asks your
+phone. Push notifications only wake the phone; the content is always fetched
+from the box.
+
+Some of the reasons behind that shape:
+
+- **The CLI, not the Agent SDK.** The CLI runs on a Pro or Max subscription;
+  the SDK needs an API key, billed per token. That's the point of Marlow: a
+  personal assistant at a flat monthly cost.
+- **One run at a time.** Runs share one working directory and one set of
+  memory files, so the server never lets two of them edit those at once.
+- **No public ingress by default.** The box answers only on your tailnet, and
+  each device pairs with its own token. You can opt in to Tailscale Funnel
+  (`update.sh --funnel`) so phones need no Tailscale, at the cost of a public
+  endpoint; the trade-off is in [`deploy/INSTALL.md`](deploy/INSTALL.md).
+- **Boundaries as data.** What Claude may read and write, and the hosts the box
+  may reach, are declared in [`server/boundaries.py`](server/boundaries.py).
+  The file rules are enforced by a sandbox around every run; an optional
+  nftables allowlist enforces the host list ([`deploy/README.md`](deploy/README.md)).
+
+The full design record is [`docs/marlow-v2-design.md`](docs/marlow-v2-design.md).
+
 ## What's here
 
 ```
-server/     The application. invoke.py is the only module that shells out to
-            `claude -p`; queue.py serializes invocations; app.py wires the
-            public (Tailscale) + internal (loopback) ASGI apps. See
-            docs/marlow-v2-implementation-plan.md §2 for the module map.
-web/        The web client: TypeScript, Vite and React, served by the server
-            itself from web/dist (built on the box, never committed). An
-            installable PWA with Web Push. See docs/tasks/portable-web-client.md;
-            the behaviour it reproduces is docs/chat-ux-contract.md.
-tests/      pytest suite. Runs the real server code against a fake `claude`
-            binary (tests/conftest.py) — plumbing is exercised, not mocked away.
-deploy/     systemd unit, watchdog, off-host dead-man's switch, nftables egress
-            allowlist, the update path, and seed-identity.sh. See deploy/README.md.
-identity/   Empty template of the assistant brain a fresh install boots with.
-            Placeholders only — real personality is seeded at deploy time.
-docs/       Design record, gate results, and the build plan.
+server/       The application. invoke.py is the only module that shells out to
+              `claude -p`; queue.py serializes runs; app.py wires the public
+              (Tailscale) and internal (loopback) apps. Module map:
+              docs/marlow-v2-implementation-plan.md §2.
+hooks/        The PreToolUse hook that holds a tool call for your approval.
+cron/         The entrypoint that turns a scheduled job into a queued request.
+web/          The web client: TypeScript, Vite and React, served by the server
+              itself from web/dist (built on the box, never committed). An
+              installable PWA with Web Push.
+ios/          The native iPhone app (SwiftUI) and its notification extension.
+tests/        pytest suite. Runs the real server code against a fake `claude`
+              binary (tests/conftest.py), so the plumbing is exercised, not
+              mocked away.
+deploy/       The installer, the update path, the systemd unit, watchdog,
+              egress allowlist and certificate renewal.
+identity/     The template a fresh install's personality and memory start from.
+scripts/      Developer tools: the local dev server, probes of CLI behaviour,
+              icon and data builders.
+spikes/       One-off experiments kept for their findings.
+docs/         Design record, build plan, and docs/tasks/, one note per feature
+              or decision.
+changes.json  The "What's new" list both apps show after an update.
+CLAUDE.md     Instructions for Claude Code sessions working on this repository.
+              Marlow's own instructions are identity/CLAUDE.md.
 ```
-
-## Design constraints (decided — see docs/)
-
-- CLI (`claude -p` / `--continue` / `--resume`), rather than the Agent SDK.
-- One server-mediated work queue; only one `claude -p` runs at a time.
-- **No public ingress by default** — Tailscale tailnet only, device-token auth. A box's owner can opt in to Tailscale Funnel (`update.sh --funnel`) so phones need no Tailscale, at the cost of a public endpoint; the trade-off is spelled out for users in `deploy/INSTALL.md` and built in `docs/tasks/funnel-ingress.md`. APNs and Web Push are wake signals; content is pulled from the box (Web Push payloads are also end-to-end encrypted, and a reply's text is never in one).
-- Security boundaries (fs path-sets, egress host allowlist, env-injected secrets) declared as data in `server/boundaries.py`, enforced standalone now, shaped so a future sandbox policy is generated from them.
 
 ## Develop
 
@@ -99,6 +146,8 @@ npm run e2e             # Playwright against the dev server
 npm run dev             # Vite with hot reload, proxying /v1 and /health to :8080
 ```
 
+The iOS app: [`ios/README.md`](ios/README.md).
+
 CI runs the pytest suite on pull requests and on `main`, and the iOS build when
 `ios/` changes. Before that, the `.githooks/pre-push` hook runs the pytest
 suite, plus `npm test` in `web/` when a push touches it, so a red suite never
@@ -106,10 +155,12 @@ leaves the machine.
 
 ## Deploy
 
-See [`deploy/README.md`](deploy/README.md). In short: clone this repo as a
-dedicated `marlow` user, seed an identity into the working dir once, install the
-systemd unit. Updates are a manual `deploy/update.sh` (fast-forward-only pull,
-reinstall, build the web client when it changed, restart, health-check) — the software checkout never diverges, so it
-stays fast-forwardable; the seeded identity dir is separate and never touched by
-updates. Pair a browser with a link from `deploy/pair-device.sh`, run on the
-box.
+To install, follow [`deploy/INSTALL.md`](deploy/INSTALL.md). Updating is one
+command on the box, `sudo ~marlow/marlow-server/deploy/update.sh`.
+[`deploy/README.md`](deploy/README.md) is the long-form reference for how a
+box is put together and why, including the optional pieces the installer
+leaves out.
+
+## License
+
+Apache-2.0: see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).

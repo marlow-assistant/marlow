@@ -177,10 +177,10 @@ unit_var() { tr ' ' '\n' <<<"$UNIT_ENV" | sed -n "s/^$1=//p" | tail -1; }
 source "$REPO_DIR/deploy/funnel.sh"
 funnel_preflight || exit 1
 
-# What to tell the admin when the fetch fails. An invited box fetches over
-# HTTPS with a fine-grained token, and those expire: git then says "could not
-# read Username" or "Repository not found", which reads like a network blip or
-# a moved repo, so the admin retries and gets nowhere (2026-10-28). Name the
+# What to tell the admin when the fetch fails. git's error for a refused
+# credential, or for a wrong URL on a public repo ("could not read Username",
+# "Repository not found"), reads like a network blip, so the admin retries and
+# gets nowhere (2026-10-28). Name the
 # credential only when git's error is about one: a wrong guess sends someone
 # to fix the wrong thing.
 fetch_failure_hint() {
@@ -195,12 +195,13 @@ fetch_failure_hint() {
         auth=1
     fi
     if [[ $auth == 1 && "$url" == https://* ]]; then
-        echo "GitHub refused this box's token for $url."
-        echo "Fine-grained tokens expire, so it has most likely lapsed or been revoked."
-        echo "Make a new read-only token for the repo (Contents: read), put it in place"
-        echo "of the old one in /home/${MARLOW_USER:-marlow}/.git-credentials, where install.sh"
-        echo "stored it, and run update.sh again. (GitHub gives the same answer for a wrong"
-        echo "repo URL, so check origin's URL if the token is new.)"
+        echo "GitHub refused $url to this box."
+        echo "Marlow's repository is public and needs no credentials, so check origin's"
+        echo "URL first: GitHub answers a wrong or moved one this way. If origin is a"
+        echo "private fork read with a token, the token has most likely lapsed: make a"
+        echo "new read-only one (Contents: read), put it in"
+        echo "${MARLOW_USER:-the instance user}'s git credentials in place of the old one,"
+        echo "and run update.sh again."
     elif [[ $auth == 1 ]]; then
         echo "GitHub refused this box's deploy key for $url."
         echo "The key has probably been removed from the repo's Deploy keys, or the repo"

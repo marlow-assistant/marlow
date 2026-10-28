@@ -40,26 +40,20 @@ One consequence changes what you do:
   expensive to write. Reasoning-first is the default; write the concrete
   surfaces where *you* would otherwise re-derive them, not as a matter of course.
 
-## CI — OFF since 2026-08-11. The suite is local only.
+## CI — back on since 2026-10-28
 
-**Both workflows stay `disabled_manually` until CI is turned back on** (check
-with `gh api /repos/marlow-assistant/marlow/actions/workflows` — `state` on
-each). The `ios` macOS job ran the account out of Actions minutes on
-2026-08-11 and `ci` was switched off alongside it.
+Both workflows run in `marlow-assistant/marlow` (check with `gh api
+/repos/marlow-assistant/marlow/actions/workflows` — `state` on each). They
+were off from 2026-08-11 in the private repository, where the `ios` macOS job
+ran the account out of Actions minutes. A public repository's Actions minutes
+are free, macOS included, so that cost is gone.
 
-**What this means in practice, and the mistake to avoid:** a PR now shows **no
-checks at all**. `gh pr checks` says "no checks reported" and
-`statusCheckRollup` is `[]`. That is not a pass, not a failure, and not a
-pending run — it is *nothing*, and it looks identical to a branch whose CI
-hasn't started yet. Do not report a branch as "green in CI"; say the local suite
-passed and give the count. The one gate that still runs on every push is
-`.githooks/pre-push` (below), so **it is now the only gate**, not a backstop.
-
-Re-enabling is Mike's call and costs money — it is the macOS runner that burns
-the quota (~10× multiplier), not the Python job. If it comes back, the obvious
-move is to re-enable `ci` alone and leave `ios` off, since the Python gate is
-~25s and effectively free. Everything below this line describes how CI behaved
-when it ran, and applies again the moment it does.
+**The mistake to avoid:** a pushed branch with no PR shows **no checks at
+all**. `gh pr checks` says "no checks reported" and `statusCheckRollup` is
+`[]`. That is not a pass, not a failure, and not a pending run — it is
+*nothing*. Say "green in CI" only once a PR's `test` check has reported;
+before that, say the local suite passed and give the count.
+`.githooks/pre-push` (below) runs on every push, so it is the first gate.
 
 - `.github/workflows/ci.yml` runs `pytest` on push to `main` and on **pull
   requests** — pushing a feature branch alone does *not* trigger it (confirmed

@@ -53,8 +53,8 @@ usage: sudo deploy/install.sh --user-name NAME --email ADDRESS [--timezone ZONE]
                 Mozilla's) as the contact for this box's notifications; asked for
                 if left off
   --timezone    your home IANA zone (default: this box's zone, unless that is UTC)
-  --repo        where to clone the software from (default: Marlow's GitHub repo over HTTPS;
-                a git@ URL reads it with a deploy key instead)
+  --repo        where to clone the software from (default: Marlow's public GitHub repo
+                over HTTPS; a git@ URL reads a private one with a deploy key)
   --ref         branch to install (default: main)
   --instance    a second instance's Linux user (its own Claude login, its own port)
   --public-port that instance's tailnet port (not 8443, which the first one has)
@@ -168,21 +168,6 @@ GITHUB_HOST_KEY="github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6
 # Runs a fixed command as marlow. Arguments go through as argv, never through a
 # shell string, so nothing typed on the command line is ever re-parsed.
 as_marlow() { sudo -u "$MARLOW_USER" -H "$@"; }
-
-# A private repo over HTTPS is read with a fine-grained token the box's owner
-# makes themselves (Contents read-only, that repository only), so no key passes
-# through whoever invited them. git's store helper keeps it in
-# ~/.git-credentials (0600), scoped to github.com, so update.sh's fetch needs
-# nothing more, and calling this again replaces a lapsed one. Never in the
-# clone URL, where .git/config and every git error would show it. The pattern
-# also keeps a newline out of git's line-based credential protocol.
-store_github_token() {
-    local token="$1"
-    [[ "$token" =~ ^(github_pat_|ghp_)[A-Za-z0-9_]{20,255}$ ]] || return 1
-    as_marlow git config --global credential.https://github.com.helper store
-    printf 'protocol=https\nhost=github.com\nusername=x-access-token\npassword=%s\n\n' "$token" \
-        | as_marlow git credential approve
-}
 
 if [[ -r /etc/os-release ]]; then
     # shellcheck disable=SC1091
@@ -316,47 +301,11 @@ EOF
                 exit 3
             fi
         fi
-    elif [[ "$REPO_URL" == https://github.com/* ]] \
-        && ! as_marlow env GIT_TERMINAL_PROMPT=0 git ls-remote "$REPO_URL" >/dev/null 2>&1; then
-        # Public, the probe succeeds and no token is needed. Private (the
-        # friends alpha), GitHub answers as if the repository didn't exist.
-        owner="${REPO_URL#https://github.com/}"
-        owner="${owner%%/*}"
-        cat <<EOF
-
-This box can't read the repository yet. While Marlow's repository is private,
-each box reads it with a token of your own. Accept the invitation to the
-repository first, then make a token at
-https://github.com/settings/personal-access-tokens/new with:
-
-    Resource owner:      $owner
-    Repository access:   only $REPO_URL
-    Permissions:         Contents, read-only (nothing else)
-
-When it expires, update.sh says so and how to replace it.
-
-EOF
-        if [[ -t 0 && -t 1 ]]; then
-            while true; do
-                read -r -s -p "Paste the token (it is not shown; Ctrl-C to stop): " token || exit 3
-                echo
-                if ! store_github_token "$token"; then
-                    echo "   that isn't a GitHub token (they start github_pat_); try again"
-                    continue
-                fi
-                echo "   checking..."
-                as_marlow env GIT_TERMINAL_PROMPT=0 git ls-remote "$REPO_URL" >/dev/null 2>&1 && break
-                echo "   GitHub refused it: check Contents is read-only on this repository, and"
-                echo "   whether $owner still has to approve the token"
-            done
-            unset token
-            echo "   the repository is readable"
-        else
-            echo "STOPPED: run the same install command again from a terminal; it asks for the token."
-            exit 3
-        fi
     fi
-    as_marlow git clone --branch "$REF" "$REPO_URL" "$REPO_DIR"
+    # A public repo over HTTPS needs no credential. A wrong URL there makes
+    # GitHub ask for one, and git would stop at a Username prompt that reads
+    # as the installer's own question.
+    as_marlow env GIT_TERMINAL_PROMPT=0 git clone --branch "$REF" "$REPO_URL" "$REPO_DIR"
 fi
 
 step "installing Python dependencies"

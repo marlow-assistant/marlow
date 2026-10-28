@@ -70,11 +70,12 @@ from `docs/marlow-v2-implementation-plan.md`.
   `Marlow.xcodeproj` is generated from `ios/Marlow/project.yml`. A new test file
   is otherwise *not compiled* — it fails nothing and the suite reports green
   without it. Check the test count moved.
-- **CI is off; the suite is local only.** A PR shows **no checks at all** — that
-  is not a pass and not a failure, it is nothing. The only gate is
-  `.githooks/pre-push`, which blocks a red push locally (enable per clone:
-  `git config core.hooksPath .githooks`). Never describe a branch as "green in
-  CI"; say the local suite passed and give the count.
+- **CI runs on PRs and on `main`, not on a bare branch push** (`ci`, the
+  pytest job named `test`; `ios` only when a push touches `ios/`). So the
+  first gate is `.githooks/pre-push`, which blocks a red push locally (enable
+  per clone: `git config core.hooksPath .githooks`). Say "green in CI" only
+  when the PR's checks have reported; otherwise say the local suite passed and
+  give the count.
 - **Review is done by tools, not Mike's line-by-line reading.** Run
   `/code-review high` yourself on non-trivial changes, plus `/security-review`
   when the change touches the permission round-trip, egress, credentials, or

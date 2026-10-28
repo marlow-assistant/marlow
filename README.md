@@ -13,6 +13,14 @@ seed at deploy time* (`deploy/seed-identity.sh`), living in the runtime working
 dir and diverging independently from there. The program and the personality are
 deliberately separate things.
 
+## Where this came from
+
+Marlow was built in a private repository from July to October 2026: just over
+1,000 commits in three and a half months, by Mike Mason working with Claude
+Code. This repository starts from a snapshot of that work, so its history
+begins with a single commit. The earlier history stays private because it
+carries personal details that were removed for this release.
+
 ## What's here
 
 ```
@@ -62,9 +70,10 @@ npm run e2e             # Playwright against the dev server
 npm run dev             # Vite with hot reload, proxying /v1 and /health to :8080
 ```
 
-CI is off (see `CLAUDE.md`). The `.githooks/pre-push` hook is the only gate:
-it runs the pytest suite, plus `npm test` in `web/` when a push touches it, so
-a red suite never leaves the machine.
+CI runs the pytest suite on pull requests and on `main`, and the iOS build when
+`ios/` changes. Before that, the `.githooks/pre-push` hook runs the pytest
+suite, plus `npm test` in `web/` when a push touches it, so a red suite never
+leaves the machine.
 
 ## Deploy
 

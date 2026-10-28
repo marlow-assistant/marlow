@@ -73,8 +73,7 @@ nothing else about your Marlow changes.
 
 ## Install
 
-Allow about 15 minutes, plus however long it takes whoever invited you to
-answer one message.
+Allow about 15 minutes.
 
 **Who runs what.** Log in to the box as the user you normally use, the one that
 can `sudo` (on a cloud VM, the user it came with, such as `ubuntu`). Everything
@@ -141,22 +140,13 @@ here. Pick the nearest city:
 
 Anywhere else: `timedatectl list-timezones | grep -i yourcity` on the box.
 
-The installer pauses twice for you:
+The installer pauses once for you, for the **Claude login.** It starts Claude
+for you. Pick a colour theme (any), choose to log in with your Claude
+subscription, open the link it prints in a browser, and sign in. Then Claude
+asks whether to trust the folder: choose **No, exit**. You're still logged in,
+and the installer carries on.
 
-- **Repository access.** While Marlow's repository is private, the box reads
-  it with a token you make on GitHub. Accept the invitation to the repository
-  first. The installer prints what the token needs (read-only access to that
-  one repository, nothing else) and the page to make it on. Paste it when
-  asked, and the installer carries on. The token expires; when it does,
-  `update.sh` says so and where to put a new one.
-- **Claude login.** The installer starts Claude for you. Pick a colour theme
-  (any), choose to log in with your Claude subscription, open the link it
-  prints in a browser, and sign in. Then Claude asks whether to trust the
-  folder: choose **No, exit**. You're still logged in, and the installer
-  carries on.
-
-If either pause goes wrong (the token isn't accepted, the login didn't finish),
-the installer stops and says so. Run **the same command again** (up-arrow,
+If the login doesn't finish, the installer stops and says so. Run **the same command again** (up-arrow,
 Enter); it picks up where it stopped. Any other stop is a problem rather than
 a step: send whoever invited you the last 20 or so lines it printed. Running
 the command again is always safe.
@@ -346,11 +336,6 @@ policy too.
 ## If you're the one inviting
 
 1. Send `deploy/install.sh`, `deploy/lib.sh` and a link to this page.
-2. Give their GitHub account **Read** on the repository: its **Settings →
-   Collaborators and teams → Add people**. Their token can then read it and
-   nothing else. If the organization approves tokens, approve theirs when it
-   shows under the organization's **Settings → Personal access tokens**.
-3. iPhone users: point them to the web app on the home screen (step 5).
+2. iPhone users: point them to the web app on the home screen (step 5).
    The native app can only be installed from your Mac with Xcode, with
    their phone in developer mode.
-4. If they stop using Marlow, remove them from the repository.

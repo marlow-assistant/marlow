@@ -44,9 +44,9 @@ START), 5 read-only activity and identity views. Out of scope: dictation
 `public_app` serves `web/dist` at `/` with an SPA fallback, never shadowing
 `/v1/*` or `/health`. A missing `dist` gives a plain 404 with a hint and the
 server still starts. Every static response carries `Content-Security-Policy:
-default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:
-data:; connect-src 'self'; object-src 'none'; base-uri 'none';
-frame-ancestors 'none'`, plus `nosniff` and `Referrer-Policy: no-referrer`.
+default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self';
+img-src 'self' blob: data:; connect-src 'self' https://huggingface.co
+https://*.hf.co; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`, plus `nosniff` and `Referrer-Policy: no-referrer`.
 Hashed assets cache long; `index.html` and the service worker are `no-cache`.
 Same origin throughout, so no CORS is configured and the client never knows a
 server URL.

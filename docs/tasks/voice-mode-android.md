@@ -373,9 +373,20 @@ built-in voices: Safari 18.7 listed Samantha, Daniel, Karen and the rest, no
 Enhanced or Premium, and every one sounded bad to Mike. Web Settings now has a
 voice picker (Voice section, `choosableVoices`) so the least bad can be chosen,
 and Android gets the same picker over Google's voices. Phonon for the web, in the
-browser or made on the box and streamed, is **parked** (Mike, 2026-10-25). iPhone
-users have the native app. Revisit if an Android user finds Google's voice poor,
-or if the iPhone web app becomes someone's main client.
+browser or made on the box and streamed, was **parked** (Mike, 2026-10-25); see
+the next paragraph.
+
+**Phonon in the browser (2026-10-28).** Mike ran the `phonon-tts` demo on his
+iPhone and it sounded great, so web voice mode can now read with Phonon 31m
+(`web/src/lib/phononSpeech.ts`): the package in a worker, CPU, q8, **one thread**
+(the page isn't cross-origin isolated, so no threads). The model comes from
+Hugging Face (~65 MB, pinned by the package) and is cached in the Cache API; the
+CSP allows `huggingface.co` and `*.hf.co` for it. **Default only on iPhone and
+iPad** (Automatic); on Android the default stays Google's built-in voice, which
+is decent (Mike), and Phonon is a choice in Settings → Voice. Until it loads, or
+if it can't (no SIMD, offline), each utterance falls back to `speechSynthesis`.
+**Not yet heard** on Mike's iPhone through Marlow, or on an Android phone, and the
+real-time factor on a phone is unmeasured (the debug report now records it).
 
 ## The server side and the iOS port
 

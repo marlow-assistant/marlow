@@ -25,6 +25,10 @@ export class UtteranceDebug {
   sentAt: number | null = null;
   firstSpeechAt: number | null = null;
   words: number | null = null;
+  /** Phonon only: time spent generating, and the audio's length, summed over
+   * the reply's sentences. Under 1 the phone keeps ahead of the speech. */
+  synthMs = 0;
+  synthSeconds = 0;
   outcome: string | null = null;
 
   constructor(
@@ -59,6 +63,11 @@ export class UtteranceDebug {
 
   spoke(): void {
     this.firstSpeechAt ??= this.now();
+  }
+
+  synthesized(generationMs: number, audioSeconds: number): void {
+    this.synthMs += generationMs;
+    this.synthSeconds += audioSeconds;
   }
 
   failed(why: string): void {
@@ -116,6 +125,9 @@ export class VoiceDebugLog {
       if (u.releasedAt !== null) {
         lines.push(`  release -> text: ${ms(u.textAt !== null ? u.textAt - u.releasedAt : null)} (${u.words ?? 0} words)`);
         if (u.sentAt !== null) lines.push(`  release -> first speech: ${ms(u.firstSpeechAt !== null ? u.firstSpeechAt - u.releasedAt : null)}`);
+        if (u.synthSeconds > 0) {
+          lines.push(`  synthesis: ${s1(u.synthSeconds)} of audio in ${s1(u.synthMs / 1000)} (${(u.synthMs / 1000 / u.synthSeconds).toFixed(2)} x real time)`);
+        }
       }
     });
     return lines.join("\n");

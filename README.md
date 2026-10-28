@@ -2,9 +2,9 @@
 
 <img src="marlow-icon-square.png" alt="Marlow's portrait: a man in a dark Victorian coat with a glowing monocle, Big Ben behind him" width="200" align="right">
 
-Marlow is a personal assistant that runs on a machine you control and talks to
+Marlow is a personal assistant that runs on a machine you control and can examine, and talks to
 you from your phone. It is built on Claude Code and runs under your own Claude
-subscription (Pro or Max); there is no API key and no service in between.
+subscription (Pro or Max).
 
 What it does:
 
@@ -48,8 +48,7 @@ deliberately separate things.
 Marlow was built in a private repository from July to October 2026: just over
 1,000 commits in three and a half months, by Mike Mason working with Claude
 Code. This repository starts from a snapshot of that work, so its history
-begins with a single commit. The earlier history stays private because it
-carries personal details that were removed for this release.
+begins with a single commit.
 
 ## What's here
 
@@ -73,7 +72,7 @@ docs/       Design record, gate results, and the build plan.
 
 ## Design constraints (decided — see docs/)
 
-- CLI (`claude -p` / `--continue` / `--resume`), **never** the Agent SDK (the SDK forces API-key billing).
+- CLI (`claude -p` / `--continue` / `--resume`), rather than the Agent SDK.
 - One server-mediated work queue; only one `claude -p` runs at a time.
 - **No public ingress by default** — Tailscale tailnet only, device-token auth. A box's owner can opt in to Tailscale Funnel (`update.sh --funnel`) so phones need no Tailscale, at the cost of a public endpoint; the trade-off is spelled out for users in `deploy/INSTALL.md` and built in `docs/tasks/funnel-ingress.md`. APNs and Web Push are wake signals; content is pulled from the box (Web Push payloads are also end-to-end encrypted, and a reply's text is never in one).
 - Security boundaries (fs path-sets, egress host allowlist, env-injected secrets) declared as data in `server/boundaries.py`, enforced standalone now, shaped so a future sandbox policy is generated from them.

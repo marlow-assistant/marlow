@@ -1,4 +1,4 @@
-# Deploying marlow-server
+# Deploying Marlow
 
 > **Installing on a new box? Use [`install.sh`](install.sh); the steps are in
 > [`INSTALL.md`](INSTALL.md).** This README is the long-form reference for how
@@ -18,11 +18,11 @@ from there and pulled here by §10.
 
 ## The two-location model (why this looks the way it does)
 
-A marlow-server host holds **two separate things** that must never share one git
+A Marlow host holds **two separate things** that must never share one git
 history:
 
-1. **The software** — this repo (`marlow-server`), cloned to
-   `/home/marlow/marlow-server`. Updated by fast-forward pull (`update.sh`). It
+1. **The software** — this repo, cloned to `/home/marlow/marlow-server` (the
+   directory keeps the server's original name). Updated by fast-forward pull (`update.sh`). It
    **never diverges**: nothing writes into it at runtime, so it stays cleanly
    fast-forwardable forever.
 2. **The identity / working dir** — `$MARLOW_WORKING_DIR` (default
@@ -70,23 +70,13 @@ wrap it in `bash -c '...'`** so the `~` expands as *marlow*: `sudo -iu marlow
 ~/foo` expands `~` in the *caller's* shell before sudo runs, silently pointing at
 the wrong home (a trap we hit for real, twice).
 
-**The repo is private**, so the box needs its own read-only credentials — a
-per-repo **deploy key** (an SSH key registered to this one repo), not an
-account-wide token. Generate one as `marlow` and register its public half
-(GitHub → repo → Settings → Deploy keys, **read-only** — or from a machine with
-`gh`: `gh repo deploy-key add <pubkey> --repo marlow-assistant/marlow`):
+The repo is public, so the box clones it over HTTPS with no credentials. (A
+private fork instead needs read-only credentials of the box's own: a per-repo
+**deploy key**, generated as `marlow` with `ssh-keygen -t ed25519`, registered
+read-only under the fork's Settings → Deploy keys, and a `git@github.com:` clone
+URL, since an HTTPS clone won't use it.)
 
-```sh
-sudo -iu marlow bash -c '
-  mkdir -p ~/.ssh && chmod 700 ~/.ssh
-  test -f ~/.ssh/id_ed25519 || ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519 -N "" -C "marlow-box-deploy"
-  ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-  cat ~/.ssh/id_ed25519.pub   # <- register this, read-only
-'
-```
-
-Then clone over the **SSH** remote (the deploy key is an SSH key — an HTTPS clone
-won't use it), build the venv, install deps. Set marlow's git identity in the
+Clone, build the venv, install deps. Set marlow's git identity in the
 same breath: the §4 seed makes a commit, and a fresh system user has none
 (`git commit` aborts with "Author identity unknown"). (`seed-identity.sh` also
 passes a fallback identity now, but configuring it here is what the *running*
@@ -96,7 +86,7 @@ service will use for future memory commits.)
 sudo -iu marlow bash -c '
   git config --global user.name "Marlow"
   git config --global user.email "marlow@marlow.<tailnet>.ts.net"
-  git clone git@github.com:marlow-assistant/marlow.git ~/marlow-server
+  git clone https://github.com/marlow-assistant/marlow.git ~/marlow-server
   cd ~/marlow-server
   python3 -m venv ~/.venvs/marlow-server
   ~/.venvs/marlow-server/bin/pip install -r server/requirements.txt
@@ -154,7 +144,7 @@ files prevent credential races, not quota contention).
 
 ## 4. Seed an identity into the working dir (one-time)
 
-marlow-server ships **no** personality. Choose one:
+Marlow ships **no** personality. Choose one:
 
 ```sh
 # Blank-slate Marlow (fill SOUL.md/CLAUDE.md/USER.md in ~/marlow-identity after):
@@ -435,7 +425,7 @@ sudo -u marlow ssh-keygen -t ed25519 -N "" -C "marlow-identity-pusher" \
 sudo -u marlow cat ~marlow/.ssh/identity-push.pub
 ```
 
-Add that public key to the **identity** repo (not `marlow-server`) under Settings
+Add that public key to the **identity** repo (not the software repo) under Settings
 → Deploy keys, **with write access ticked**. Deploy keys are per-repository, and
 read-only is the default — a read-only key fails at push time, not at setup.
 
@@ -921,9 +911,8 @@ sudo ~marlow/marlow-server/deploy/install.sh --instance taylor --public-port 844
     --user-name "Taylor" --timezone America/Edmonton --email you@example.com --ref <branch>
 ```
 
-It stops twice, like a first install: for the new user's read-only deploy
-key, then for the Claude login, which is the other person's own account (their
-connectors come with it). What it sets up:
+It stops once, like a first install: for the Claude login, which is the
+other person's own account (their connectors come with it). What it sets up:
 
 - **`marlow-server@taylor`**, rendered by `update.sh` from
   `marlow-server.service` with only the home, `User` and `Group` changed, and

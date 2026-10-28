@@ -190,7 +190,13 @@ added later without auth fails the suite. This is what keeps steps 1–4 true.
   `web_static.py` is the defence (`script-src 'self'; connect-src 'self'`, no
   inline): it stops injected script and stops a stolen token being sent off
   the origin. Re-read it in the security review and treat any loosening as a
-  Funnel blocker.
+  Funnel blocker. **One accepted loosening (Mike, 2026-10-28):** web voice
+  mode's Phonon model needs `connect-src https://huggingface.co
+  https://*.hf.co` and `script-src 'wasm-unsafe-eval'`. The cost is that
+  injected script could post a stolen token to a Hugging Face endpoint the
+  attacker controls, but injected script still can't run (no inline, no JS
+  eval), and that is the defence that carries the weight. Self-hosting the
+  model on the box would close the gap if Funnel needs it closed.
 - **The sandbox can reach loopback.** Moving `public_app` to `127.0.0.1` puts
   it where any user on the box can connect. It still needs a device token, but
   confirm in `boundaries.py`/`egress.nft` what a `claude -p` child can connect

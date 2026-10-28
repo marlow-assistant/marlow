@@ -169,7 +169,8 @@ pairing link, also as a QR code. The link works once and lasts 10 minutes.
   the chat asks about notifications. iPhone only sends notifications to the
   home-screen app, which keeps its own sign-in, so a link opened in a Safari
   tab pairs only that tab.
-- **iPhone, native app:** in the Marlow app, tap **Scan pairing code** and scan the QR.
+- **iPhone, native app:** build and install it first, following
+  [`ios/README.md`](../ios/README.md). Then in the Marlow app, tap **Scan pairing code** and scan the QR.
   (Not the Camera app, which would open Safari.) Or copy the link and paste it
   into the app. Typing the link in by hand isn't supported.
 - **A computer:** open the link in Chrome, Firefox or Safari.

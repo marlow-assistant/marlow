@@ -132,6 +132,7 @@ function setup({ start = true } = {}) {
   const fallback = new FakeFallback();
   const clock = { t: 0 };
   let loads = 0;
+  let contexts = 0;
   let resolveLoad!: (e: PhononEngine) => void;
   let rejectLoad!: (e: Error) => void;
   let progress!: (fraction: number | null) => void;
@@ -145,7 +146,10 @@ function setup({ start = true } = {}) {
         rejectLoad = rej;
       });
     },
-    makeContext: () => ctx as unknown as AudioOut,
+    makeContext: () => {
+      contexts++;
+      return ctx as unknown as AudioOut;
+    },
     now: () => clock.t,
   });
   const finished: number[] = [];
@@ -171,6 +175,7 @@ function setup({ start = true } = {}) {
     },
     progress: (p: number | null) => progress(p),
     loads: () => loads,
+    contexts: () => contexts,
   };
 }
 
@@ -353,6 +358,13 @@ describe("PhononSpeech fallback", () => {
     const t = setup();
     t.speech.unlock();
     expect(t.fallback.unlocks).toBe(1);
+  });
+
+  it("makes the audio context in a tap that comes before the voice choice has loaded", () => {
+    // The tap is iOS's only chance to unlock it; one made later stays silent.
+    const t = setup({ start: false });
+    t.speech.unlock();
+    expect(t.contexts()).toBe(1);
   });
 });
 

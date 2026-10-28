@@ -192,10 +192,11 @@ export class PhononSpeech implements SpeechOutput {
    * silent, until one is created or resumed inside a gesture, and a reply
    * arrives long after the tap (the same wall as `BrowserSpeech.unlock`). The
    * context takes the device's own rate: the 24 kHz buffers are resampled by
-   * the browser, and a context at an unusual rate is where Safari has bugs. */
+   * the browser, and a context at an unusual rate is where Safari has bugs.
+   * Made even before `start()`: the tap can beat the stored choice's read,
+   * and a context first made later, outside a gesture, stays silent. */
   unlock(): void {
     this.fallback.unlock();
-    if (!this.started) return;
     try {
       this.ctx ??= this.deps.makeContext();
       if (this.ctx.state === "suspended") void this.ctx.resume().catch(() => {});

@@ -178,6 +178,17 @@ command on the box, `sudo ~marlow/marlow-server/deploy/update.sh`.
 box is put together and why, including the optional pieces the installer
 leaves out.
 
+## Support
+
+Marlow is a personal project. Issues are welcome: bug reports, questions about
+installing or running it, and ideas. It is maintained on a best-effort basis,
+with no promised response time, and I may be slow or may not reply.
+
+Please don't put real mail, calendar entries, tokens or other personal content
+from your box in an issue. For a security problem, don't open an issue: use
+[private vulnerability reporting](https://github.com/marlow-assistant/marlow/security/advisories/new),
+described in [`SECURITY.md`](SECURITY.md).
+
 ## License
 
 Apache-2.0: see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).

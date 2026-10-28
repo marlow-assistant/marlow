@@ -1,0 +1,38 @@
+#!/usr/sbin/nft -f
+# Egress allowlist (plan §5.2) — enforced standalone, bound to the marlow
+# service user, not merely documented. This is OpenShell's per-host network
+# policy, pre-built (plan §9.2).
+#
+# UNTESTED against the real server's interfaces — verify tailscale0 vs. the
+# public interface names before applying; wrong interface names here make
+# this either a no-op or (worse) block tailscale itself.
+#
+# The IP set is populated by resolve-egress-ips.sh (hostnames from
+# server/boundaries.py's EGRESS_ALLOWLIST) — this file only defines the
+# table/chain/set structure and the enforcement rule; run the resolver once
+# before loading this, and periodically after (cron/timer), or the set
+# starts empty and every packet is dropped.
+
+table inet marlow_filter {
+    set marlow_egress_allowed {
+        type ipv4_addr
+        flags interval
+    }
+
+    chain output {
+        type filter hook output priority 0; policy accept;
+
+        # Only constrain traffic from the marlow service user — everything
+        # else on the box is unaffected.
+        meta skuid marlow jump marlow_egress_check
+    }
+
+    chain marlow_egress_check {
+        # Always allowed regardless of the resolved set:
+        ip daddr 127.0.0.0/8 accept
+        oifname "tailscale0" accept   # tailnet traffic — device pairing, phone comms
+
+        ip daddr @marlow_egress_allowed accept
+        log prefix "marlow-egress-denied: " drop
+    }
+}

@@ -1,0 +1,26 @@
+[Unit]
+Description=Renew marlow-server's tailnet TLS cert (deploy/README.md §8b)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Runs as root: `tailscale cert` needs root to write the cert/key, and
+# `systemctl restart` needs it to talk to PID1 over D-Bus. The script itself
+# chowns the output to marlow:marlow and locks the key to 0600.
+User=root
+# The root-owned copy update.sh syncs, never marlow's checkout: marlow owns
+# that tree, so root running a script from it would let anything running as
+# marlow choose what root runs next (deploy/README.md §6a's rule).
+ExecStart=/opt/marlow/bin/renew-cert.sh
+
+# Same "OpenShell-shaped" hardening as marlow-server.service (CLAUDE.md),
+# scoped to the one directory renew-cert.sh actually writes — root here
+# doesn't need to mean unrestricted filesystem access. tailscaled's socket
+# and D-Bus are read/connected, not written to, so ProtectSystem=strict
+# doesn't block them.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/marlow/.marlow

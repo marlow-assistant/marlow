@@ -1,0 +1,69 @@
+[Unit]
+Description=marlow-server (queue + invoke + API)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=marlow
+Group=marlow
+# `crontab` is setgid `crontab` on the target host, but NoNewPrivileges below
+# deliberately suppresses that credential gain. Give the already-protected
+# harness process the narrow spool-access group up front so its startup and
+# post-turn schedule renderer can install marlow's own crontab without relaxing
+# NoNewPrivileges for every other child process. ProtectSystem=strict also
+# makes the spool mount read-only; its matching narrow write exception is in
+# ReadWritePaths below.
+SupplementaryGroups=crontab
+# Two-location model (deploy/README.md): WorkingDirectory is the SOFTWARE repo
+# (so `python -m server.app` imports the `server` package). The assistant's
+# identity/working dir is a SEPARATE directory — config.py's MARLOW_WORKING_DIR
+# defaults to ~/marlow-identity, resolved as an explicit path independent of
+# CWD, so no override is needed here.
+WorkingDirectory=/home/marlow/marlow-server
+Environment=MARLOW_DATA_DIR=/home/marlow/.marlow/data
+Environment=MARLOW_LOG_DIR=/home/marlow/.marlow/logs
+# ABSOLUTE path, deliberately. config.py defaults claude_bin to bare "claude"
+# (PATH lookup), but systemd hands this unit a minimal PATH that does NOT
+# include ~/.local/bin, where the native installer puts the CLI. Without this
+# the service starts clean, serves /health, and then fails on the first real
+# invocation with "claude binary not found". Shell rc files are irrelevant
+# here — systemd never reads them.
+Environment=MARLOW_CLAUDE_BIN=/home/marlow/.local/bin/claude
+# Pin the CLI version: ProtectHome=read-only already makes ~/.local unwritable,
+# so the autoupdater would fail anyway — better to disable it explicitly than
+# to fail obscurely. Upgrades then happen only via deploy/update.sh, making a
+# CLI version change a deliberate, testable event rather than a silent one
+# (the gate #1 contract is pinned to a version; see docs/marlow-v2-gate1-results.md).
+Environment=DISABLE_AUTOUPDATER=1
+# One line per memory entry instead of every memory's full text. config.py still
+# defaults to inject_all, which measured 58,244 tokens — ~29% of a 200K window,
+# on every single turn — against Mike's real v1 memory
+# (docs/tasks/memory-index-split.md). Set here rather than flipped in config.py so
+# the change is one box's deploy decision, not every install's default; the
+# default flip and inject_all's scheduled deletion are that doc's business.
+#
+# GATE, do not skip: `scripts/memory_index_lint.py <memory-dir>` must exit 0
+# before this is worth having. Entries without a frontmatter `description:` index
+# as their first body line, which reads as a real description while being
+# whatever the file happened to open with — migrated-looking and not migrated.
+Environment=MARLOW_MEMORY_MODE=index_only
+ExecStart=/home/marlow/.venvs/marlow-server/bin/python -m server.app
+Restart=always
+RestartSec=5
+
+# Defense-in-depth, standalone-correct now (plan §9.2's "OpenShell-shaped" —
+# this is the same restriction an OpenShell landlock block would apply):
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+# marlow's own .claude (OAuth token write-back on every headless refresh,
+# gate1-results §6), .marlow (data/logs), and marlow-identity (the identity
+# working dir — memory/ edits, git commits) stay writable. Note the software
+# repo /home/marlow/marlow-server is deliberately NOT here: it's read-only under
+# ProtectHome, so the agent can't edit its own source.
+ReadWritePaths=/home/marlow/.marlow /home/marlow/.claude /home/marlow/marlow-identity /var/spool/cron/crontabs
+
+[Install]
+WantedBy=multi-user.target

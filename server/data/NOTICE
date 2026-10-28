@@ -1,0 +1,11 @@
+places.tsv.gz
+
+Place names, coordinates, populations and time zones in this file come from
+GeoNames (https://www.geonames.org), licensed under Creative Commons
+Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/).
+
+The data has been modified: filtered to populated places in Canada, the United
+States, Mexico and the United Kingdom, and reduced to name, coordinates,
+country, region, population and time zone (scripts/build_places.py).
+
+Downloaded 2026-10-13 and 2026-10-14.

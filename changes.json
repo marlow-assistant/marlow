@@ -1,0 +1,68 @@
+{
+  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 11.",
+  "entries": [
+    {
+      "id": 1,
+      "date": "2026-10-23",
+      "part": "server",
+      "category": "unattended",
+      "text": "Marlow's routine jobs (the nightly ideas, tidying its memory, checking your inbox) now follow the day you set in Settings, under Your day. Check-ins can be turned off there."
+    },
+    {
+      "id": 2,
+      "date": "2026-10-23",
+      "part": "app",
+      "category": "feature",
+      "text": "Voice mode, where you talk to Marlow and hear its replies, now works in the Android app too."
+    },
+    {
+      "id": 3,
+      "date": "2026-10-23",
+      "part": "app",
+      "category": "feature",
+      "text": "You can take a photo from inside the app and send it to Marlow: tap + next to the message box and choose Take photo."
+    },
+    {
+      "id": 4,
+      "date": "2026-10-23",
+      "part": "app",
+      "category": "feature",
+      "text": "Marlow now tells you what changed after an update, like this. Past changes are always in Settings, under What's new."
+    },
+    {
+      "id": 6,
+      "date": "2026-10-23",
+      "part": "server",
+      "category": "feature",
+      "text": "You can now attach up to 6 photos to one message. Choose several at once from your library, or add them one at a time with the camera or paste."
+    },
+    {
+      "id": 7,
+      "date": "2026-10-24",
+      "part": "server",
+      "category": "access",
+      "text": "Pairing a new device now uses a QR code or link instead of a six-digit code, and Unpair now also cuts that device off on Marlow's side, so a lost phone can be shut out. Devices you've already paired stay paired."
+    },
+    {
+      "id": 8,
+      "date": "2026-10-25",
+      "part": "app",
+      "category": "feature",
+      "text": "In the web app, Settings now has a Voice section: pick the voice voice mode reads replies in, and tap one to hear it first. These are the browser's own voices; the iPhone app keeps its own, better voices."
+    },
+    {
+      "id": 9,
+      "date": "2026-10-25",
+      "part": "server",
+      "category": "fix",
+      "text": "On an iPhone using the web app from the home screen, a reply you're watching no longer flashes a blank \"Marlow has something for you.\" banner. If you lock the phone just before a reply lands, its notification can come up to about 15 seconds late."
+    },
+    {
+      "id": 10,
+      "date": "2026-10-27",
+      "part": "server",
+      "category": "data",
+      "text": "Marlow's own files on the box (its memory, character, schedule and scripts) moved from the claude-assistant folder to marlow-identity, in the same home folder. Nothing in them changed and conversations carry on. If something of yours names the old folder, point it at the new one; the update lists any of Marlow's files that still do."
+    }
+  ]
+}

@@ -1,0 +1,1965 @@
+/* One stylesheet, loaded as a file: the CSP has no 'unsafe-inline' for
+   styles. Sizes follow the UX contract (RND-1, SCR-14, SCR-15, CMP-5),
+   with iOS points read as CSS pixels. */
+
+:root {
+  --bg: #000003;
+  --bg-2: #1c1c1e;
+  --bg-3: #2c2c2e;
+  --text: #f2f2f7;
+  --text-2: #a1a1aa;
+  --accent: #0a84ff;
+  --accent-user: rgba(10, 132, 255, 0.4); /* RND-1: accent at 0.4 */
+  --red: #ff453a;
+  --orange: #ff9f0a;
+  --yellow: #ffd60a;
+  --radius: 18px;
+  color-scheme: dark light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #ffffff;
+    --bg-2: #f2f2f7;
+    --bg-3: #e5e5ea;
+    --text: #111114;
+    --text-2: #6b6b73;
+    --accent: #007aff;
+    --accent-user: rgba(0, 122, 255, 0.4);
+    --red: #d70015;
+    --orange: #c93400;
+    --yellow: #ffcc00;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 1rem/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 18px;
+}
+
+.primary:disabled {
+  opacity: 0.5;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.boot {
+  height: 100%;
+}
+
+/* --- pairing ------------------------------------------------------------ */
+
+.pairing,
+.elsewhere {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 48px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.pairing-face {
+  display: block;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 0 0 0.5px rgba(128, 128, 128, 0.4), 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.pairing h1 {
+  margin: 8px 0 0;
+  font-size: 1.5rem;
+}
+
+.pairing-help,
+.pairing-notice {
+  color: var(--text-2);
+  margin: 0;
+}
+
+.pairing-notice {
+  color: var(--orange);
+}
+
+.pairing form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: left;
+}
+
+.pairing label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 0.875rem;
+}
+
+.pairing input {
+  font: inherit;
+  font-size: 1.125rem;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--bg-3);
+  background: var(--bg-2);
+  color: var(--text);
+}
+
+.pairing-error {
+  color: var(--red);
+  margin: 0;
+}
+
+/* --- chat layout --------------------------------------------------------- */
+
+.chat {
+  /* The presence header's pill row: gap + pill + bottom padding, 44px at the
+     default text size. On .chat, not .presence, so the transcript's top
+     padding can clear it too; the pill's line is in rem, so this is as well. */
+  --presence-fade: calc(26px + 1.125rem);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+/* The presence header (iOS PresenceHeader). It sits above the transcript
+   scroller rather than floating over it, but its bottom --presence-fade overlaps the
+   scroller and fade out, so rows dim out as they pass under it instead of being cut
+   by a hard line (the iOS header's gradient). The centre column
+   (avatar, pill) sets the height; the lightbulb and the gear are laid over its
+   top row, as iOS's ZStack does. */
+.presence {
+  --presence-top: max(10px, env(safe-area-inset-top));
+  flex: none;
+  position: relative;
+  padding: var(--presence-top) 16px 8px;
+  /* Floats over the top of the transcript like the iOS header: solid behind
+     the avatar and pill, then a fade through the last --presence-fade px,
+     which overlap the scroller (its top padding clears them at rest). */
+  margin-bottom: calc(-1 * var(--presence-fade));
+  background: linear-gradient(
+    var(--bg) calc(100% - var(--presence-fade)),
+    transparent
+  );
+  z-index: 1;
+}
+
+.presence-centre {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.avatar {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+}
+
+.avatar-face {
+  display: block;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 0 0 0.5px rgba(128, 128, 128, 0.4), 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* Each face sits right of centre and somewhere above the middle of its
+   portrait; the zoom is anchored there so it lands in the circle (iOS
+   MarlowAvatar). Zoom and anchor are per face, set inline from lib/faces.ts. */
+.face-img {
+  display: block;
+  object-fit: cover;
+}
+
+/* STA-1: the ring is on whenever the header is not idle. A slow breath,
+   0.35 -> 1 -> 0.35 over 1.8s. It sits 4px outside the avatar and is not
+   clipped: nothing above it overflows, and the header's top padding is larger
+   than the ring's reach. */
+.avatar-ring {
+  position: absolute;
+  inset: -4px;
+  border: 2.5px solid var(--accent);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: ring-breath 1.8s ease-in-out infinite;
+}
+
+@keyframes ring-breath {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Static but visibly on. */
+@media (prefers-reduced-motion: reduce) {
+  .avatar-ring {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+.presence-pill {
+  max-width: calc(100% - 8px);
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--bg-2);
+  border: 0.5px solid var(--bg-3);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presence-side {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  top: calc(var(--presence-top) + 2px);
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.gear {
+  pointer-events: auto;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  display: grid;
+  place-items: center;
+}
+
+.gear svg {
+  box-sizing: content-box;
+  padding: 10px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  border: 0.5px solid var(--bg-3);
+}
+
+/* The ideas lightbulb, top-left: the gear's twin on the other side (it took
+   the model chip's slot, 2026-10-12). */
+.bulb {
+  position: relative;
+  pointer-events: auto;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  display: grid;
+  place-items: center;
+}
+
+.bulb svg {
+  box-sizing: content-box;
+  padding: 10px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  border: 0.5px solid var(--bg-3);
+}
+
+.bulb-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 1.5px solid var(--bg);
+}
+
+/* STA-2: above the transcript. */
+/* The top banner and the +N toggle share the first row; an expanded banner gets
+   a row of its own below (found by the STA-2 e2e test: as a wrapping flex row,
+   a short second banner sat BESIDE the first on a wide screen). */
+.status-strip {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: stretch;
+}
+
+.banner {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  font-size: 0.875rem;
+  color: #fff;
+}
+
+.banner:first-child {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.banner-red {
+  background: var(--red);
+}
+
+.banner-orange {
+  background: var(--orange);
+}
+
+/* The >= 90% usage row: black on yellow, as on iOS. */
+.banner-yellow {
+  background: var(--yellow);
+  color: #000;
+}
+
+.banner-more {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 44px;
+  min-width: 44px;
+  border: 0;
+  background: var(--bg-3);
+}
+
+.notify-prompt {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  padding: 10px 16px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--bg-3);
+}
+
+.notify-prompt p {
+  flex: 1 1 220px;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.notify-prompt-buttons {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.notify-prompt .link-button {
+  font-size: 0.9375rem;
+  min-height: 44px;
+}
+
+.transcript-wrap {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+/* The header's negative margin pulls whatever comes next under its fade. For
+   the transcript that is the point; a banner (the status strip, the
+   notifications card) sat beneath the pill, which covered its text and
+   swallowed taps on the strip's "+N" (found by STA-2 and WEB-9, 2026-10-19).
+   So a banner straight after the header steps down by the fade. Not the other
+   way round (overlap only when the transcript is next): a banner arriving
+   after load then changed the transcript's top padding, which moved its
+   content and left a reader 44px short of the bottom (SCR-1). */
+.presence + .status-strip,
+.presence + .notify-prompt {
+  margin-top: var(--presence-fade);
+}
+
+.transcript {
+  height: 100%;
+  overflow-y: auto;
+  /* WEB-7: stick-to-bottom is measurement plus scrollTo, never the
+     browser's own anchoring. */
+  overflow-anchor: none;
+  padding: calc(12px + var(--presence-fade)) 12px 12px; /* 12 + the header's fade overlap */
+  display: flex;
+  flex-direction: column;
+  gap: 12px; /* RND-1: rows 12 apart */
+  outline: none;
+}
+
+.show-earlier {
+  align-self: center;
+  background: var(--bg-2);
+  border: 0;
+  border-radius: 14px;
+  padding: 8px 14px;
+  font-size: 0.875rem;
+  color: var(--text-2);
+}
+
+/* --- rows ----------------------------------------------------------------- */
+
+.row {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+}
+
+/* RND-1: a new last row grows from its speaker's bottom corner; a cold load
+   and "Show earlier" insert without it. Streaming text is not animated. */
+.row-new .bubble {
+  animation: grow 0.25s ease-out;
+}
+
+.row-user.row-new .bubble {
+  transform-origin: bottom right;
+}
+
+.row-assistant.row-new .bubble {
+  transform-origin: bottom left;
+}
+
+@keyframes grow {
+  from {
+    transform: scale(0.92);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row-new .bubble {
+    animation: none;
+  }
+}
+
+.divider {
+  align-self: center;
+  font-size: 0.75rem;
+  color: var(--text-2);
+  padding: 4px 0 8px;
+}
+
+.user-line {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  padding-left: 40px; /* RND-1: 40 gutter on the user's left */
+}
+
+/* RND-1 had a 24 gutter on the assistant's right, the chat cue for who is
+   speaking. Marlow's replies are mostly full-width cards, and on a phone the
+   gutter read as the cards sitting off centre (the Android user, 2026-10-19). A long
+   reply now spans the column with even margins; a short one still hugs the
+   left, and the user's 40 gutter keeps the two sides apart. */
+.assistant-line {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.assistant-line + .assistant-line {
+  margin-top: 8px;
+}
+
+.bubble {
+  padding: 9px 14px;
+  border-radius: var(--radius);
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bubble-user {
+  background: var(--accent-user);
+}
+
+.bubble-assistant {
+  background: var(--bg-2);
+}
+
+.user-text {
+  white-space: pre-wrap;
+}
+
+/* A "Do it" quotes the idea it answers: a thin leading bar, smaller and
+   quieter than the words under it. Colours follow the text, so the bar and the
+   secondary tone hold in light and dark. */
+.user-quote {
+  margin: 0 0 6px;
+  padding: 1px 0 1px 8px;
+  border-left: 2px solid currentColor;
+  font-size: 0.8125rem;
+  line-height: 1.3;
+  opacity: 0.75;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.user-quote-emoji {
+  flex: none;
+}
+
+.user-quote-title {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.bubble-image {
+  display: block;
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 10px;
+  margin-bottom: 6px;
+}
+
+.placeholder-image {
+  width: 120px;
+  height: 120px;
+  background: var(--bg-3);
+}
+
+.bubble-image:last-child {
+  margin-bottom: 0;
+}
+
+/* Several photos in one bubble: square-cropped tiles, 2 across for 2 and 4,
+ * 3 across for 3, 5 and 6. The model sees the whole images; only the bubble
+ * crops. */
+.bubble-grid {
+  display: grid;
+  gap: 4px;
+  width: 220px;
+  margin-bottom: 6px;
+}
+
+.bubble-grid:last-child {
+  margin-bottom: 0;
+}
+
+.bubble-grid-2,
+.bubble-grid-4 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.bubble-grid-3,
+.bubble-grid-5,
+.bubble-grid-6 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.bubble-tile {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.bubble-tile.placeholder-image {
+  height: auto;
+}
+
+/* SND-8: red circular arrow beside the bubble, vertically centred. */
+/* Glyphs in fixed circles (this, .jump, .send, .mic, .preview-remove) stay in px:
+   they are icons sized to their button, and scaled with the text setting they
+   would overflow it. Everything else is in rem (lib/textSize.ts). */
+.retry-arrow {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--red);
+  color: #fff;
+  font-size: 16px;
+  line-height: 28px;
+  padding: 0;
+}
+
+/* SND-8: small, right-aligned, pulled up into the row gap. */
+.failed-caption {
+  align-self: flex-end;
+  margin-top: 2px;
+  margin-bottom: -6px;
+  font-size: 0.75rem;
+  color: var(--red);
+  text-align: right;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.assistant-error {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.inline-error {
+  font-size: 0.8125rem;
+  color: var(--red);
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.error-text {
+  user-select: text;
+}
+
+.link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  font-size: 0.8125rem;
+}
+
+.copyable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* RND-4: on a touch screen a long press opens the Copy menu; letting it also
+   start a text selection would put two menus under one finger. */
+@media (pointer: coarse) {
+  .copyable,
+  .copyable * {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}
+
+.copy-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 132px;
+  padding: 4px;
+  border-radius: 12px;
+  background: var(--bg-3);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+.copy-menu button {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font-size: 0.9375rem;
+  text-align: left;
+}
+
+.copy-menu button:hover,
+.copy-menu button:focus-visible {
+  background: var(--bg-2);
+  outline: none;
+}
+
+.status-line {
+  font-size: 0.875rem;
+  color: var(--text-2);
+}
+
+.working {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 0.875rem;
+  min-height: 20px;
+}
+
+.working-dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.working-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-2);
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+.working-dots i:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.working-dots i:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes pulse {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+
+/* --- overlays in the transcript area -------------------------------------- */
+
+.greeting {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  pointer-events: none;
+  text-align: center;
+  padding: 16px;
+}
+
+/* The header's crop, not the whole portrait: the newer faces sit low in
+   theirs, and a full portrait at 64px is mostly coat. */
+/* The face leads an empty chat at full size: it is where someone meets
+   Marlow (Mike, 2026-10-16). */
+.greeting-face {
+  display: block;
+  width: 120px;
+  height: 120px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+/* Settings > Marlow: the faces large enough that monocle and glasses read. */
+.sheet-face {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 12px 16px 4px;
+}
+
+.sheet-face h2 {
+  margin: 0;
+  font-size: 1.0625rem;
+}
+
+.sheet-face-button {
+  display: block;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: 0 0 0 0.5px rgba(128, 128, 128, 0.4), 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.sheet-faces {
+  padding: 16px;
+}
+
+.face-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 20px 12px;
+  justify-items: center;
+  padding: 8px 0;
+}
+
+.face-tile {
+  padding: 5px;
+  border: 3px solid transparent;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.face-tile[aria-checked="true"] {
+  border-color: var(--accent);
+}
+
+.face-circle {
+  display: block;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow: 0 0 0 0.5px rgba(128, 128, 128, 0.4), 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.greeting-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 8px 0 0;
+}
+
+.greeting-sub {
+  color: var(--text-2);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* SCR-14: a 44x44 circle at the bottom-right, 12 in. */
+.jump {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--bg-3);
+  font-size: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+/* SCR-15: a 10 accent dot at the button's top-right with a 2 ring in the
+   background colour. */
+.unseen-dot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+}
+
+/* --- foot ---------------------------------------------------------------- */
+
+.foot {
+  flex: none;
+  padding: 0 12px;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+/* STA-5: at the foot, outside the scroller, just above the composer. */
+.connection {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  padding: 4px 0;
+}
+
+.connection-unreachable,
+.connection-trouble {
+  color: var(--orange);
+}
+
+/* STA-6: plain small text, no fill. */
+.notice {
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  text-align: center;
+  padding: 4px 0;
+}
+
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--text-2);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.composer {
+  padding-top: 6px;
+}
+
+/* CMP-5: 64x64 thumbnails, three across (six are two rows), each with a
+ * remove control on its corner. A single row of six at 44px left a control
+ * too small to hit with confidence on a phone (Mike, 2026-10-24). */
+.preview-row {
+  display: grid;
+  grid-template-columns: repeat(3, 64px);
+  gap: 18px;
+  margin: 0 0 6px 44px;
+  padding: 14px 14px 0 0;
+}
+
+.preview {
+  position: relative;
+  width: 64px;
+  height: 64px;
+}
+
+.preview img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 10px;
+}
+
+.preview-remove {
+  position: absolute;
+  top: -13px;
+  right: -13px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--bg-3);
+  font-size: 17px;
+  line-height: 26px;
+  padding: 0;
+}
+
+/* The visible circle is 26px; the tap target is 36px around it. */
+.preview-remove::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+}
+
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.composer textarea {
+  flex: 1;
+  resize: none;
+  font: inherit;
+  /* 22px at the default size. rem, not a bare 1.375: Composer reads the
+     computed line-height as px to size the box. */
+  line-height: 1.375rem;
+  padding: 9px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--bg-3);
+  background: var(--bg-2);
+  color: var(--text);
+  overflow-y: hidden;
+}
+
+.attach,
+.send {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0;
+  font-size: 20px;
+  padding: 0;
+}
+
+.attach {
+  background: var(--bg-2);
+}
+
+.attach-wrap {
+  position: relative;
+  flex: none;
+}
+
+/* Above "+", left-aligned with it: the composer is at the bottom of the
+   screen, so there is never room below. */
+.attach-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+}
+
+/* Icon beside the label, as on iOS. nowrap: in the narrow anchored menu
+   "Take photo" broke onto two lines (Android, 2026-10-24). */
+.attach-menu button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.attach-menu svg {
+  flex: none;
+}
+
+.send {
+  background: var(--accent);
+  color: #fff;
+}
+
+.mic {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  font-size: 18px;
+  background: var(--bg-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mic-recording {
+  background: var(--red);
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* --- voice mode (docs/tasks/voice-mode-android.md) -------------------------- */
+
+/* Over the chat and its sheets, under the approval card (.modal-backdrop, 50),
+   so a request still shows, with its tap, on this screen. */
+.voice-mode {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+}
+
+.voice-close {
+  position: absolute;
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: 12px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 1.375rem;
+}
+
+/* The button is centred on the screen and everything else hangs off it, so
+   the caption or a notice appearing never moves the target a thumb is aiming
+   for (Mike, 2026-10-21, on iOS). */
+.voice-centre {
+  position: relative;
+  width: 50%;
+  min-width: 160px;
+}
+
+.voice-caption {
+  position: absolute;
+  bottom: calc(100% + 2em);
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100vw - 48px);
+  margin: 0;
+  text-align: center;
+  font-size: 1.375rem;
+  font-weight: 600;
+}
+
+.voice-notice {
+  position: absolute;
+  top: calc(100% + 24px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100vw - 48px);
+  margin: 0;
+  text-align: center;
+  color: var(--text-2);
+}
+
+/* Out of the thumb's way, at the foot of the screen. */
+.voice-debug {
+  position: absolute;
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  text-decoration: underline;
+}
+
+.voice-button {
+  width: 100%;
+  height: clamp(130px, 30vh, 210px);
+  border-radius: 28px;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  color: #fff;
+  background: var(--accent);
+  font-size: 3rem;
+}
+
+.voice-idle {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 3px solid var(--accent);
+  color: var(--accent);
+}
+
+.voice-recording {
+  background: var(--red);
+}
+
+.voice-waiting .voice-icon,
+.voice-transcribing .voice-icon {
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
+.voice-button:disabled {
+  opacity: 1;
+}
+
+.voice-meter {
+  width: calc(100% - 40px);
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.3);
+  overflow: hidden;
+}
+
+.voice-meter-fill {
+  display: block;
+  height: 100%;
+  width: calc(var(--level, 0) * 100%);
+  background: #fff;
+  transition: width 50ms linear;
+}
+
+/* --- modal and sheets ------------------------------------------------------ */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 50;
+}
+
+.modal {
+  background: var(--bg-2);
+  border-radius: 16px;
+  padding: 18px;
+  width: min(560px, 100%);
+  max-height: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  outline: none;
+}
+
+.modal h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+/* The approval card (PermissionCard.tsx). Centred, never past 60% of the
+   viewport: the content scrolls and the buttons stay pinned underneath. */
+.perm-backdrop {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.perm-card {
+  width: min(420px, 100%);
+  max-height: 60vh;
+  max-height: 60dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-2);
+  border: 0.5px solid rgba(127, 127, 127, 0.2);
+  border-radius: 28px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
+  outline: none;
+  overflow: hidden;
+}
+
+.perm-time {
+  flex: none;
+  display: block;
+  width: calc(100% - 40px);
+  height: 3px;
+  margin: 14px 20px 4px;
+  appearance: none;
+  border: 0;
+  border-radius: 2px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+
+.perm-time::-webkit-progress-bar {
+  background: var(--bg-3);
+}
+
+.perm-time::-webkit-progress-value {
+  background: var(--accent);
+  transition: background-color 0.4s;
+}
+
+.perm-time::-moz-progress-bar {
+  background: var(--accent);
+}
+
+.perm-time.urgent::-webkit-progress-value {
+  background: var(--orange);
+}
+
+.perm-time.urgent::-moz-progress-bar {
+  background: var(--orange);
+}
+
+.perm-content {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.perm-header {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.perm-lead {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: var(--text-2);
+}
+
+.perm-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+/* Marlow's own words: the one claim on the card, so it alone is a tinted,
+   labelled, italic quotation. */
+.perm-says {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  color: var(--text-2);
+}
+
+.perm-says-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.perm-says-text {
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.perm-preview {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0;
+  border-radius: 12px;
+  background: rgba(127, 127, 127, 0.1);
+  font: 0.8125rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.perm-line {
+  display: flex;
+  gap: 6px;
+  padding: 3px 10px;
+}
+
+.perm-line-remove {
+  background: rgba(255, 69, 58, 0.16);
+}
+
+.perm-line-add {
+  background: rgba(48, 209, 88, 0.16);
+}
+
+.perm-sign {
+  flex: none;
+  width: 10px;
+}
+
+.perm-line-remove .perm-sign {
+  color: var(--red);
+}
+
+.perm-line-add .perm-sign {
+  color: #30d158;
+}
+
+.perm-line-text {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The raw request, always present: a three-line peek, or the whole of it in
+   its own capped scroll area. */
+.perm-input {
+  margin: 0;
+  color: var(--text-2);
+  font: 0.75rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+.perm-input.open {
+  display: block;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.perm-details-toggle {
+  margin-top: 6px;
+  padding: 0;
+  min-height: 32px;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.perm-actions {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 20px 20px;
+}
+
+.perm-row {
+  display: flex;
+  gap: 12px;
+}
+
+.perm-actions button {
+  flex: 1;
+  min-height: 44px;
+  border: 0;
+  border-radius: 22px;
+  background: var(--bg-3);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.perm-actions button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.perm-actions button:disabled {
+  opacity: 0.5;
+}
+
+.perm-similar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  text-align: center;
+}
+
+.perm-similar button {
+  min-height: 38px;
+  font-size: 0.875rem;
+}
+
+.perm-similar-note {
+  font-size: 0.75rem;
+  color: var(--text-2);
+}
+
+.perm-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.perm-buttons button {
+  min-width: 96px;
+  min-height: 44px;
+  border-radius: 10px;
+  border: 0;
+  background: var(--bg-3);
+}
+
+.perm-buttons button.primary {
+  background: var(--accent);
+}
+
+.sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.sheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  border-bottom: 1px solid var(--bg-2);
+}
+
+.sheet-header h2 {
+  margin: 0;
+  font-size: 1.125rem;
+}
+
+.sheet-header button {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  min-height: 44px;
+}
+
+.sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px 24px;
+}
+
+.sheet-empty {
+  color: var(--text-2);
+  padding: 24px 16px;
+  text-align: center;
+}
+
+/* --- marlow sheet: panel strip ------------------------------------------------ */
+
+.panel-strip {
+  display: flex;
+  padding: 8px;
+  border-bottom: 1px solid var(--bg-2);
+}
+
+.panel-button {
+  flex: 1;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 0;
+  background: none;
+  border: 0;
+  color: var(--text-2);
+  font-size: 0.6875rem;
+}
+
+.panel-button[aria-pressed="true"] {
+  color: var(--accent);
+}
+
+.view-link-row {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--bg-2);
+  color: var(--text);
+  text-align: left;
+}
+
+/* --- settings ---------------------------------------------------------------- */
+
+.settings-section {
+  margin-bottom: 8px;
+}
+
+.settings-group {
+  margin: 0;
+  background: var(--bg-2);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.settings-rows {
+  margin: 0;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid var(--bg-3);
+}
+
+.settings-row dt {
+  flex: none;
+}
+
+.settings-row dd {
+  margin: 0;
+  color: var(--text-2);
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.settings-footer {
+  margin: 6px 12px 0;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+}
+
+.settings-error {
+  color: var(--red);
+}
+
+/* A time row: the label left, the browser's own time control right. */
+.settings-time {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.settings-time select {
+  font: inherit;
+  color: var(--text-2);
+  background: none;
+  border: 0;
+  text-align: right;
+}
+
+.segmented {
+  display: flex;
+  gap: 2px;
+  margin: 8px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--bg-3);
+}
+
+/* Capped by the viewport: at Largest, four text-size labels at 24px need
+   ~356px and overflowed a 360px phone. The cap only bites there. */
+.segment {
+  font-size: min(1rem, 4.4vw);
+  flex: 1;
+  min-height: 36px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+}
+
+.segment[aria-checked="true"] {
+  background: var(--bg);
+  font-weight: 600;
+}
+
+.settings-action,
+.settings-danger {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.settings-action {
+  color: var(--accent);
+}
+
+.settings-action:disabled {
+  color: var(--text-2);
+  cursor: default;
+}
+
+.settings-danger {
+  color: var(--red);
+}
+
+/* Settings › Voice: one row per voice, a check on the chosen one. */
+.voice-option {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+
+.voice-option + .voice-option {
+  border-top: 1px solid var(--bg-3);
+}
+
+.voice-option-lang {
+  flex: 1;
+  color: var(--text-2);
+}
+
+.voice-option[aria-checked="true"]::after {
+  content: "✓";
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.unpair-text {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.perm-buttons button.danger-button {
+  background: var(--red);
+  color: #fff;
+}
+
+/* --- ideas ------------------------------------------------------------------- */
+
+.idea-card {
+  background: var(--bg-2);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.idea-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.idea-emoji {
+  margin-right: 8px;
+}
+
+.idea-plan {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.idea-source {
+  margin: 6px 0 0;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.idea-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.idea-meta:empty {
+  display: none;
+}
+
+.idea-category,
+.idea-nearing {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  color: var(--text-2);
+  font-size: 0.75rem;
+}
+
+.idea-nearing {
+  color: var(--orange);
+}
+
+.idea-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.idea-actions button,
+.spotlight-actions button,
+.idea-reason button {
+  min-height: 44px;
+}
+
+.idea-secondary {
+  background: var(--bg-3);
+  color: var(--text);
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 18px;
+}
+
+.idea-secondary:disabled {
+  opacity: 0.5;
+}
+
+.idea-dismissed {
+  background: var(--bg-2);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.idea-dismissed-text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-2);
+}
+
+.idea-reason {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.idea-reason input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0.5px solid var(--bg-3);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+/* The spotlight: one compact card between the transcript and the composer. */
+.spotlight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 2px;
+  padding: 4px 4px 4px 12px;
+  background: var(--bg-2);
+  border: 0.5px solid var(--bg-3);
+  border-radius: 14px;
+}
+
+.spotlight-body {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.spotlight-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.spotlight-actions {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+
+.spotlight-actions button {
+  padding: 8px 12px;
+  font-size: 0.875rem;
+}
+
+/* --- what's new (WhatsNew.tsx; docs/tasks/whats-new.md) ------------------- */
+
+/* The summary scrolls and the buttons stay pinned, as on the approval card. */
+.whats-new .whats-new-list {
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.whats-new-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* FaceImage zooms its portrait with a transform and relies on its parent to
+   clip it round; bare in the header it drew over the title (Android, 2026-10-24). */
+.whats-new-face {
+  display: block;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+}
+
+.whats-new-header h2 {
+  margin: 0;
+}
+
+.whats-new-sub {
+  margin: 2px 0 0;
+  font-size: 0.875rem;
+  color: var(--text-2);
+}
+
+.whats-new-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-whats-new {
+  padding: 4px 12px 12px;
+}
+
+.whats-new-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.whats-new-meta {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+/* The policy's must-tell categories, so a change to what Marlow can reach
+   never reads as just another feature. */
+.whats-new-tell {
+  color: var(--accent);
+}
+
+/* More room above OK than between entries, as on iOS: the last entry sat
+   tight on the button (2026-10-23). */
+.whats-new-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.whats-new-buttons button {
+  min-height: 44px;
+  width: 100%;
+}
+
+.whats-new-hint {
+  margin: 4px 0 0;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+}

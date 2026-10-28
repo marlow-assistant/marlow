@@ -1,0 +1,269 @@
+/* Activity and Identity views. Classes only: the CSP forbids inline styles. */
+
+.view-day {
+  margin: 16px 0 6px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: none;
+}
+
+.view-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.view-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--bg-2);
+  color: var(--text);
+  border: 0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font: inherit;
+}
+
+button.view-row {
+  cursor: pointer;
+}
+
+.view-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.view-title {
+  font-weight: 600;
+}
+
+.view-when {
+  color: var(--text-2);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.view-when.overdue {
+  color: var(--orange);
+}
+
+.view-sub {
+  color: var(--text-2);
+  font-size: 0.875rem;
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.view-flags {
+  font-size: 0.8125rem;
+  margin-top: 3px;
+  color: var(--text-2);
+}
+
+.view-flag-warn {
+  color: var(--orange);
+}
+
+.view-detail {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8125rem;
+}
+
+.view-detail li {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.view-detail-label {
+  color: var(--text-2);
+  flex: none;
+}
+
+.view-detail-target {
+  overflow-wrap: anywhere;
+}
+
+.view-detail-count {
+  color: var(--text-2);
+  flex: none;
+}
+
+/* A background job (docs/tasks/default-infrastructure.md): present, but quieter
+   than the jobs the user asked for. */
+.view-row-background {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--bg-2);
+}
+
+.view-row-background .view-title {
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+/* What the job said. Plain text, never markdown: it is the model's reply, shown
+   as written. */
+.view-output {
+  margin-top: 8px;
+  font-size: 0.875rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.view-output-failed {
+  color: var(--text-2);
+}
+
+.view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--text-2);
+  font-size: 0.875rem;
+}
+
+.view-took {
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  margin-top: 4px;
+}
+
+.view-error {
+  color: var(--orange);
+  text-align: center;
+  padding: 24px 16px;
+}
+
+.view-error button,
+.view-more {
+  background: var(--bg-2);
+  color: var(--accent);
+  border: 0;
+  border-radius: 10px;
+  min-height: 44px;
+  padding: 0 16px;
+  font: inherit;
+}
+
+.view-more {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.view-foot {
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  margin-top: 16px;
+}
+
+.view-warn-box {
+  color: var(--orange);
+  font-size: 0.875rem;
+  margin-bottom: 12px;
+}
+
+.view-mono {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.view-note {
+  background: var(--bg-2);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  margin-bottom: 12px;
+}
+
+.view-note strong {
+  color: var(--text);
+}
+
+.view-back {
+  background: none;
+  border: 0;
+  color: var(--accent);
+  min-height: 44px;
+  font: inherit;
+}
+
+.view-filetext {
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+}
+
+pre.view-filetext {
+  white-space: pre-wrap;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.8125rem;
+}
+
+/* Usage panel. */
+.usage-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.usage-asof {
+  font-weight: 400;
+}
+
+.usage-bar {
+  display: block;
+  width: 100%;
+  height: 6px;
+  margin: 8px 0 6px;
+  appearance: none;
+  border: 0;
+  border-radius: 3px;
+  background: var(--bg-3);
+  overflow: hidden;
+}
+
+.usage-bar::-webkit-progress-bar {
+  background: var(--bg-3);
+  border-radius: 3px;
+}
+
+.usage-bar::-webkit-progress-value {
+  background: var(--accent);
+  border-radius: 3px;
+}
+
+.usage-bar::-moz-progress-bar {
+  background: var(--accent);
+  border-radius: 3px;
+}
+
+.usage-bar-high::-webkit-progress-value {
+  background: var(--yellow);
+}
+
+.usage-bar-high::-moz-progress-bar {
+  background: var(--yellow);
+}
+
+.usage-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-foot,
+.usage-quiet {
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  margin: 4px 0 0;
+}

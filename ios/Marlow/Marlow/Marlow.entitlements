@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>aps-environment</key>
+	<string>development</string>
+	<key>com.apple.developer.usernotifications.time-sensitive</key>
+	<true/>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.mikemason.Marlow</string>
+	</array>
+	<!-- ORDER IS LOAD-BEARING. Adding this array at all changes the default
+	     access group for items saved without an explicit kSecAttrAccessGroup
+	     to the FIRST entry. `KeychainStore` saves the paired device_token that
+	     way, so the app-identifier group — where that item already lives, and
+	     what the default was before this array existed — has to stay first.
+	     Reordering these two lines un-pairs the phone on the next save. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.mikemason.Marlow</string>
+		<string>$(AppIdentifierPrefix)com.mikemason.Marlow.shared</string>
+	</array>
+</dict>
+</plist>

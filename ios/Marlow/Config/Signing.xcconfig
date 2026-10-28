@@ -1,0 +1,10 @@
+// Signing. The team ID is an Apple account identifier, so it is not committed
+// (2026-10-26). Put yours in Signing.local.xcconfig next to this
+// file, which .gitignore keeps out of git:
+//
+//     DEVELOPMENT_TEAM = ABCDE12345
+//
+// Without it a simulator build still works; a device build asks for a team.
+// Worktrees don't share ignored files, so each checkout needs its own copy.
+DEVELOPMENT_TEAM =
+#include? "Signing.local.xcconfig"

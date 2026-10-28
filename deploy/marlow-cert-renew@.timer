@@ -1,0 +1,18 @@
+[Unit]
+Description=Weekly renewal check for marlow-server@%i's tailnet TLS cert
+
+[Timer]
+# Certs last 90 days; weekly is a wide margin and `tailscale cert` is a cheap
+# no-op when nowhere near expiry (deploy/README.md §8b). When it does renew,
+# it restarts marlow-server (dropping any in-flight turn or pending
+# permission approval) — Sunday 03:00 (server tz) is deliberately off-hours
+# rather than systemd's plain `weekly` default (Monday 00:00, arbitrary),
+# to make that restart's blast radius as low as practical.
+# Half an hour after marlow-cert-renew.timer, so the two instances' restarts
+# don't land together.
+OnCalendar=Sun *-*-* 03:30:00
+Persistent=true
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

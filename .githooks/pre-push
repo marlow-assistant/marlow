@@ -1,0 +1,241 @@
+#!/usr/bin/env bash
+# Blocks a push when the test suite is red — the free, local stand-in for
+# server-side branch protection (which needs GitHub Pro on a private repo).
+# Binds whoever pushes from this clone, including Claude.
+#
+# Enable once per clone:  git config core.hooksPath .githooks
+# Bypass a single push (you'd better mean it):  git push --no-verify
+set -euo pipefail
+
+root="$(git rev-parse --show-toplevel)"
+cd "$root"
+
+# Git passes the remote's name as $1. New branches are diffed against this
+# remote's main (see push_base); any other remote just falls through to "run".
+PUSH_REMOTE="${1:-origin}"
+
+# --- is this push nothing but branch deletions? -------------------------------
+#
+# Deleting a merged branch pushes no commits, so there is nothing to test. It
+# used to fall through to "no range seen, run everything": ~80s of pytest plus
+# vitest per deleted branch, about 5 minutes to tidy four (2026-10-05).
+# Returns 0 only when there was at least one ref line and every one of them was
+# a deletion; empty stdin is not "only deletions".
+deletions_only_push() {
+    local seen=0 local_ref local_sha remote_ref remote_sha
+    local zero="0000000000000000000000000000000000000000"
+
+    while read -r local_ref local_sha remote_ref remote_sha; do
+        [ -z "${local_sha:-}" ] && continue
+        [ "$local_sha" = "$zero" ] || return 1
+        seen=1
+    done
+    [ "$seen" = "1" ]
+}
+
+# --- what to diff a pushed ref against -----------------------------------------
+#
+# Prints the commit to diff local_sha against, or fails when there isn't a
+# trustworthy one (the caller then runs everything).
+#
+# An existing branch diffs against what the remote already has. A NEW branch
+# has no remote counterpart, and used to count as ambiguous -- so every first
+# push ran everything, including the web tests, and demanded web/node_modules
+# in fresh worktrees that don't have one, even when nothing in web/ changed
+# (2026-10-05). Its base is now the merge-base with the remote's main. That is
+# never too small: a stale remote-tracking main only moves the merge-base
+# earlier, which widens the diff, and a branch stacked on another branch
+# diffs against main, which covers the parent's changes too. If the merge-base
+# can't be resolved (no remote main fetched, unrelated history), fail.
+push_base() {
+    local local_sha="$1" remote_sha="$2"
+    local zero="0000000000000000000000000000000000000000"
+
+    if [ "$remote_sha" = "$zero" ]; then
+        git merge-base "$local_sha" "refs/remotes/$PUSH_REMOTE/main" 2>/dev/null || return 1
+        return 0
+    fi
+    git cat-file -e "$remote_sha^{commit}" 2>/dev/null || return 1
+    echo "$remote_sha"
+}
+
+# --- is this push documentation-only? ----------------------------------------
+#
+# A prose-only push cannot turn the suite red, and this suite takes ~20s, so
+# paying it to learn nothing is the common case worth skipping.
+#
+# The allowlist is deliberately NARROW, and "any *.md" would have been wrong:
+# identity/SOUL.md, identity/CLAUDE.md and identity/USER.md are the seed
+# templates that deploy/seed-identity.sh copies, and tests/test_deploy.py
+# asserts the seeded working dir contains them — so those markdown files are
+# under test and must never take the skip. Only `docs/**` (pure prose, read by
+# humans and agents, imported by nothing) and top-level `*.md` qualify.
+#
+# Every ambiguity resolves toward RUNNING the suite: an unreadable range, a
+# new branch whose merge-base with main can't be found, an empty stdin, a ref
+# we can't resolve. Skipping is the unsafe direction, so it happens only when the file
+# list was read successfully and every path in it is prose.
+docs_only_push() {
+    local had_range=0 local_ref local_sha remote_ref remote_sha base files
+    local zero="0000000000000000000000000000000000000000"
+
+    while read -r local_ref local_sha remote_ref remote_sha; do
+        [ -z "${local_sha:-}" ] && continue
+        # Branch deletion: nothing being pushed, nothing to test.
+        [ "$local_sha" = "$zero" ] && continue
+
+        git cat-file -e "$local_sha^{commit}" 2>/dev/null || return 1
+        base="$(push_base "$local_sha" "${remote_sha:-$zero}")" || return 1
+
+        files="$(git diff --name-only "$base" "$local_sha" 2>/dev/null)" || return 1
+        had_range=1
+
+        while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+                docs/*) ;;
+                */*) return 1 ;;   # nested and not under docs/ — code
+                *.md) ;;           # top-level prose (README.md, CLAUDE.md)
+                *) return 1 ;;
+            esac
+        done <<< "$files"
+    done
+
+    # No range seen at all (empty stdin, or only deletions): don't claim
+    # docs-only, just run the suite.
+    [ "$had_range" = "1" ]
+}
+
+# --- does this push touch the web client? -------------------------------------
+#
+# The web client's unit tests (Vitest, in web/) run only when the push changes
+# something under web/: the server suite stays the ~20s it was for a server
+# change. Playwright does not run here (it needs a browser and the dev server);
+# it is run by hand before review.
+#
+# Same doctrine as docs_only_push, mirrored: this returns "no" (1) only when
+# the file list was read successfully and nothing in it is under web/. Every
+# ambiguity -- a new branch with no merge-base, an unreadable range, empty
+# stdin -- answers "yes", because skipping is the unsafe direction.
+push_touches_web() {
+    local had_range=0 local_ref local_sha remote_ref remote_sha base files
+    local zero="0000000000000000000000000000000000000000"
+
+    while read -r local_ref local_sha remote_ref remote_sha; do
+        [ -z "${local_sha:-}" ] && continue
+        [ "$local_sha" = "$zero" ] && continue
+        git cat-file -e "$local_sha^{commit}" 2>/dev/null || return 0
+        base="$(push_base "$local_sha" "${remote_sha:-$zero}")" || return 0
+        files="$(git diff --name-only "$base" "$local_sha" 2>/dev/null)" || return 0
+        had_range=1
+        while IFS= read -r f; do
+            case "$f" in
+                web/*) return 0 ;;
+            esac
+        done <<< "$files"
+    done
+
+    [ "$had_range" = "1" ] && return 1
+    return 0
+}
+
+# Git hands the refs on stdin once, and both checks need them.
+PUSH_REFS="$(cat)"
+
+if deletions_only_push <<< "$PUSH_REFS"; then
+    echo "pre-push: only deleting branches — nothing to test."
+    exit 0
+fi
+
+if docs_only_push <<< "$PUSH_REFS"; then
+    echo "pre-push: documentation-only push (docs/** and top-level *.md) — skipping the suite."
+    echo "pre-push: touch anything else and it runs again automatically."
+    exit 0
+fi
+
+# Git exports its own GIT_* variables into every hook process, and they leak
+# straight through into the suite. `tests/conftest.py:safe_git_init` refuses to
+# build a scratch repo inside an existing work tree — a check that shells out to
+# `git`, which under an inherited GIT_DIR answers about *this* repo no matter
+# which temp directory it was pointed at. Every fixture that builds a throwaway
+# repo then fails, but only from in here: 786 passed from a shell, 7 failed and
+# 47 errors under the hook (2026-08-23).
+#
+# That failure mode is worse than a plain bug, because the gate is the only one
+# (CI is off) and the symptom — a red suite that is green everywhere else —
+# reads as "the hook is busted, push with --no-verify". Which is what happened
+# on the chat-polish branch, 2026-08-23. Hand pytest the environment a shell would.
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_QUARANTINE_PATH \
+      GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+
+# A linked worktree shares the repo but NOT .venv, so the lookup below found
+# nothing and the push was blocked (2026-08-27, pushing an iOS-only change from
+# marlow-server-ios-effort-toggle). Blocking is the correct answer to a missing
+# runner -- but the escape it makes obvious is `--no-verify`, which with CI off
+# is an ungated push to the only gate there is, taken at the moment you are
+# least inclined to think about it. So: resolve the venv from the REPO rather
+# than the checkout. `--git-common-dir` points at the primary worktree's .git
+# from any linked one, and at our own in the ordinary case.
+#
+# Running that binary from here still collects THIS worktree's tests -- pytest
+# takes its rootdir from the cwd, not from where the interpreter lives.
+COMMON_DIR="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+PRIMARY_PYTEST=""
+if [ -n "$COMMON_DIR" ]; then
+    PRIMARY_PYTEST="$(dirname "$COMMON_DIR")/.venv/bin/pytest"
+fi
+
+# Order matters: a repo venv, ours or the primary's, beats whatever `pytest`
+# happens to be on PATH -- that one may be any version, against any deps.
+if [ -x ".venv/bin/pytest" ]; then
+    PYTEST=".venv/bin/pytest"
+elif [ -n "$PRIMARY_PYTEST" ] && [ -x "$PRIMARY_PYTEST" ]; then
+    echo "pre-push: no .venv here (worktree?) — using $PRIMARY_PYTEST"
+    PYTEST="$PRIMARY_PYTEST"
+elif command -v pytest >/dev/null 2>&1; then
+    PYTEST="pytest"
+else
+    # Same doctrine as the docs-only skip above: ambiguity resolves toward
+    # running the suite. A missing pytest is not evidence the push is safe, it
+    # is the absence of evidence either way — and it fails silently, so every
+    # push from a venv-less clone or worktree sails through green. That is the
+    # gate being off, not the gate passing.
+    echo "pre-push: no pytest (.venv/bin/pytest, the primary worktree's .venv," >&2
+    echo "pre-push: or PATH) — push blocked." >&2
+    echo "pre-push: the suite is the only gate (CI is off), so a missing" >&2
+    echo "pre-push: runner cannot be treated as a pass." >&2
+    echo "pre-push: arm it with:  python3 -m venv .venv && .venv/bin/pip install \\" >&2
+    echo "pre-push:                 -r server/requirements.txt -r server/requirements-dev.txt" >&2
+    echo "pre-push: or override deliberately with 'git push --no-verify'." >&2
+    exit 1
+fi
+
+echo "pre-push: running $PYTEST -q ..."
+if ! "$PYTEST" -q; then
+    echo "" >&2
+    echo "pre-push: tests FAILED — push blocked. Fix them, or 'git push --no-verify' to override." >&2
+    exit 1
+fi
+if push_touches_web <<< "$PUSH_REFS"; then
+    # Same rule as pytest above: a missing runner blocks, it is not a pass.
+    if ! command -v npm >/dev/null 2>&1; then
+        echo "pre-push: this push touches web/ but npm is not on PATH — push blocked." >&2
+        echo "pre-push: install Node 20.19+ (the web client's floor) and retry." >&2
+        exit 1
+    fi
+    if [ ! -d web/node_modules ]; then
+        echo "pre-push: this push touches web/ but web/node_modules is missing — push blocked." >&2
+        echo "pre-push: arm it with:  (cd web && npm ci)" >&2
+        exit 1
+    fi
+    # Typecheck first: Vitest strips types without checking them, and the
+    # box's build is `tsc -b && vite build`, so a type error would otherwise
+    # pass this gate and fail update.sh on the box instead (review, 2026-10-01).
+    echo "pre-push: web/ changed — running npm run typecheck and npm test in web/ ..."
+    if ! (cd web && npm run typecheck --silent && npm test --silent); then
+        echo "" >&2
+        echo "pre-push: web tests FAILED — push blocked." >&2
+        exit 1
+    fi
+fi
+echo "pre-push: green — pushing."

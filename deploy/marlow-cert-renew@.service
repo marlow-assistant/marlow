@@ -1,0 +1,21 @@
+[Unit]
+Description=Renew the tailnet TLS cert for marlow-server@%i (deploy/README.md §8b)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# marlow-cert-renew.service, for a second instance (docs/tasks/marlow-for-taylor.md).
+# Same script and hardening, from the instance's own root-owned copy;
+# only the owner, the directory it writes and the unit it restarts change.
+# update.sh installs it as marlow-cert-renew@<user>.service, so %i is the user.
+User=root
+Environment=MARLOW_TLS_OWNER=%i
+Environment=MARLOW_TLS_DIR=/home/%i/.marlow/tls
+Environment=MARLOW_SYSTEMD_UNIT=marlow-server@%i
+ExecStart=/opt/marlow/instances/%i/bin/renew-cert.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/%i/.marlow

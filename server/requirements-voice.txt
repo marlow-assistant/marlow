@@ -1,0 +1,7 @@
+# Speech to text for the web client (server/transcribe.py). Not in
+# requirements.txt: a box that never dictates needs none of it, and without
+# these the endpoint answers 503 and the web client hides its mic.
+# PyAV bundles ffmpeg (~128 MB on disk); sherpa-onnx runs Parakeet.
+av>=19
+numpy
+sherpa-onnx>=1.13

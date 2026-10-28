@@ -1,0 +1,112 @@
+{
+    "@context": [
+        "https://geojson.org/geojson-ld/geojson-context.jsonld",
+        {
+            "@version": "1.1",
+            "wx": "https://api.weather.gov/ontology#",
+            "s": "https://schema.org/",
+            "geo": "http://www.opengis.net/ont/geosparql#",
+            "unit": "http://codes.wmo.int/common/unit/",
+            "@vocab": "https://api.weather.gov/ontology#",
+            "geometry": {
+                "@id": "s:GeoCoordinates",
+                "@type": "geo:wktLiteral"
+            },
+            "city": "s:addressLocality",
+            "state": "s:addressRegion",
+            "distance": {
+                "@id": "s:Distance",
+                "@type": "s:QuantitativeValue"
+            },
+            "bearing": {
+                "@type": "s:QuantitativeValue"
+            },
+            "value": {
+                "@id": "s:value"
+            },
+            "unitCode": {
+                "@id": "s:unitCode",
+                "@type": "@id"
+            },
+            "forecastOffice": {
+                "@type": "@id"
+            },
+            "forecastGridData": {
+                "@type": "@id"
+            },
+            "publicZone": {
+                "@type": "@id"
+            },
+            "county": {
+                "@type": "@id"
+            }
+        }
+    ],
+    "id": "https://api.weather.gov/points/46.4953,-84.3453",
+    "type": "Feature",
+    "geometry": {
+        "type": "Point",
+        "coordinates": [
+            -84.3453,
+            46.4953
+        ]
+    },
+    "properties": {
+        "@id": "https://api.weather.gov/points/46.4953,-84.3453",
+        "@type": "wx:Point",
+        "cwa": "APX",
+        "type": "land",
+        "forecastOffice": "https://api.weather.gov/offices/APX",
+        "gridId": "APX",
+        "gridX": 65,
+        "gridY": 131,
+        "forecast": "https://api.weather.gov/gridpoints/APX/65,131/forecast",
+        "forecastHourly": "https://api.weather.gov/gridpoints/APX/65,131/forecast/hourly",
+        "forecastGridData": "https://api.weather.gov/gridpoints/APX/65,131",
+        "observationStations": "https://api.weather.gov/gridpoints/APX/65,131/stations",
+        "relativeLocation": {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    -84.3705436,
+                    46.4761686
+                ]
+            },
+            "properties": {
+                "city": "Sault Ste. Marie",
+                "state": "MI",
+                "distance": {
+                    "unitCode": "wmoUnit:m",
+                    "value": 0
+                },
+                "bearing": {
+                    "unitCode": "wmoUnit:degree_(angle)",
+                    "value": 0
+                }
+            }
+        },
+        "forecastZone": "https://api.weather.gov/zones/forecast/MIZ087",
+        "county": "https://api.weather.gov/zones/county/MIC033",
+        "fireWeatherZone": "https://api.weather.gov/zones/fire/MIZ087",
+        "timeZone": "America/Detroit",
+        "radarStation": "KAPX",
+        "astronomicalData": {
+            "sunrise": "2026-10-13T07:52:27-04:00",
+            "sunset": "2026-10-13T18:54:39-04:00",
+            "transit": "2026-10-13T13:23:33-04:00",
+            "civilTwilightBegin": "2026-10-13T07:22:13-04:00",
+            "civilTwilightEnd": "2026-10-13T19:24:53-04:00",
+            "nauticalTwilightBegin": "2026-10-13T06:47:19-04:00",
+            "nauticalTwilightEnd": "2026-10-13T19:59:47-04:00",
+            "astronomicalTwilightBegin": "2026-10-13T06:12:20-04:00",
+            "astronomicalTwilightEnd": "2026-10-13T20:34:46-04:00"
+        },
+        "nwr": {
+            "transmitter": "KIG74",
+            "sameCode": "026033",
+            "areaBroadcast": "https://api.weather.gov/radio/KIG74/broadcast",
+            "pointBroadcast": "https://api.weather.gov/points/46.4953,-84.3453/radio"
+        }
+    }
+}

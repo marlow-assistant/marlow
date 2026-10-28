@@ -1,0 +1,97 @@
+{
+  "_comment": "The permission policy for the marlow user -- the only one per instance. Installed to /home/marlow/.claude/settings.json; a second instance gets it with /home/marlow/ rewritten to its own home (deploy/update.sh). Rationale in docs/tasks/marlow-settings-permissions-policy.md. There WAS a marlow-settings.cron.json alongside this; it was deleted 2026-08-07 because it differed only by an `ask` block on two tools and was read by nothing. The unattended never-prompt policy now lives in code -- server/active_turn.py plus the deny in server/app.py's /internal/permission-request -- and covers every unvetted tool rather than two. Do not reintroduce a second settings file: this one applies to cron turns too, and the attended/unattended difference is decided at the round-trip. The deny block is kept in lockstep with server/boundaries.py by tests/test_marlow_settings.py -- edit both or the suite fails.",
+
+  "permissions": {
+    "_connector_comment": "The mcp__claude_ai_* entries are the Gmail/Calendar Claude.ai CONNECTORS -- account-level MCP servers provisioned against the login, not configured on this box (docs/tasks/v2-dogfood-parity.md). They are enumerated tool-by-tool rather than granted at server scope (`mcp__claude_ai_Gmail`, which the CLI accepts and which covers every tool the server exposes) because both connectors are read/write: Gmail exposes create_draft/update_draft/label_thread and Calendar exposes create_event/delete_event/respond_to_event. Reading is the whole job -- the morning briefing summarises, it does not reply or RSVP -- so the writing half is left to fall through to the phone. On a cron turn that fall-through IS an auto-deny -- server/app.py denies any permission request raised by an unattended turn outright -- which is the correct unattended answer for anything that mutates Mike's mailbox or calendar. Adding a write tool here is a decision, not a typo fix. AND READING IS NOT ONE PRIVILEGE: `get_thread` and `get_message` are absent too (Mike, 2026-08-07). The standing grant is the Gmail LIST VIEW -- senders, subjects, snippets, which is what `search_threads` returns. Full message bodies stay a per-occasion call, as on v1 where Mike denied `get_thread`. They are also the richest prompt-injection carrier on this box, and cron WebFetch is now unprompted, so the two grants compound. Adding them back is a decision, not a completeness fix.",
+
+    "_allow_comment": "No Bash entries, deliberately. They used to be here and `Bash(git diff:*)` read ~/.ssh via `git diff --no-index` (/security-review 2026-08-05) -- Bash rules are command-prefix matches with no path awareness, so this file cannot express the one constraint that matters. Bash is vetted in the hook instead, by server/bash_policy.py, which resolves every argument and requires it to land inside the working tree. Entries here would be redundant as well as unsafe: a Bash call with no allow rule falls through to the hook, and the hook's allow clears it (gate #1 §2, and probe run `fallthrough-1`). NO Glob(...) OR Grep(...) ENTRIES EITHER, removed 2026-09-06 -- the CLI warns on its own that `Glob(<path>) is not matched by file permission checks -- only Read(path) rules are`, and that Read rules cover every file-READING tool. Grep(...) drew no warning and was removed with it: same shape, and the warning list is not exhaustive. Removing them changes nothing, and server/file_policy.py's module docstring is why -- the hook is consulted for allow-matched calls too and its decision wins, so it vets Glob and Grep by path independently of this file. Do not re-add them to 'document intent': an entry nothing agrees with is the shape that made five denies below inert for months. NO TodoWrite EITHER, removed 2026-09-06 -- the CLI does not offer that tool at 2.1.251 (read from the init event's `tools` array, not from the model, which reports its own toolset unreliably). It drew no warning and never could: the CLI warns about a path rule whose tool spelling is wrong, not about a name for a tool that does not exist. Its twin in boundaries.VETTED_PATHLESS_TOOLS went with it, which is why the lockstep test between the two never caught it -- both halves were inert together. tests/test_marlow_settings.py now checks every bare name here against boundaries.VETTED_BUILTIN_TOOLS, the list invoke.py actually hands the CLI. The `//` in the path rules below is the CLI's absolute-path spelling, not a typo -- a single slash anchors at ~/.claude, and these three allows were inert until 2026-10-19 (see the end of _deny_comment). Changing that made no difference to what runs, for the reason above: the hook was already deciding all three.",
+
+    "allow": [
+      "Read(//home/marlow/marlow-identity/**)",
+
+      "Edit(//home/marlow/marlow-identity/memory/**)",
+
+      "Read(//home/marlow/.marlow/attachments/**)",
+
+      "WebSearch",
+      "WebFetch",
+      "ToolSearch",
+
+      "mcp__claude_ai_Gmail__search_threads",
+      "mcp__claude_ai_Gmail__list_labels",
+
+      "mcp__claude_ai_Google_Calendar__list_calendars",
+      "mcp__claude_ai_Google_Calendar__list_events",
+      "mcp__claude_ai_Google_Calendar__search_events",
+      "mcp__claude_ai_Google_Calendar__get_event",
+      "mcp__weather__geocode",
+      "mcp__weather__forecast",
+      "mcp__weather__route_forecast"
+    ],
+
+    "_deny_comment": "Mirrors server/boundaries.py SECRET_PATHS/SECRET_GLOBS. The next two lines are the DEFAULT locations only: boundaries.py resolves them from MARLOW_DATA_DIR and MARLOW_APNS_KEY_PATH at runtime, and settings.json cannot. If either env var is set in marlow-server.service, update these by hand or the two layers stop agreeing about where the secret lives. The Write/Edit entries below AGENT_CONFIG_PATHS in boundaries.py are a different kind of rule: not secrets (the CLI reads all of them) but harness config, consulted before the first tool call and therefore before the PreToolUse hook exists to object. Live since --strict-mcp-config came out of invoke.py -- an mcpServers entry is a command that runs at CLI startup (docs/tasks/v2-dogfood-parity.md). Duplicated here rather than left to the hook because gap #7 was exactly a box where the hook was never wired at all. The .git/** pair joined them 2026-08-08: server/identity_git.py runs git in that repo as the SERVER process every turn, and .git/config names commands git executes (/security-review). Know what these two lines do NOT cover, though: the primitive that review actually found was `git log --output=.git/config` -- a BASH call, and per the allow comment above, Bash rules here are command-prefix matches with no path awareness, so this file cannot express it. Only the hook's argument resolution catches that one. These entries are the Write/Edit half only. The CLAUDE.md and FIRST-RUN.md pair joined them 2026-10-05 from boundaries.PRODUCT_OWNED_PATHS, a different tuple: those files are the software's own rules, replaced by update.sh on every deploy, and stay READABLE (docs/tasks/box-upgrades.md). cron/email-flash.md followed 2026-10-06: a shipped job prompt, installed by update.sh the same way, cron/ideas.md 2026-10-12, and cron/consolidate.md 2026-10-21 when the harness took over running it (docs/tasks/default-infrastructure.md). EDIT ONLY SINCE 2026-09-06, and the Write(...) twin of each line is deliberately gone. The CLI warns that `Write(<path>) is not matched by file permission checks -- only Edit(path) rules are`, and that an Edit rule covers every file-EDITING tool. Those five Write lines had never participated in a check; the paths stayed unwritable only because someone wrote both spellings. That is the fourth instance of this lesson (Bash 2026-08-05, path tools PR #19, pathless tools 2026-08-06) and the first on the DENY side, where a dead rule is silent rather than noisy -- an inert allow produces a spurious prompt that announces itself, an inert deny produces nothing at all. VERIFY BY WARNING, NOT BY READING THIS LIST: the warnings are a property of the CLI version, so re-read every one after an upgrade rather than assuming this set is still the whole of it. DOUBLE SLASH SINCE 2026-10-19, and the fifth instance: every path rule in this file, allow and deny, used to be spelled `/home/marlow/...` with ONE slash, and in a user settings file a single leading slash anchors at ~/.claude, not at the filesystem root -- `Edit(/home/marlow/.claude/**)` meant ~/.claude/home/marlow/.claude/**, which is nothing. `//` is the absolute form, `~/` the home-relative one. Inert from the first absolute rule (PR #18, 2026-08-05) until this change: the five Read and nine Edit denies above never denied anything, and the paths stayed safe only because hooks/pretooluse.py hard-denies the same set on its own. Probed on the box at 2.1.301 (scripts/probe-path-rule-anchor.sh, docs/tasks/settings-path-anchor.md). THE CLI DOES NOT WARN ABOUT THIS ONE, so verify-by-warning cannot catch it; tests/test_marlow_settings.py refuses a single-slash absolute instead. deploy/update.sh's `/home/marlow/` rewrite still matches inside `//home/marlow/`.",
+
+    "deny": [
+      "Read(//home/marlow/.claude/.credentials.json)",
+      "Read(//home/marlow/.ssh/**)",
+      "Read(//home/marlow/.marlow/data/**)",
+      "Read(//home/marlow/.marlow/apns/**)",
+      "Read(//home/marlow/.marlow/tls/**)",
+      "Read(//home/marlow/.marlow/admin/**)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Bash(cat /home/marlow/.claude/.credentials.json*)",
+      "Bash(cat /home/marlow/.ssh/**)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Edit(//home/marlow/.claude.json)",
+      "Edit(//home/marlow/.claude/**)",
+      "Edit(//home/marlow/marlow-identity/.mcp.json)",
+      "Edit(//home/marlow/marlow-identity/.claude/**)",
+      "Edit(//home/marlow/marlow-identity/.git/**)",
+      "Edit(//home/marlow/marlow-identity/CLAUDE.md)",
+      "Edit(//home/marlow/marlow-identity/FIRST-RUN.md)",
+      "Edit(//home/marlow/marlow-identity/cron/email-flash.md)",
+      "Edit(//home/marlow/marlow-identity/cron/ideas.md)",
+      "Edit(//home/marlow/marlow-identity/cron/consolidate.md)",
+
+      "mcp__claude_ai_Trello",
+      "mcp__claude_ai_Excalidraw",
+      "mcp__claude_ai_Google_Drive",
+      "mcp__claude_ai_Mermaid_Chart",
+
+      "CronCreate",
+      "CronDelete",
+      "CronList",
+      "RemoteTrigger",
+      "DesignSync",
+      "EnterWorktree",
+      "ExitWorktree",
+      "TaskOutput",
+      "TaskStop",
+      "NotebookEdit",
+
+      "Agent",
+      "ListAgents"
+    ],
+
+    "_tool_surface_comment": "The last sixteen entries in the deny list ABOVE -- from `mcp__claude_ai_Trello` down -- are a DIFFERENT KIND OF DENY from the path rules they sit with, and the difference is the whole reason they work: a deny here removes the tool's NAME from the model's tool listing entirely, it does not merely refuse the call. Probed on the box 2026-08-24 at CLI 2.1.221 (docs/tasks/marlow-tool-surface-trimming.md) -- put `mcp__claude_ai_Trello` in this list and all sixteen Trello tools vanish from the listing. Server scope works without a wildcard, as _connector_comment above already notes. WHY: the connectors are attached to Mike's Claude ACCOUNT and Marlow runs `claude -p` as that account, so anything he connects for his own use lands in Marlow's tool surface too. That is gate #1's premise (the CLI draws on the Pro subscription), not a bug, and there is no per-consumer split short of a second subscription. --strict-mcp-config would scope it and is PERMANENTLY off the table: it also strips the Claude.ai connectors where Gmail and Calendar live (dropped 2026-08-06, docs/tasks/v2-dogfood-parity.md). Do not reach for it here. The harness entries are Claude Code's own agent-scaffolding tools, not part of Marlow-the-product. The three MCP-resource readers were in an earlier draft of this list and were REMOVED before merge (/code-review medium): unlike the rest they were never observed causing friction, and nobody had checked whether a connector exposes resources Marlow reaches through them. Speculative, so parked. Two entries here are proven friction: Marlow proposed CronCreate for a 'remind me later today' request (Mike approved it, then asked what CronCreate even was), and RemoteTrigger for the same want before that. Neither has anything to do with this server's scheduling. THIS IS FRICTION AND CONTEXT, NOT AN EXPOSURE. Every tool named here was already fail-closed -- none is in boundaries.VETTED_PATHLESS_TOOLS or the allow list above, so each fell through hooks/pretooluse.py to a phone prompt when attended and an auto-deny in cron. Do not let a review re-file this as a security fix. DELIBERATELY ABSENT: the Gmail and Calendar WRITE tools. Denying them would be the largest context win available (Gmail lists ~28 tools, of which exactly two are granted) and it is a BEHAVIOURAL CHANGE, not a cleanup -- today they fall through to the phone, which is how Mike keeps the per-occasion decision (_connector_comment above; get_thread/get_message, Mike 2026-08-07). A deny here would remove the option to say yes, silently: the tool would not be listed, so Marlow would report it cannot send mail rather than asking. Held pending a measured saving from this change. Agent and ListAgents ARE denied, decided 2026-08-24 after /code-review medium flagged that denying TaskOutput/TaskStop while leaving Agent reachable was a dead end -- Marlow could start a background agent it then had no tool to collect from. Resolved in the direction of no subagents at all, for reasons that are about this server rather than about the tool: the work queue serializes every claude -p call and invoke.py's timeout is 20 MINUTES, so one runaway subagent blocks Mike's next message and the morning cron alike; invoke.py's activity parser reports the first tool_use block and stops, so the client would show 'using Agent' and then nothing for the duration; nothing in server/ or hooks/ handles parent_tool_use_id, so nested calls are indistinguishable from top-level ones; and each nested call needing approval would fire its own 55s fail-closed phone prompt for work Mike did not scope (in cron, all auto-denied). The Agent tool is for fanning out searches across a large codebase; Marlow reads mail and answers questions. These two are also the only entries here that are EAGERLY loaded, so they carry full schemas on every turn -- denying them is the largest per-turn saving in this list. Reopening this means fixing the queue, the activity stream and the permission window first, not just deleting two lines. Still absent, still undecided: Monitor, SendMessage and PushNotification -- plausible affordances rather than proven noise, see docs/tasks/marlow-harness-affordances.md. VERIFY BY LISTING, NEVER BY READING THIS FILE. A deny rule can be silently inert -- five Write(...) denies above turned out not to participate in file-permission checks at all (2026-08-23). Absence of an error looks exactly like success. Ask the model to list its deferred tools on the box and confirm these names are gone."
+  },
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /home/marlow/marlow-server && /home/marlow/.venvs/marlow-server/bin/python -m hooks.pretooluse"
+          }
+        ]
+      }
+    ]
+  },
+
+  "_effort_comment": "Thinking effort. A fresh session on this box defaulted to `high`, which Mike found 2026-08-15 and set to `low` by hand on the live file -- but the live file is a COPY of this one, so the next `cp` would have silently reverted it. That is why the key is here and why test_thinking_effort_is_low pins it: this is a cost/latency default, and the failure mode is silent regression, not a visible error. `low` is the default for EVERY turn, attended and cron alike; anything genuinely needing more thinking should opt up per-task rather than raising the floor for all of them.",
+  "effortLevel": "low"
+}

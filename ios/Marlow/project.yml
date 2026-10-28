@@ -1,0 +1,155 @@
+name: Marlow
+# DEVELOPMENT_TEAM comes from here, and from the gitignored local file it
+# includes; no target sets it.
+configFiles:
+  Debug: Config/Signing.xcconfig
+  Release: Config/Signing.xcconfig
+options:
+  bundleIdPrefix: com.mikemason
+  deploymentTarget:
+    # 18 for voice mode's Phonon voice: FluidAudio's host needs MLState
+    # (Mike, 2026-10-21; every Marlow phone runs 26).
+    iOS: "18.0"
+  createIntermediateGroups: true
+packages:
+  # Voice mode's voice, Phonon, runs on FluidAudio's Core ML host with the
+  # FlowLM on the Neural Engine (docs/tasks/voice-mode-tts-engines.md). A
+  # commit, not a tag: Phonon support (2026-10-20) landed after v0.17.7. The
+  # model it loads is pinned separately in Marlow/VoiceModels.json.
+  FluidAudio:
+    url: https://github.com/FluidInference/FluidAudio
+    revision: c79c4106b954f81205113c3343e5a7e59a1089b5
+targets:
+  Marlow:
+    type: application
+    platform: iOS
+    sources:
+      - path: Marlow
+      # Compiled into BOTH the app and the notification service extension.
+      # An extension is a separate executable and shares no code with the app
+      # unless it is listed in both places.
+      - path: Shared
+      # The app's half of What's new (docs/tasks/whats-new.md). The repo-root
+      # file, not a copy: one list for the box, web and this build, so an
+      # entry can't be added to one and missed in another.
+      - path: ../../changes.json
+        buildPhase: resources
+    info:
+      path: Marlow/Info.plist
+      properties:
+        # For NotificationShared.keychainAccessGroup: Swift never sees build
+        # settings, only what the Info.plist carries.
+        AppIdentifierPrefix: $(AppIdentifierPrefix)
+        UILaunchScreen: {}
+        UIBackgroundModes:
+          - remote-notification
+        NSUserNotificationsUsageDescription: >-
+          Marlow needs permission to notify you when it has something to tell you.
+        NSCameraUsageDescription: >-
+          Marlow uses the camera to take photos you send it in a message.
+        NSMicrophoneUsageDescription: >-
+          Marlow needs the microphone to record what you dictate.
+        NSLocationWhenInUseUsageDescription: >-
+          Marlow attaches your location to messages you send, at the precision you choose in Settings, so it can help with where you are.
+        NSSpeechRecognitionUsageDescription: >-
+          Marlow transcribes your dictation on this iPhone before sending it as a message. Your audio never leaves the phone.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mikemason.Marlow
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: Marlow/Marlow.entitlements
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # One per face but the first, which is AppIcon itself (MarlowFace.swift).
+        # Both settings are needed to get CFBundleAlternateIcons into the built
+        # Info.plist: with the names alone (2026-10-16, Xcode 26) the plist had
+        # no alternates and setAlternateIconName would fail at runtime.
+        # MarlowFaceTests reads the built plist to catch exactly that.
+        ASSETCATALOG_COMPILER_ALTERNATE_APP_ICON_NAMES: "AppIcon2 AppIcon3 AppIcon4 AppIcon5 AppIcon6 AppIcon7 AppIcon8 AppIcon9 AppIcon10 AppIcon11"
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+        # The monocle's cyan from the icon, darker in light mode for contrast
+        # on white. Without this setting the colour set exists and nothing
+        # reads it: `Color.accentColor` stays system blue.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    dependencies:
+      # `embed: true` is what actually puts the extension inside the .appex
+      # slot of the app bundle. Without it the target builds and iOS never
+      # invokes it, which looks exactly like the spike failing.
+      - target: MarlowNotificationService
+        embed: true
+      - package: FluidAudio
+        product: FluidAudio
+    postBuildScripts:
+      - name: "Embed Git Info"
+        # The processed plist is an explicit input so Xcode cannot run this
+        # phase before ProcessInfoPlistFile and then overwrite both keys.
+        inputFiles:
+          - "$(BUILT_PRODUCTS_DIR)/$(INFOPLIST_PATH)"
+        script: |
+          GIT_BRANCH=$(git -C "$SRCROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)
+          GIT_COMMIT=$(git -C "$SRCROOT" rev-parse --short HEAD 2>/dev/null || echo unknown)
+          PLIST="$BUILT_PRODUCTS_DIR/$INFOPLIST_PATH"
+          /usr/libexec/PlistBuddy -c "Delete :GitBranch" "$PLIST" 2>/dev/null
+          /usr/libexec/PlistBuddy -c "Add :GitBranch string $GIT_BRANCH" "$PLIST"
+          /usr/libexec/PlistBuddy -c "Delete :GitCommit" "$PLIST" 2>/dev/null
+          /usr/libexec/PlistBuddy -c "Add :GitCommit string $GIT_COMMIT" "$PLIST"
+  # Rewrites a turn_ready notification's body with the real reply, fetched
+  # over the tailnet before the banner is shown
+  # (docs/tasks/ios-notification-open-and-content-swap.md Half B).
+  MarlowNotificationService:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: MarlowNotificationService
+      - path: Shared
+    info:
+      path: MarlowNotificationService/Info.plist
+      properties:
+        CFBundleDisplayName: Marlow Notification Service
+        AppIdentifierPrefix: $(AppIdentifierPrefix)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.usernotifications.service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).NotificationService
+    settings:
+      base:
+        # Must be prefixed by the app's bundle id — iOS rejects an embedded
+        # extension whose identifier is not a child of its container app's.
+        PRODUCT_BUNDLE_IDENTIFIER: com.mikemason.Marlow.NotificationService
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: MarlowNotificationService/MarlowNotificationService.entitlements
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
+  MarlowTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: MarlowTests
+    dependencies:
+      - target: Marlow
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mikemason.MarlowTests
+        CODE_SIGN_STYLE: Automatic
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  Marlow:
+    build:
+      targets:
+        Marlow: all
+        MarlowNotificationService: all
+        MarlowTests: [test]
+    test:
+      config: Debug
+      targets:
+        - MarlowTests
+    run:
+      config: Debug

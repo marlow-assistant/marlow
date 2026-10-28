@@ -1,0 +1,43 @@
+# AppArmor profile: let bubblewrap create user namespaces.
+#
+# Install to /etc/apparmor.d/bwrap — see deploy/README.md §11.
+#
+# WHY THIS EXISTS
+# Ubuntu 24.04 ships kernel.apparmor_restrict_unprivileged_userns=1, which stops
+# any unprivileged process from creating a user namespace. bubblewrap needs one,
+# and fails at `setting up uid map: Permission denied` before it starts the
+# child. Without this profile, invoke.py's confinement of `claude -p` (the
+# namespace where ~/.ssh and ~/.marlow do not exist) cannot start.
+#
+# WHY THIS SHAPE
+# The blunt alternative is to set the sysctl to 0 permanently, which removes the
+# restriction for every process on the box. This grants it to one binary. The
+# rest of the system stays restricted.
+#
+# `flags=(unconfined)` is doing less than it looks like: this profile is not
+# trying to confine bwrap's behaviour, only to lift the userns restriction for
+# it. bwrap is the thing that does the confining.
+#
+# THE TRADE, STATED PLAINLY (Mike's call, 2026-08-06)
+# Any process running as `marlow` that can invoke /usr/bin/bwrap can now create
+# a user namespace. That capability is restricted by default because namespaces
+# have been a recurring local-privilege-escalation surface in the kernel. We are
+# accepting that in exchange for making ~/.ssh, ~/.marlow/data and
+# ~/.marlow/apns unreachable to a prompt-injected agent — a threat that is live
+# every time Marlow reads a web page, versus one that needs a foothold an
+# attacker would have to already have.
+#
+# TO REVERT: rm /etc/apparmor.d/bwrap && systemctl reload apparmor
+# The sysctl stays at 1 throughout; this profile is the only exception to it.
+
+abi <abi/4.0>,
+
+include <tunables/global>
+
+profile bwrap /usr/bin/bwrap flags=(unconfined) {
+  userns,
+
+  # Site-local additions, if ever needed. Kept so this file can be replaced
+  # wholesale by update.sh without losing box-specific tweaks.
+  include if exists <local/bwrap>
+}

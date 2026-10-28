@@ -1,0 +1,32 @@
+.md { overflow-wrap: anywhere; }
+.md p, .md ul, .md ol, .md blockquote, .md pre, .md .md-table-wrap { margin: 0 0 0.6em; }
+.md ul, .md ol { padding-left: 1.5em; }
+.md li > ul, .md li > ol { margin: 0.2em 0 0; }
+.md blockquote { padding-left: 0.8em; border-left: 3px solid currentColor; opacity: 0.85; }
+.md .md-pre { overflow-x: auto; white-space: pre; padding: 0.6em 0.8em; border-radius: 6px; background: rgba(127, 127, 127, 0.15); }
+.md .md-pre code, .md .md-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.md .md-code { padding: 0.1em 0.3em; border-radius: 4px; background: rgba(127, 127, 127, 0.15); }
+.md .md-pre .md-code-block { white-space: pre; }
+.md .md-table-wrap { overflow-x: auto; }
+/* A wide table scrolls inside .md-table-wrap rather than squeezing. The
+   inherited `overflow-wrap: anywhere` (.md, .bubble) let a column's
+   min-content shrink to one character, so the table never overflowed its
+   wrapper: on a phone it broke "$1,240" and "Deductible" mid-word instead
+   (2026-10-14). Cells now break between words only; the table takes its
+   max-content width, with each cell capped so one long note wraps instead of
+   stretching its column to a single line (iOS caps at 220pt the same way). */
+.md .md-table { border-collapse: collapse; width: max-content; }
+.md .md-table th, .md .md-table td {
+  border: 1px solid currentColor;
+  padding: 0.25em 0.6em;
+  overflow-wrap: normal;
+  max-width: 14em;
+  vertical-align: top;
+}
+/* `start`, not the browser's centred th, for a column with no alignment. */
+.md .md-table th { text-align: start; background: rgba(127, 127, 127, 0.15); }
+.md .md-table .md-align-left { text-align: left; }
+.md .md-table .md-align-right { text-align: right; }
+.md .md-table .md-align-center { text-align: center; }
+.md hr { border: 0; border-top: 1px solid currentColor; opacity: 0.4; }
+.md .md-raw { white-space: pre-wrap; }

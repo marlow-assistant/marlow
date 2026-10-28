@@ -1,0 +1,58 @@
+Marlow
+Copyright 2026 Mike Mason
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+The name "Marlow" is not licensed for use as a product or service name.
+
+
+Artwork
+-------
+
+The face and icon artwork was generated with ChatGPT image generation from
+prompts written by the project's author, and is released under the same
+license as the rest of the project (Apache-2.0). It covers:
+
+  - the eleven face portraits and the app icons cut from them:
+      ios/Marlow/Marlow/Assets.xcassets/MarlowFace*.imageset/
+      ios/Marlow/Marlow/Assets.xcassets/AppIcon*.appiconset/
+      web/public/faces/ (marlow-*.jpg, icon-*.jpg, app-*-512.png,
+        app-*-maskable-512.png)
+  - the web app icons, which are crops of face 1:
+      web/public/icon-192.png, icon-512.png, icon-maskable-512.png
+  - marlow-icon-square.png (the original of face 1)
+
+
+Third-party data
+----------------
+
+server/data/places.tsv.gz
+
+  Place names, coordinates, populations and time zones in this file come from
+  GeoNames (https://www.geonames.org), licensed under Creative Commons
+  Attribution 4.0 (https://creativecommons.org/licenses/by/4.0/).
+
+  The data has been modified: filtered to populated places in Canada, the
+  United States, Mexico and the United Kingdom, and reduced to name,
+  coordinates, country, region, population and time zone
+  (scripts/build_places.py).
+
+  Downloaded 2026-10-13 and 2026-10-14.
+
+(server/data/NOTICE stays beside the data file and carries the same text.)
+
+tests/fixtures/weather/
+
+  Recorded responses from public weather and routing services, used only by
+  the test suite: Open-Meteo (CC BY 4.0, https://open-meteo.com), MET Norway
+  (CC BY 4.0 and the Norwegian Licence for Open Government Data),
+  Environment and Climate Change Canada (Open Government Licence - Canada),
+  the US National Weather Service (US government work, public domain), and
+  the OSRM routing service, whose road data is (c) OpenStreetMap contributors,
+  available under the Open Database License (https://www.openstreetmap.org/copyright).
+
+
+Third-party software
+--------------------
+
+Marlow's dependencies are installed from their own package indexes and keep
+their own licenses; see docs/tasks/dependency-licenses.md.

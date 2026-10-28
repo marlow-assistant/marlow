@@ -1,0 +1,24 @@
+[Unit]
+Description=Push Marlow's identity repository off-box (deploy/README.md §7a)
+After=network-online.target marlow-server.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=marlow
+Group=marlow
+Environment=MARLOW_WORKING_DIR=/home/marlow/marlow-identity
+Environment=MARLOW_SERVER_REPO=/home/marlow/marlow-server
+Environment=MARLOW_DATA_DIR=/home/marlow/.marlow/data
+Environment=MARLOW_LOG_DIR=/home/marlow/.marlow/logs
+ExecStart=/usr/bin/python3 /opt/marlow/bin/identity-push.py
+
+# The pusher reads the identity checkout and its dedicated SSH key, writes only
+# ordinary git bookkeeping in the identity checkout, and reports failures to
+# the loopback server. Keep the same host hardening as marlow-server while
+# granting only the two state directories it can legitimately update.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/marlow/.marlow /home/marlow/marlow-identity

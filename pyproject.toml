@@ -1,0 +1,32 @@
+[build-system]
+# 77 is the first release that reads the SPDX `license` string and
+# `license-files` below.
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "marlow-server"
+version = "0.1.0"
+description = "Always-on server that fronts headless Claude Code for a private iOS/macOS client. Tailscale-only, one work queue, phone-mediated permissions."
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+dynamic = ["dependencies"]
+
+[project.optional-dependencies]
+# Kept in step with server/requirements-dev.txt (which the deploy path doesn't
+# use). Runtime deps stay dynamic-from-file so requirements.txt is the single
+# source of truth for `pip install -r`.
+dev = ["pytest", "httpx"]
+
+[tool.setuptools]
+packages = ["server"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["server/requirements.txt"] }
+
+[tool.pytest.ini_options]
+# Repo root on sys.path so `import server` works regardless of how pytest is
+# launched (plain `pytest`, not just `python -m pytest`). CI relies on this.
+pythonpath = ["."]
+testpaths = ["tests"]

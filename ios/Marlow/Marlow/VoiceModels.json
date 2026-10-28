@@ -1,0 +1,251 @@
+{
+ "phonon": {
+  "files": [
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/LICENSE",
+    "path": "LICENSE",
+    "size": 11357
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/README.md",
+    "path": "README.md",
+    "size": 2767
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/arch.json",
+    "path": "arch.json",
+    "size": 811
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/constants_bin/bos_emb.bin",
+    "path": "constants_bin/bos_emb.bin",
+    "size": 128
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/constants_bin/default.safetensors",
+    "path": "constants_bin/default.safetensors",
+    "size": 3073840
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/constants_bin/en_gb_Maeve.safetensors",
+    "path": "constants_bin/en_gb_Maeve.safetensors",
+    "size": 3073840
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/constants_bin/en_us_Easton.safetensors",
+    "path": "constants_bin/en_us_Easton.safetensors",
+    "size": 3073840
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/constants_bin/en_us_Zoey.safetensors",
+    "path": "constants_bin/en_us_Zoey.safetensors",
+    "size": 3073840
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/constants_bin/input_bias.bin",
+    "path": "constants_bin/input_bias.bin",
+    "size": 2048
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/constants_bin/speaker_proj_weight.bin",
+    "path": "constants_bin/speaker_proj_weight.bin",
+    "size": 1048576
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/constants_bin/text_embed_table.bin",
+    "path": "constants_bin/text_embed_table.bin",
+    "size": 8194048
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/constants_bin/tokenizer.json",
+    "path": "constants_bin/tokenizer.json",
+    "size": 277967
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/constants_bin/tokenizer.model",
+    "path": "constants_bin/tokenizer.model",
+    "size": 65045
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/mimi_decoder.mlmodelc/analytics/coremldata.bin",
+    "path": "mimi_decoder.mlmodelc/analytics/coremldata.bin",
+    "size": 243
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/mimi_decoder.mlmodelc/coremldata.bin",
+    "path": "mimi_decoder.mlmodelc/coremldata.bin",
+    "size": 1852
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/mimi_decoder.mlmodelc/model.mil",
+    "path": "mimi_decoder.mlmodelc/model.mil",
+    "size": 95070
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/mimi_decoder.mlmodelc/weights/weight.bin",
+    "path": "mimi_decoder.mlmodelc/weights/weight.bin",
+    "size": 44897216
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/pocket_state.json",
+    "path": "pocket_state.json",
+    "size": 2918
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/pocket_state.mlmodelc/analytics/coremldata.bin",
+    "path": "pocket_state.mlmodelc/analytics/coremldata.bin",
+    "size": 243
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/pocket_state.mlmodelc/coremldata.bin",
+    "path": "pocket_state.mlmodelc/coremldata.bin",
+    "size": 4771
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/pocket_state.mlmodelc/model.mil",
+    "path": "pocket_state.mlmodelc/model.mil",
+    "size": 744313
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/pocket_state.mlmodelc/weights/weight.bin",
+    "path": "pocket_state.mlmodelc/weights/weight.bin",
+    "size": 79068864
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/default.safetensors",
+    "path": "voices/default.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_gb_Alfie.safetensors",
+    "path": "voices/en_gb_Alfie.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_gb_Bryony.safetensors",
+    "path": "voices/en_gb_Bryony.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_gb_Edwin.safetensors",
+    "path": "voices/en_gb_Edwin.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_gb_Elodie-Rose.safetensors",
+    "path": "voices/en_gb_Elodie-Rose.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_gb_Freya.safetensors",
+    "path": "voices/en_gb_Freya.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_gb_Hugh.safetensors",
+    "path": "voices/en_gb_Hugh.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_gb_Imogen.safetensors",
+    "path": "voices/en_gb_Imogen.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_gb_Lottie.safetensors",
+    "path": "voices/en_gb_Lottie.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_gb_Maeve.safetensors",
+    "path": "voices/en_gb_Maeve.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_gb_Pippa.safetensors",
+    "path": "voices/en_gb_Pippa.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_gb_Spencer.safetensors",
+    "path": "voices/en_gb_Spencer.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_gb_Teddy.safetensors",
+    "path": "voices/en_gb_Teddy.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_gb_Toby.safetensors",
+    "path": "voices/en_gb_Toby.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_us_Delia.safetensors",
+    "path": "voices/en_us_Delia.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_us_Easton.safetensors",
+    "path": "voices/en_us_Easton.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_us_Everly.safetensors",
+    "path": "voices/en_us_Everly.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_us_Hadley.safetensors",
+    "path": "voices/en_us_Hadley.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_us_Harper.safetensors",
+    "path": "voices/en_us_Harper.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_us_Juniper.safetensors",
+    "path": "voices/en_us_Juniper.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_us_Micah.safetensors",
+    "path": "voices/en_us_Micah.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_us_Miles.safetensors",
+    "path": "voices/en_us_Miles.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_us_Preston.safetensors",
+    "path": "voices/en_us_Preston.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_us_Russell.safetensors",
+    "path": "voices/en_us_Russell.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_us_Trevor.safetensors",
+    "path": "voices/en_us_Trevor.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices/en_us_Zoey.safetensors",
+    "path": "voices/en_us_Zoey.safetensors",
+    "size": 256208
+   },
+   {
+    "url": "https://huggingface.co/FluidInference/pocket-tts-coreml/resolve/b51c4854305532b182026259092cc53e4b600f49/phonon/phonon-31m-en/voices_catalog.jsonl",
+    "path": "voices_catalog.jsonl",
+    "size": 33407
+   }
+  ]
+ }
+}

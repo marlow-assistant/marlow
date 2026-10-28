@@ -1,0 +1,12 @@
+[Unit]
+Description=Hourly off-box push of Marlow's identity repository
+
+[Timer]
+# Preserve the existing cron cadence and keep it clear of scheduled prompt
+# batches. Persistent catches up once after downtime instead of waiting another
+# hour with the identity repository backed up only on the box.
+OnCalendar=*-*-* *:17:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

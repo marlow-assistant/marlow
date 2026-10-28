@@ -1,0 +1,7 @@
+{
+  "timezone": "{{TIMEZONE}}",
+  "entries": [
+    { "id": "morning", "cron": "0 8 * * *", "job": "morning" },
+    { "id": "week-ahead", "cron": "0 18 * * 0", "job": "week-ahead" }
+  ]
+}

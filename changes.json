@@ -69,7 +69,7 @@
       "date": "2026-10-28",
       "part": "app",
       "category": "feature",
-      "text": "In the web app, voice mode now reads replies in Phonon, a natural voice made on your phone. The first time, it downloads the voice (about 65 MB) from Hugging Face; after that it works without downloading again. If you picked a voice in Settings, under Voice, choose Automatic to hear Phonon."
+      "text": "In the web app, voice mode now reads replies in Phonon, a natural voice made on your phone. The first time, it downloads the voice (about 65 MB) from Hugging Face; after that it works without downloading again. If you picked a voice in Settings, under Voice, choose Automatic to hear Phonon. You can also pick from 25 Phonon voices there; the default is Alfie."
     }
   ]
 }

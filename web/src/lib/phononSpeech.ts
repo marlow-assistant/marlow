@@ -11,13 +11,14 @@
 // silent. The route is decided as an utterance starts, and the two never talk
 // over each other: a change of route waits for the earlier speech to end.
 
+import { isPhononKey, phononVoiceFor, phononVoiceKey, phononVoiceUrl, type PhononVoice } from "./phononVoices";
 import type { SpeechOutput } from "./voiceMode";
 
 /** Whether voice mode reads with Phonon: when no device voice was picked in
- * Settings, wherever it can run. Any device voice the person picked stays the
- * browser's. */
+ * Settings (Automatic), or a Phonon voice was, wherever it can run. Any device
+ * voice the person picked stays the browser's. */
 export function usesPhonon(stored: string | null): boolean {
-  return stored === null;
+  return stored === null || isPhononKey(stored);
 }
 
 /** Can this browser run it at all: module workers and WebAssembly SIMD, which
@@ -38,7 +39,10 @@ export interface PhononEngine {
   readonly sampleRate: number;
   readonly device: string;
   readonly threads: number;
-  stream(text: string, options: { signal: AbortSignal }): AsyncIterable<Float32Array>;
+  /** Registers a voice from the URL of its file. */
+  addVoice(name: string, source: string): Promise<void>;
+  /** No `voice` is the model's own default. */
+  stream(text: string, options: { signal: AbortSignal; voice?: string }): AsyncIterable<Float32Array>;
 }
 
 export type AudioOut = Pick<
@@ -99,6 +103,27 @@ export function loadPhonon(onProgress: (fraction: number | null) => void): Promi
   return shared.promise;
 }
 
+// Voices already added, per engine and at module level like the engine itself:
+// each mount of voice mode, and Settings' previews, share one model, and a voice
+// is added to it once. A failed add is forgotten so the next utterance retries.
+const addedVoices = new WeakMap<PhononEngine, Map<string, Promise<void>>>();
+
+/** Adds a voice to the engine if it hasn't been, and resolves once it is there. */
+export function ensureVoice(engine: PhononEngine, voice: PhononVoice): Promise<void> {
+  let added = addedVoices.get(engine);
+  if (!added) addedVoices.set(engine, (added = new Map()));
+  let pending = added.get(voice.name);
+  if (!pending) {
+    pending = engine.addVoice(voice.name, phononVoiceUrl(voice));
+    added.set(voice.name, pending);
+    const map = added;
+    pending.catch(() => {
+      if (map.get(voice.name) === pending) map.delete(voice.name);
+    });
+  }
+  return pending;
+}
+
 export class PhononSpeech implements SpeechOutput {
   onUtteranceFinished: (() => void) | null = null;
   /** Each utterance's first sound, for the debug report's release-to-first-speech. */
@@ -128,12 +153,21 @@ export class PhononSpeech implements SpeechOutput {
   private active = 0;
   private route: "phonon" | "browser" | null = null;
   private idle: (() => void)[] = [];
+  private voice: PhononVoice = phononVoiceFor(null);
+  /** Why the last utterance read in the model's own voice, not `voice`. */
+  private voiceError: string | null = null;
 
   constructor(deps: PhononSpeechDeps) {
     this.deps = deps;
     this.fallback = deps.fallback;
     this.fallback.onUtteranceFinished = () => this.finish();
     this.fallback.onSpeak = () => this.onSpeak?.();
+  }
+
+  /** The voice, by name, for utterances made from now on; a name not on the
+   * list is Alfie. */
+  setVoice(name: string): void {
+    this.voice = phononVoiceFor(phononVoiceKey(name));
   }
 
   /** Begins loading Phonon. Not called for someone reading with a device
@@ -168,7 +202,8 @@ export class PhononSpeech implements SpeechOutput {
     const s = this.status;
     if (s === null) return this.fallback.voiceName;
     if (s.state === "ready" && this.engine) {
-      return `Phonon (${this.engine.device}, ${this.engine.threads} thread${this.engine.threads === 1 ? "" : "s"})`;
+      const who = this.voiceError === null ? this.voice.name : `default voice, ${this.voice.name} failed: ${this.voiceError}`;
+      return `Phonon ${who} (${this.engine.device}, ${this.engine.threads} thread${this.engine.threads === 1 ? "" : "s"})`;
     }
     const why =
       s.state === "failed"
@@ -278,10 +313,21 @@ export class PhononSpeech implements SpeechOutput {
     };
     const startedAt = this.deps.now();
     let seconds = 0;
+    // A voice that can't be added reads in the model's own: never silence.
+    const voice = this.voice;
+    let voiceName: string | undefined = voice.name;
+    try {
+      await ensureVoice(engine, voice);
+      this.voiceError = null;
+    } catch (e) {
+      voiceName = undefined;
+      this.voiceError = e instanceof Error ? e.message : String(e);
+    }
+    if (gen !== this.gen) return;
     try {
       const ctx = (this.ctx ??= this.deps.makeContext());
       if (ctx.state !== "running") void ctx.resume().catch(() => {});
-      for await (const chunk of engine.stream(text, { signal: abort.signal })) {
+      for await (const chunk of engine.stream(text, { voice: voiceName, signal: abort.signal })) {
         if (gen !== this.gen) break;
         const buffer = ctx.createBuffer(1, chunk.length, engine.sampleRate);
         buffer.copyToChannel(chunk as Float32Array<ArrayBuffer>, 0);

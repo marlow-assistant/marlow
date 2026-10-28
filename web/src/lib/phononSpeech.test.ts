@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ensureVoice,
   PhononSpeech,
   usesPhonon,
   type AudioOut,
@@ -7,6 +8,7 @@ import {
   type PhononEngine,
   type SpeechFallback,
 } from "./phononSpeech";
+import { PHONON_VOICES, phononVoiceUrl } from "./phononVoices";
 
 const CHUNK = 1920; // 80 ms at 24 kHz, what the package yields
 const SECONDS = CHUNK / 24_000;
@@ -58,6 +60,7 @@ class Req {
   private wake: (() => void) | null = null;
   constructor(
     readonly text: string,
+    readonly voice: string | undefined,
     readonly signal: AbortSignal,
     /** Keeps delivering after an abort: a chunk already in flight when the stop landed. */
     private readonly deaf: boolean,
@@ -97,8 +100,15 @@ class FakeEngine implements PhononEngine {
   threads = 1;
   reqs: Req[] = [];
   deaf = false;
-  stream(text: string, { signal }: { signal: AbortSignal }) {
-    const r = new Req(text, signal, this.deaf);
+  /** Every `addVoice(name, url)`, and a way to make it fail. */
+  added: [string, string][] = [];
+  addError: Error | null = null;
+  async addVoice(name: string, source: string) {
+    this.added.push([name, source]);
+    if (this.addError) throw this.addError;
+  }
+  stream(text: string, { signal, voice }: { signal: AbortSignal; voice?: string }) {
+    const r = new Req(text, voice, signal, this.deaf);
     this.reqs.push(r);
     return r;
   }
@@ -263,6 +273,67 @@ describe("PhononSpeech playback", () => {
   });
 });
 
+describe("PhononSpeech voices", () => {
+  const url = (name: string) => phononVoiceUrl(PHONON_VOICES.find((v) => v.name === name)!);
+
+  it("speaks in Alfie unless told otherwise, adding the voice first", async () => {
+    const t = setup();
+    await t.loaded();
+    t.speech.speak("one");
+    await tick();
+    expect(t.engine.added).toEqual([["Alfie", url("Alfie")]]);
+    expect(t.engine.reqs[0].voice).toBe("Alfie");
+  });
+
+  it("adds a chosen voice once, however many utterances it speaks", async () => {
+    const t = setup();
+    t.speech.setVoice("Zoey");
+    await t.loaded();
+    t.speech.speak("one");
+    await tick();
+    t.engine.reqs[0].end();
+    await tick();
+    t.speech.speak("two");
+    await tick();
+    expect(t.engine.added).toEqual([["Zoey", url("Zoey")]]);
+    expect(t.engine.reqs.map((r) => r.voice)).toEqual(["Zoey", "Zoey"]);
+    expect(t.speech.voiceName).toBe("Phonon Zoey (cpu, 1 thread)");
+  });
+
+  it("remembers an added voice for the engine, not for one mount of voice mode", async () => {
+    const engine = new FakeEngine();
+    const alfie = PHONON_VOICES[0];
+    await Promise.all([ensureVoice(engine, alfie), ensureVoice(engine, alfie)]);
+    await ensureVoice(engine, alfie);
+    expect(engine.added).toHaveLength(1);
+  });
+
+  it("falls back to the model's own voice when a voice can't be added, and still speaks", async () => {
+    const t = setup();
+    t.engine.addError = new Error("offline");
+    t.speech.setVoice("Zoey");
+    await t.loaded();
+    t.speech.speak("one");
+    await tick();
+    expect(t.engine.reqs[0].voice).toBeUndefined();
+    expect(t.fallback.spoken).toEqual([]);
+    t.engine.reqs[0].push();
+    t.engine.reqs[0].end();
+    await tick();
+    t.ctx.sources[0].finish();
+    expect(t.finished).toEqual([1]);
+    expect(t.speech.voiceName).toBe("Phonon default voice, Zoey failed: offline (cpu, 1 thread)");
+
+    // A later utterance tries the voice again.
+    t.engine.addError = null;
+    t.speech.speak("two");
+    await tick();
+    expect(t.engine.added).toHaveLength(2);
+    expect(t.engine.reqs[1].voice).toBe("Zoey");
+    expect(t.speech.voiceName).toBe("Phonon Zoey (cpu, 1 thread)");
+  });
+});
+
 describe("PhononSpeech stopSpeaking", () => {
   it("aborts the stream, stops the sources and finishes nothing, even for a chunk that arrives later", async () => {
     const t = setup();
@@ -384,7 +455,7 @@ describe("PhononSpeech status", () => {
     t.progress(0.4);
     expect(t.speech.voiceName).toBe("Samantha (en-US, on device) (Phonon not in use: loading 40%)");
     await t.loaded();
-    expect(t.speech.voiceName).toBe("Phonon (cpu, 1 thread)");
+    expect(t.speech.voiceName).toBe("Phonon Alfie (cpu, 1 thread)");
     expect(t.statuses).toEqual([{ state: "loading", fraction: null }, { state: "loading", fraction: 0.4 }, { state: "ready" }]);
   });
 
@@ -411,5 +482,6 @@ describe("usesPhonon", () => {
   it("is the default anywhere, and a device voice someone picked stays theirs", () => {
     expect(usesPhonon(null)).toBe(true);
     expect(usesPhonon("com.apple.voice.compact.en-GB.Daniel")).toBe(false);
+    expect(usesPhonon("phonon:Zoey")).toBe(true);
   });
 });

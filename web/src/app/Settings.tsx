@@ -14,7 +14,20 @@ import type { Face } from "../lib/faces";
 import type { LocationSharing, LocationStatus } from "../lib/location";
 import { capitalizedModelName } from "../lib/modelName";
 import { browserVoiceEngine, choosableVoices, previewVoice, voiceKey, type VoiceEngine } from "../lib/browserSpeech";
-import { phononCanRun, usesPhonon } from "../lib/phononSpeech";
+import {
+  loadPhonon,
+  phononCanRun,
+  PhononSpeech,
+  usesPhonon,
+  type LoadStatus,
+  type SpeechFallback,
+} from "../lib/phononSpeech";
+import {
+  PHONON_VOICES,
+  phononVoiceFor,
+  phononVoiceKey,
+  type PhononVoice,
+} from "../lib/phononVoices";
 import { KV_TEXT_SIZE, KV_VOICE, kvDelete, kvGet, kvSet } from "../lib/storage";
 import { applyTextSize, currentTextSize, TEXT_SIZES } from "../lib/textSize";
 import { FaceGrid } from "./Face";
@@ -255,22 +268,44 @@ function TextSizeSection() {
   );
 }
 
-/** Voice mode's reading voice: Automatic, which is Phonon made on this phone
- * wherever it can run, or one of the browser's own `speechSynthesis` voices.
- * The native app has its own picker over Phonon's voices
- * (docs/tasks/voice-mode-tts-engines.md). Phonon is the default because the
+const PREVIEW_TEXT = "Hi, this is how I'll sound in voice mode.";
+
+/** Settings previews Phonon's voices only, so PhononSpeech's browser-voice
+ * fallback is never wanted: a preview is spoken once the model is ready. */
+const NO_BROWSER_VOICE: SpeechFallback = {
+  onUtteranceFinished: null,
+  onSpeak: null,
+  voiceName: "",
+  englishVoices: "",
+  speak() {},
+  stopSpeaking() {},
+  unlock() {},
+  close() {},
+};
+
+/** Voice mode's reading voice: Automatic, which is Phonon's Alfie wherever it
+ * can run (Mike, 2026-10-28), one of Phonon's 25 voices, or one of the
+ * browser's own `speechSynthesis` voices. Phonon is the default because the
  * built-in voices sounded bad on an iPhone (Mike, 2026-10-25) and on Android
- * (the Android user, 2026-10-28). Automatic isn't previewed from here, since a
- * preview would start Phonon's 65 MB download. Kept on this device only, like
- * text size: the voices are this device's. The device voices are hidden until
- * the engine lists any, which on Android Chrome is seconds after load; where
- * Phonon can run, Automatic alone keeps the section up. */
+ * (the Android user, 2026-10-28). Choosing a Phonon voice previews it, which
+ * starts the 65 MB model download if this is the first use; Automatic isn't
+ * previewed, so nothing downloads for someone who only looks. Kept on this
+ * device only, like text size: the voices are this device's. The device voices
+ * are hidden until the engine lists any, which on Android Chrome is seconds
+ * after load; where Phonon can run, its voices keep the section up. */
 function VoiceSection({ engine }: { engine: VoiceEngine | null }) {
   const [voices, setVoices] = useState(() => (engine ? choosableVoices(engine.synth.getVoices()) : []));
   const [chosen, setChosen] = useState<string | null>(null);
   // A tap before the stored choice has loaded wins over it.
   const tapped = useRef(false);
   const phonon = useMemo(() => phononCanRun(), []);
+  // The preview's PhononSpeech, made in the first Phonon tap: the tap is when
+  // the AudioContext has to be made for iOS (PhononSpeech.unlock).
+  const speech = useRef<PhononSpeech | null>(null);
+  const ready = useRef(false);
+  // A preview waiting for the model to finish downloading.
+  const waiting = useRef(false);
+  const [load, setLoad] = useState<LoadStatus | null>(null);
 
   useEffect(() => {
     if (!engine) return;
@@ -292,23 +327,93 @@ function VoiceSection({ engine }: { engine: VoiceEngine | null }) {
     };
   }, []);
 
+  // Safari caps the AudioContexts a page holds.
+  useEffect(
+    () => () => {
+      speech.current?.close();
+      speech.current = null;
+    },
+    [],
+  );
+
   if (voices.length === 0 && !phonon) return null;
 
-  const choose = (voice: SpeechSynthesisVoice | null) => {
-    tapped.current = true;
-    setChosen(voice ? voiceKey(voice) : null);
-    if (voice && engine) {
-      previewVoice(engine, voice);
-      void kvSet(KV_VOICE, voiceKey(voice)).catch(() => {});
+  const stopPreviews = () => {
+    waiting.current = false;
+    speech.current?.stopSpeaking();
+    engine?.synth.cancel();
+  };
+
+  const previewPhonon = (voice: PhononVoice) => {
+    let s = speech.current;
+    if (!s) {
+      s = new PhononSpeech({
+        fallback: NO_BROWSER_VOICE,
+        load: loadPhonon,
+        makeContext: () => new AudioContext(),
+        now: () => performance.now(),
+      });
+      const mine = s;
+      mine.onLoad = (status) => {
+        setLoad(status);
+        if (status.state === "ready") {
+          ready.current = true;
+          if (waiting.current) {
+            waiting.current = false;
+            mine.speak(PREVIEW_TEXT);
+          }
+        } else if (status.state === "failed") {
+          // The next tap starts a fresh try.
+          mine.close();
+          speech.current = null;
+          waiting.current = false;
+        }
+      };
+      speech.current = s;
+    }
+    stopPreviews();
+    s.setVoice(voice.name);
+    s.unlock();
+    if (ready.current) {
+      s.speak(PREVIEW_TEXT);
     } else {
-      engine?.synth.cancel();
+      waiting.current = true;
+      s.start();
+    }
+  };
+
+  const choose = (voice: SpeechSynthesisVoice | PhononVoice | null) => {
+    tapped.current = true;
+    if (voice === null) {
+      stopPreviews();
+      setChosen(null);
       void kvDelete(KV_VOICE).catch(() => {});
+    } else if ("accent" in voice) {
+      setChosen(phononVoiceKey(voice.name));
+      void kvSet(KV_VOICE, phononVoiceKey(voice.name)).catch(() => {});
+      previewPhonon(voice);
+    } else {
+      setChosen(voiceKey(voice));
+      void kvSet(KV_VOICE, voiceKey(voice)).catch(() => {});
+      speech.current?.stopSpeaking();
+      waiting.current = false;
+      if (engine) previewVoice(engine, voice);
     }
   };
   // A stored voice since uninstalled reads as Automatic, which is what
   // pickVoice falls back to. Voice mode still counts it a device voice, so
-  // Automatic says so rather than claim Phonon.
-  const current = voices.some((v) => voiceKey(v) === chosen) ? chosen : null;
+  // Automatic says so rather than claim Phonon. A Phonon name since dropped
+  // from the list is Alfie, as it is in voice mode.
+  const current = voices.some((v) => voiceKey(v) === chosen)
+    ? chosen
+    : phonon && PHONON_VOICES.some((v) => phononVoiceKey(v.name) === chosen)
+      ? chosen
+      : null;
+  const phononSecondary = (v: PhononVoice) => {
+    if (chosen !== phononVoiceKey(v.name) || load === null) return v.accent;
+    if (load.state === "loading") return load.fraction === null ? "Loading…" : `Downloading ${Math.round(load.fraction * 100)}%`;
+    return load.state === "failed" ? "Couldn't download" : v.accent;
+  };
 
   return (
     <section className="settings-section" aria-label="Voice">
@@ -316,25 +421,54 @@ function VoiceSection({ engine }: { engine: VoiceEngine | null }) {
       <div className="settings-group" role="radiogroup" aria-label="Voice">
         <button type="button" role="radio" aria-checked={current === null} className="voice-option" onClick={() => choose(null)}>
           <span>Automatic</span>
-          <span className="voice-option-lang">{phonon && usesPhonon(chosen) ? "Phonon, 65 MB download" : "Device voice"}</span>
+          <span className="voice-option-lang">
+            {phonon && usesPhonon(chosen) ? `Phonon, ${phononVoiceFor(null).name}` : "Device voice"}
+          </span>
         </button>
-        {voices.map((v) => (
-          <button
-            key={voiceKey(v)}
-            type="button"
-            role="radio"
-            aria-checked={current === voiceKey(v)}
-            className="voice-option"
-            onClick={() => choose(v)}
-          >
-            <span>{v.name}</span>
-            <span className="voice-option-lang">{v.lang}</span>
-          </button>
-        ))}
+        {phonon && (
+          <div role="group" aria-label="Phonon">
+            <p className="voice-group-title" aria-hidden="true">
+              Phonon
+            </p>
+            {PHONON_VOICES.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                role="radio"
+                aria-checked={current === phononVoiceKey(v.name)}
+                className="voice-option"
+                onClick={() => choose(v)}
+              >
+                <span>{v.name}</span>
+                <span className="voice-option-lang">{phononSecondary(v)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {voices.length > 0 && (
+          <div role="group" aria-label="This device">
+            <p className="voice-group-title" aria-hidden="true">
+              This device
+            </p>
+            {voices.map((v) => (
+              <button
+                key={voiceKey(v)}
+                type="button"
+                role="radio"
+                aria-checked={current === voiceKey(v)}
+                className="voice-option"
+                onClick={() => choose(v)}
+              >
+                <span>{v.name}</span>
+                <span className="voice-option-lang">{v.lang}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <p className="settings-footer">
         {phonon
-          ? "Automatic is Phonon, a natural voice made on this device; the others are the browser's own."
+          ? "Phonon voices are made on this device; the others are the browser's own."
           : "How voice mode reads replies on this device. Tap a voice to hear it."}
       </p>
     </section>

@@ -384,7 +384,9 @@ Hugging Face (~65 MB, pinned by the package) and is cached in the Cache API; the
 CSP allows `huggingface.co` and `*.hf.co` for it. **The default everywhere**
 (Automatic in Settings → Voice): first planned for iPhone only, but the Android
 user found Google's voices poor too (Mike, 2026-10-28). A device voice someone
-picked earlier stays theirs until they choose Automatic. Until it loads, or
+picked earlier stays theirs until they choose Automatic. Settings offers the
+native app's 25 voices from the pinned `gradium/phonon-voices` revision
+(`web/src/lib/phononVoices.ts`), with Automatic = Alfie (Mike). Until it loads, or
 if it can't (no SIMD, offline), each utterance falls back to `speechSynthesis`.
 **Not yet heard** on Mike's iPhone through Marlow, or on an Android phone, and the
 real-time factor on a phone is unmeasured (the debug report now records it).

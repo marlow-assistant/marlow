@@ -22,6 +22,13 @@ What it does:
 - **Asks before acting.** Anything outside what it is allowed to do on its
   own comes to your phone as a question you approve or decline.
 
+<p align="center">
+  <img src="docs/images/screenshot-chat.png" width="190" alt="A chat: Marlow compares three insurance quotes in a table">
+  <img src="docs/images/screenshot-approval.png" width="190" alt="An approval card: Marlow asks to edit a memory file, with Deny and Allow">
+  <img src="docs/images/screenshot-activity.png" width="190" alt="The Activity pane: what each run read, searched and changed">
+  <img src="docs/images/screenshot-settings.png" width="190" alt="Settings: appearance, effort, location sharing and voice">
+</p>
+
 It has three parts:
 
 - **A persistent server** (Python) on an always-on Linux box. Every request,

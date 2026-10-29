@@ -1,4 +1,3 @@
-import jsQR from "jsqr";
 import { useEffect, useRef } from "react";
 import { inviteFromText } from "../lib/pairLink";
 
@@ -17,7 +16,9 @@ const MAX_SIDE = 640;
  * system camera's "open in browser" (no URL handoff to a web app, and its
  * storage is separate from the browser's), so it has to read the code itself.
  * `BarcodeDetector` is absent from WebKit, hence jsQR. A code that isn't ours
- * is ignored and the camera keeps looking. */
+ * is ignored and the camera keeps looking. jsQR is imported on first scan, not
+ * bundled: it is ~130 kB that almost every launch (already paired) never needs,
+ * and it keeps the main chunk under Vite's 500 kB warning. */
 export function QrScanner({ onInvite, onError }: { onInvite: (invite: string) => void; onError: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   // Held in refs so a parent re-render doesn't restart the camera.
@@ -28,6 +29,7 @@ export function QrScanner({ onInvite, onError }: { onInvite: (invite: string) =>
     let stopped = false;
     let stream: MediaStream | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let jsQR: typeof import("jsqr").default;
     const canvas = document.createElement("canvas");
 
     const stop = () => {
@@ -61,9 +63,9 @@ export function QrScanner({ onInvite, onError }: { onInvite: (invite: string) =>
       timer = setTimeout(tick, FRAME_MS);
     };
 
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "environment" } })
-      .then(async (s) => {
+    Promise.all([navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }), import("jsqr")])
+      .then(async ([s, mod]) => {
+        jsQR = mod.default;
         if (stopped) {
           s.getTracks().forEach((t) => t.stop());
           return;

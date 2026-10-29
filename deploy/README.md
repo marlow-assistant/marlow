@@ -70,11 +70,7 @@ wrap it in `bash -c '...'`** so the `~` expands as *marlow*: `sudo -iu marlow
 ~/foo` expands `~` in the *caller's* shell before sudo runs, silently pointing at
 the wrong home (a trap we hit for real, twice).
 
-The repo is public, so the box clones it over HTTPS with no credentials. (A
-private fork instead needs read-only credentials of the box's own: a per-repo
-**deploy key**, generated as `marlow` with `ssh-keygen -t ed25519`, registered
-read-only under the fork's Settings → Deploy keys, and a `git@github.com:` clone
-URL, since an HTTPS clone won't use it.)
+The repo is public, so the box clones it over HTTPS with no credentials.
 
 Clone, build the venv, install deps. Set marlow's git identity in the
 same breath: the §4 seed makes a commit, and a fresh system user has none

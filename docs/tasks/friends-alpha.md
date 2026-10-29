@@ -4,13 +4,11 @@
 
 In order. Each line is one task doc, and its Status line is the truth.
 
-1. **Read access** (item 6): each invitee gets read access to this repo
-   through the GitHub org, Android included.
-2. **Item 5:** Mike runs the installer hands-off on a fresh Multipass VM,
-   from `main` with an HTTPS token, which is how a friend
-   will install.
-3. Invite the first one or two friends. iPhone friends use the home-screen
-   web app, so they need nothing beyond 1 and 2 either.
+1. **Item 5:** Mike runs the installer hands-off on a fresh Multipass VM,
+   from `main` over HTTPS, which is how a friend will install. The repo is
+   public (2026-10-28), so no token or deploy key is involved.
+2. Invite the first one or two friends. iPhone friends use the home-screen
+   web app, so they need nothing beyond 1 either.
 
 **Status:** installer merged (2026-10-02), first-run onboarding merged (2026-10-02).
 The Android user's install (2026-10-05) went OK by Mike's account, so it
@@ -67,7 +65,7 @@ e2-micro's 1 GB is tight for the Node CLI.
 ## What to build, in order
 
 Done (the build list, one line each): `deploy/install.sh` (idempotent, root,
-Ubuntu 24.04; stops at the two manual steps, the deploy key and `claude` login,
+Ubuntu 24.04; stops at the manual steps (`tailscale up` and the `claude` login),
 and delegates shared steps to `update.sh` so an install and an update cannot
 disagree; `deploy/INSTALL.md` is the friend-facing doc); Mike out of the
 runtime (the per-turn context says "the user", never a name; the line in
@@ -88,9 +86,8 @@ Still to do:
    unrecorded.
    Not yet: Mike's hands-off run from `--ref main` on a fresh VM, which is
    the gate before adding more friends.
-6. **Repo access.** While the repo is private, each box needs read access:
-   the invitee's own read-only fine-grained token, over HTTPS. Going public
-   removes this step.
+6. **Repo access.** Done: the repo went public (2026-10-28), so a box clones
+   it over HTTPS with no token or deploy key.
 7. **TestFlight.** Parked (2026-10-25). iPhone friends use the web app
    added to the home screen from Safari, with notifications and the unread
    mark (confirmed on Mike's phone). It is less polished than the

@@ -1,5 +1,5 @@
 {
-  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 12.",
+  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 13.",
   "entries": [
     {
       "id": 1,
@@ -70,6 +70,13 @@
       "part": "app",
       "category": "feature",
       "text": "In the web app, voice mode now reads replies in Phonon, a natural voice made on your phone. The first time, it downloads the voice (about 65 MB) from Hugging Face; after that it works without downloading again. If you picked a voice in Settings, under Voice, choose Automatic to hear Phonon. You can also pick from 25 Phonon voices there; the default is Alfie."
+    },
+    {
+      "id": 12,
+      "date": "2026-10-28",
+      "part": "app",
+      "category": "feature",
+      "text": "In the web app, pairing now has a Scan QR code button that reads the code with your camera, so the app installed on your home screen can pair itself instead of the code opening in your browser. The camera is used only to read the code, and nothing is saved."
     }
   ]
 }

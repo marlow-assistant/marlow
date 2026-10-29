@@ -287,6 +287,11 @@ The numbers are cited elsewhere, so don't renumber them.
 - **Pairing:** an admin-issued single-use invite (a QR / link, 256 bits, ten
   minutes) via `POST /internal/admin/invite` on the owner-only socket;
   `deploy/pair-device.sh` prints it. Redeemed at `POST /v1/pair`.
+  The installed web app (an iOS home-screen app especially) can't receive the
+  link from the system camera: no URL handoff to a web app, and its storage is
+  separate from the browser's. So it scans the QR itself (`QrScanner.tsx`,
+  jsQR, since WebKit has no `BarcodeDetector`), with paste as the fallback.
+  Never observed on a real phone as of 2026-10-28.
 - **Architecture:** standalone, own repo, seeded identity.
 - **TLS:** the public listener requires it, and a bad cert is a startup
   failure, never a downgrade. Local dev opts out with

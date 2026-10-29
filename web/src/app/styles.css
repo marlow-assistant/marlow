@@ -146,6 +146,14 @@ button {
   color: var(--text);
 }
 
+.pairing-scan {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 14px;
+  background: var(--bg-2);
+}
+
 .pairing-error {
   color: var(--red);
   margin: 0;

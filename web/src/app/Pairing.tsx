@@ -156,15 +156,31 @@ export function Pairing({ onPaired, notice }: { onPaired: (token: string) => voi
 
 function defaultDeviceName(): string {
   const ua = navigator.userAgent;
-  const os = /Android/.test(ua)
-    ? "Android"
-    : /Mac OS X/.test(ua)
-      ? "Mac"
-      : /Windows/.test(ua)
-        ? "Windows"
-        : /Linux/.test(ua)
-          ? "Linux"
-          : "Browser";
-  const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "";
+  // Checked first: every iOS user agent says "like Mac OS X", and iPadOS asks
+  // for desktop sites by default and then claims to be a Mac outright; only
+  // touch points give it away.
+  const os = /iPhone/.test(ua)
+    ? "iPhone"
+    : /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+      ? "iPad"
+      : /Android/.test(ua)
+        ? "Android"
+        : /Mac OS X/.test(ua)
+          ? "Mac"
+          : /Windows/.test(ua)
+            ? "Windows"
+            : /Linux/.test(ua)
+              ? "Linux"
+              : "Browser";
+  // iOS browsers wear Safari's engine and name themselves with a suffix token.
+  const browser = /Edg(e|A|iOS)?\//.test(ua)
+    ? "Edge"
+    : /Firefox\/|FxiOS\//.test(ua)
+      ? "Firefox"
+      : /Chrome\/|CriOS\//.test(ua)
+        ? "Chrome"
+        : /Safari\//.test(ua)
+          ? "Safari"
+          : "";
   return browser ? `${browser} on ${os}` : os;
 }

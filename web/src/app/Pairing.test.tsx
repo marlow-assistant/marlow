@@ -14,6 +14,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   decode.mockReset();
   Reflect.deleteProperty(navigator, "mediaDevices");
+  Reflect.deleteProperty(navigator, "maxTouchPoints");
   vi.restoreAllMocks();
 });
 
@@ -119,5 +120,19 @@ describe("Pairing", () => {
     setMediaDevices(undefined);
     render(<Pairing onPaired={() => {}} />);
     expect(screen.queryByRole("button", { name: "Scan QR code" })).toBeNull();
+  });
+
+  it.each([
+    ["Safari on iPhone", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", 5],
+    ["Chrome on iPhone", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0 Mobile/15E148 Safari/604.1", 5],
+    ["Safari on iPad", "Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", 5],
+    // iPadOS asks for desktop sites by default and then says it is a Mac.
+    ["Safari on iPad", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15", 5],
+    ["Safari on Mac", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15", 0],
+  ])("names the device %s", (expected, ua, touchPoints) => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue(ua);
+    Object.defineProperty(navigator, "maxTouchPoints", { configurable: true, value: touchPoints });
+    render(<Pairing onPaired={() => {}} />);
+    expect((screen.getByLabelText("Device name") as HTMLInputElement).value).toBe(expected);
   });
 });

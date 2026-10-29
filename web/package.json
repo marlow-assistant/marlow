@@ -17,6 +17,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
+    "jsqr": "^1.4.0",
     "marked": "^18.0.14",
     "phonon-tts": "0.5.0",
     "react": "^19.3.0",

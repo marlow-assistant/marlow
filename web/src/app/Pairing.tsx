@@ -3,17 +3,21 @@ import { Api, HttpError, TransportError } from "../lib/api";
 import { DEFAULT_FACE } from "../lib/faces";
 import { inviteFromHash, inviteFromText } from "../lib/pairLink";
 import { FaceImage } from "./Face";
+import { canScan, QrScanner } from "./QrScanner";
 
 /** No server URL to enter: the client is served by the box it talks to. The
  * invite comes from the box (`deploy/pair-device.sh`), as a link, which is the
  * whole trust model: whoever can run it is on the box. Opening the link, or
  * scanning its QR with the camera, lands here with the invite in the URL's
  * fragment; it is taken out of the address bar at once, so it isn't left in
- * history or a screenshot. Pasting the link is the fallback. */
+ * history or a screenshot. The installed home-screen app can't be reached that
+ * way (the system camera opens the default browser, whose storage is separate),
+ * so it scans the code itself. Pasting the link is the last fallback. */
 export function Pairing({ onPaired, notice }: { onPaired: (token: string) => void; notice?: string }) {
   const [name, setName] = useState(defaultDeviceName);
   const [fromLink, setFromLink] = useState(() => inviteFromHash(location.hash));
   const [pasted, setPasted] = useState("");
+  const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,11 +82,39 @@ export function Pairing({ onPaired, notice }: { onPaired: (token: string) => voi
           "Name this device, then pair."
         ) : (
           <>
-            Run <code>deploy/pair-device.sh</code> on the box, then open its link or scan its QR code with this device's
-            camera. Links last ten minutes and work once.
+            Run <code>deploy/pair-device.sh</code> on the box, then scan its QR code here, or open its link. Links last ten minutes and work once.
           </>
         )}
       </p>
+      {scanning && (
+        <>
+          <QrScanner
+            onInvite={(i) => {
+              setFromLink(i);
+              setError(null);
+              setScanning(false);
+            }}
+            onError={() => {
+              setScanning(false);
+              setError("Can't use the camera. Allow it for Marlow in your settings, or paste the link below.");
+            }}
+          />
+          <button type="button" onClick={() => setScanning(false)}>
+            Cancel
+          </button>
+        </>
+      )}
+      {!fromLink && !scanning && canScan() && (
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setScanning(true);
+          }}
+        >
+          Scan QR code
+        </button>
+      )}
       <form onSubmit={submit}>
         <label>
           Device name
@@ -94,7 +126,7 @@ export function Pairing({ onPaired, notice }: { onPaired: (token: string) => voi
             maxLength={64}
           />
         </label>
-        {!fromLink && (
+        {!fromLink && !scanning && (
           <label>
             Pairing link
             <input
@@ -124,15 +156,31 @@ export function Pairing({ onPaired, notice }: { onPaired: (token: string) => voi
 
 function defaultDeviceName(): string {
   const ua = navigator.userAgent;
-  const os = /Android/.test(ua)
-    ? "Android"
-    : /Mac OS X/.test(ua)
-      ? "Mac"
-      : /Windows/.test(ua)
-        ? "Windows"
-        : /Linux/.test(ua)
-          ? "Linux"
-          : "Browser";
-  const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "";
+  // Checked first: every iOS user agent says "like Mac OS X", and iPadOS asks
+  // for desktop sites by default and then claims to be a Mac outright; only
+  // touch points give it away.
+  const os = /iPhone/.test(ua)
+    ? "iPhone"
+    : /iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)
+      ? "iPad"
+      : /Android/.test(ua)
+        ? "Android"
+        : /Mac OS X/.test(ua)
+          ? "Mac"
+          : /Windows/.test(ua)
+            ? "Windows"
+            : /Linux/.test(ua)
+              ? "Linux"
+              : "Browser";
+  // iOS browsers wear Safari's engine and name themselves with a suffix token.
+  const browser = /Edg(e|A|iOS)?\//.test(ua)
+    ? "Edge"
+    : /Firefox\/|FxiOS\//.test(ua)
+      ? "Firefox"
+      : /Chrome\/|CriOS\//.test(ua)
+        ? "Chrome"
+        : /Safari\//.test(ua)
+          ? "Safari"
+          : "";
   return browser ? `${browser} on ${os}` : os;
 }

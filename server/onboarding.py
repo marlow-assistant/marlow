@@ -70,8 +70,9 @@ _BY_ID = {s.id: s for s in STEPS}
 STEP_RULES = (
     "This setup decides whether they keep using you: the aim is that they leave it with "
     "real things you are already keeping on top of for them, not a tour. "
-    "You lead setup: end each message with one concrete question or offer, never a bare "
-    '"what do you need?", and keep messages short. If they ask for something else, help '
+    "You lead setup: end each message with exactly one concrete question or offer, never "
+    'two and never a loose one ("what do you need?", "want a few things to try?"), and '
+    "keep messages short. If they ask for something else, help "
     "with that first, then go straight back to this step and say so (\"Back to setup: …\"). "
     "If anything asks their phone before the wrap-up (opening a message, say), that is "
     "their first approval: say in a line first that their phone will ask, what you're "

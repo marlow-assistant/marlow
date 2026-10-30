@@ -140,7 +140,12 @@ something on disk the server checks that too.
    on in the same reply. This is the main reason for a tool over a file write:
    with a file, the next step only arrives on the next turn's line, so the
    model finishes step 1 with nothing to ask next, which is Taylor's "it just
-   stopped" rebuilt.
+   stopped" rebuilt. **One step per turn**: the reply opens the next step
+   with its question and stops. A second `step_done` in the same turn gets
+   "Not yet" from the tool (one process per turn, so it remembers), and the
+   record advances at most once a turn whatever the model calls. A trial-VM
+   run without this limit (2026-10-30) chained steps the user never answered
+   and finished setup in four messages.
 3. **The server decides.** After the turn it reads the tool calls out of the
    stream and moves the user on only if the step's disk check passes too. A
    claim the check rejects leaves the step open, and the next step line says
@@ -177,7 +182,7 @@ against it. Each turn gets the current step's instructions, not the script.
 | `name` | what to call them | none | 3 |
 | `stay-on-top` | look at mail and calendar first, then ask what to stay on top of; reminder vs note | none | 6 |
 | `one-thing` | set up one thing while they watch | some onboarding turn's commit touched `cron/schedules.json` or a path under `memory/` (sticky: saved in one turn, claimed in the next, still counts) | 4 |
-| `tour` | where it lives (avatar → Schedule), then things to try in a message of its own | none | 3 |
+| `tour` | where it lives (avatar → Schedule), then one thing to try, and a response to it | none | 4 |
 | `runs-alone` | briefing and week-ahead asked about, check-in told | none | 4 |
 | `wrap-up` | up to two ideas, then USER.md, approval explained first | USER.md no longer contains "Not yet known" | 4 |
 

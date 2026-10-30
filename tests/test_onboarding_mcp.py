@@ -57,6 +57,24 @@ def test_a_step_that_is_not_in_the_list_is_pointed_back_to_the_current_one():
             False, "That isn't the current onboarding step; the current one is one-thing.")
 
 
+def test_a_second_step_in_the_same_turn_is_refused():
+    # One process per turn, so "already advanced" is this process's memory.
+    state = o.TurnState()
+
+    def call(step):
+        reply = o.handle({"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                          "params": {"name": "step_done",
+                                     "arguments": {"step": step, "outcome": "done"}}},
+                         STEPS, state)
+        return reply["result"]["content"][0]["text"]
+
+    assert call("one-thing").startswith("Next, onboarding step tour")
+    refused = call("tour")
+    assert refused.startswith("Not yet:") and "wait" in refused
+    # A repeat of the step already finished is harmless and says the same.
+    assert call("one-thing").startswith("Not yet:")
+
+
 def test_a_later_step_in_the_list_answers_from_its_own_position():
     # The list runs from the current step to the last, so a later id is in it
     # and the answer follows that id. Whether it counts is the Marlow server's call.
@@ -200,13 +218,17 @@ def test_stdio_round_trip_over_a_real_pipe():
                     "params": {"name": "step_done", "arguments": {"step": "one-thing", "outcome": "done"}}}),
         json.dumps({"jsonrpc": "2.0", "id": 4, "method": "tools/call",
                     "params": {"name": "step_done", "arguments": {"step": "one-thing"}}}),
+        json.dumps({"jsonrpc": "2.0", "id": 5, "method": "tools/call",
+                    "params": {"name": "step_done", "arguments": {"step": "tour", "outcome": "done"}}}),
     )
-    assert [r.get("id") for r in replies] == [1, None, 2, 3, 4]
+    assert [r.get("id") for r in replies] == [1, None, 2, 3, 4, 5]
     assert replies[0]["result"]["protocolVersion"] == "2025-06-18"
     assert replies[1]["error"]["code"] == -32700
     assert [t["name"] for t in replies[2]["result"]["tools"]] == ["step_done"]
     assert replies[3]["result"]["content"][0]["text"] == "Next, onboarding step tour: Show them where it lives."
     assert replies[4]["result"]["isError"] is True
+    # The process is the turn: a second advance through the same pipe is refused.
+    assert replies[5]["result"]["content"][0]["text"].startswith("Not yet:")
 
 
 def test_stdio_with_no_steps_argument_starts_and_says_onboarding_is_finished():

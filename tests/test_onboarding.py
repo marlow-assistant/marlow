@@ -61,7 +61,7 @@ def test_steps_table():
         ("name", 3, "none"),
         ("stay-on-top", 6, "none"),
         ("one-thing", 4, "one-thing"),
-        ("tour", 3, "none"),
+        ("tour", 4, "none"),
         ("runs-alone", 4, "none"),
         ("wrap-up", 4, "user-md"),
     ]
@@ -200,11 +200,15 @@ def test_skipped_passes_a_failing_check(paths):
     assert s.step == "tour" and s.outcomes["one-thing"] == "skipped"
 
 
-def test_two_steps_in_one_turn(paths):
+def test_one_step_per_turn_at_most(paths):
+    # A turn that finished one step and called the next one done too was the
+    # trial-VM run that raced through setup (2026-10-30): the user never
+    # answered the second step. The tool refuses the second call; the record
+    # holds the line if the model calls anyway.
     _fresh(paths)
     s = _go(paths, [("name", "done"), ("stay-on-top", "done")])
-    assert s.step == "one-thing"
-    assert s.outcomes == {"name": "done", "stay-on-top": "done"}
+    assert s.step == "stay-on-top"
+    assert s.outcomes == {"name": "done"}
     assert s.turns == 0
 
 

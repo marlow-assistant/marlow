@@ -55,7 +55,7 @@ STEPS: tuple[Step, ...] = (
     Step("name", 3, CHECK_NONE),
     Step("stay-on-top", 6, CHECK_NONE),
     Step("one-thing", 4, CHECK_ONE_THING),
-    Step("tour", 3, CHECK_NONE),
+    Step("tour", 4, CHECK_NONE),
     Step("runs-alone", 4, CHECK_NONE),
     Step("wrap-up", 4, CHECK_USER_MD),
 )
@@ -77,7 +77,8 @@ STEP_RULES = (
     "If anything asks their phone before the wrap-up (opening a message, say), that is "
     "their first approval: say in a line first that their phone will ask, what you're "
     "asking to do, and why. When this step is finished, or they wave it off, call "
-    "step_done with this step's id and carry on with what it returns, in the same reply."
+    "step_done with this step's id; in the same reply, open the step it returns with that "
+    "step's question and stop there for their answer. Never finish two steps in one reply."
 )
 
 _MISSING = {
@@ -245,13 +246,14 @@ def after_turn(
         if outcome == OUTCOME_SKIPPED:
             _advance(state, OUTCOME_SKIPPED)
             advanced = True
+            break  # one step per turn: the user hasn't answered the next one
         elif outcome == OUTCOME_DONE:
             if _check_passes(_BY_ID[state.step].check, state, user_path):
                 _advance(state, OUTCOME_DONE)
                 advanced = True
             else:
                 state.rejected = state.step
-                break
+            break
 
     if not state.finished and not advanced and state.turns >= _BY_ID[state.step].cap:
         state.capped = state.step

@@ -18,14 +18,14 @@ Call step_done once you have it, then go straight on to the next step in the
 same reply.
 
 ## stay-on-top
-Ask what they'd like you to help them stay on top of. In the same message,
-say in a line each what you can make of it: a reminder is a message from you
-at a time they pick; a note is something you remember and keep an eye on
-until it's done. Then ask, as the one question, whether you may take a quick
-look at their calendar for the coming week and the subject lines of recent
-mail, to suggest a few things. Never look before they say yes: finding you
-already in their inbox is unsettling, and asking is how they learn you ask.
-If they say yes: `ToolSearch` for "gmail" and "calendar", then Calendar
+One short message, one question: what's one thing they'd like you to keep on
+top of for them. Nothing else in it: no list of what you can do (the next
+step explains reminders and notes as it makes one). If they name something,
+call step_done. Only if they're unsure, offer in a message of its own to take
+a quick look at their calendar for the coming week and the subject lines of
+recent mail, to suggest a few things. Never look before they say yes: finding
+you already in their inbox is unsettling, and asking is how they learn you
+ask. If they say yes: `ToolSearch` for "gmail" and "calendar", then Calendar
 `list_events` for the next seven days and Gmail `search_threads` for
 `newer_than:3d in:inbox`. The search shows senders, subjects and snippets
 only; opening a message asks their phone, so don't. Offer one or two real
@@ -44,9 +44,9 @@ Take the first thing they named and make it real in `cron/schedules.json`
   `notify`;
 - something to keep track of with no time yet → a memory note, and offer a
   date to check on it.
-Confirm it in one line with the time in their words ("Done: Thursday 9 AM,
-call the dentist"). One is enough for now: say they can ask for more any
-time. Keep anything else they named for the wrap-up. If it needs a detail
+Confirm it in one line, naming what kind it is and the time in their words
+("Done: a reminder, Thursday 9 AM, call the dentist"; "Done: a note I'll keep
+an eye on"). One is enough for now. Keep anything else they named for the wrap-up. If it needs a detail
 (a date, a target), ask for that as the step's one question and finish it
 when they answer. Call step_done only after the schedule or memory file is
 saved; the server checks.

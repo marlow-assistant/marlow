@@ -7,8 +7,7 @@ still very much enthusiast-only."
 ## The gap
 
 Today a new user needs an always-on Ubuntu box, Tailscale on the box and the
-phone (with On Demand set up by hand on iOS), a read-only deploy key on the
-repo, a terminal session to run `install.sh` and paste a Claude login code,
+phone (with On Demand set up by hand on iOS), a terminal session to run `install.sh` and paste a Claude login code,
 a Debug build over USB or TestFlight, and a pairing code typed with the right
 host. The second instance's install (2026-10-17) took an afternoon with Mike and Claude
 driving. The target is: install the app, tap to connect a Claude Pro account,

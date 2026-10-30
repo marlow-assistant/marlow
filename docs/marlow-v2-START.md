@@ -116,8 +116,11 @@ you finish something, mark it done there as well as here.
   merged (2026-10-25), **Funnel off on every box**. QR invite pairing,
   revocation (`devices.sh`), request caps, `/health` behind the token and the
   public-surface test all ship on the tailnet too. A throwaway-VM run
-  (2026-10-24) passed, including `--funnel`, relay reach, reboot and
-  `--no-funnel`. Still open, on real hardware: an iPhone off Tailscale over
+  (2026-10-24) passed relay reach, reboot and `--no-funnel`, but
+  `update.sh --funnel` failed while Tailscale waited for the nodeAttr
+  approval, leaving the server on loopback. `deploy/funnel.sh` now times that
+  step out after 60 s and puts the server back on the tailnet; no test or VM
+  run has exercised that rollback yet. Still open, on real hardware: an iPhone off Tailscale over
   Funnel, the iOS QR scanner, the web fragment flow in Android Chrome, and a
   revoked iPhone falling back to the pairing screen. They wait for the first box
   that turns Funnel on, most likely the Android user's (`update.sh --funnel`

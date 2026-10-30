@@ -100,11 +100,13 @@ you finish something, mark it done there as well as here.
   Settings. Their output shows on Activity. Steps 1–3 shipped on both
   clients (2026-10-23), after the morning-after checks all passed; on
   both of Mike's box's instances. Step 4, the seeded `morning.md`, not started.
-- **`onboarding-v2.md`** (2026-10-17): wording pass merged, harness
-  not built. The second user's first run: the script lost its place after a
-  time-zone detour, and it set things up before explaining them. Direction: shorter, structured,
-  one step at a time; proposed harness: server-owned steps, a per-turn
-  step line, server-checked completion (future). **Loose end:** the What's
+- **`onboarding-v2.md`** (2026-10-17): wording pass merged; harness
+  designed 2026-10-30, not built. The second user's first run: the script lost its place after a
+  time-zone detour, and it set things up before explaining them. The harness:
+  the server holds the step and adds it to every turn, the model calls an
+  onboarding MCP tool when a step ends (its result is the next step), the
+  server checks disk where a step leaves a result, and a turn cap moves on.
+  Split into five chunks, three of them implementor-ready. **Loose end:** the What's
   new card waits on onboarding by grepping USER.md for "Not yet known"
   (`changes.onboarding_complete`); replace it with that
   server-checked completion when it lands, and keep the template's

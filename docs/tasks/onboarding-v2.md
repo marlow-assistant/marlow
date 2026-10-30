@@ -1,7 +1,7 @@
 # Onboarding v2: a shorter, structured first run
 
-**Status:** wording pass merged 2026-10-18, harness
-not built. The pass, ahead of the next user onboarding: new greeting; one
+**Status:** wording pass merged 2026-10-18; harness
+designed and split into implementation chunks 2026-10-30, not built. The pass, ahead of the next user onboarding: new greeting; one
 reminder, then the Schedule, then stop; reminder vs note explained; "things to
 try" as its own early message; the briefing and week-ahead asked about, the
 inbox check told not asked and shown as "Check-in" on both clients; USER.md and
@@ -117,45 +117,190 @@ first outside read of `identity/FIRST-RUN.md` and the greeting
   the user's place in onboarding rather than the agent.
 - Whatever is built needs iOS and `web/`.
 
-## Harness design (proposal, Mike likes it; future task, 2026-10-17)
+## Harness design (agreed with Mike 2026-10-30, not built)
 
-The server owns the step list and decides when a step is done by checking
-the result. The model saying "I'm done" is the weaker version: the model is
-what lost its place, so it shouldn't keep the place either.
+The model isn't untrustworthy here, it gets sidetracked. It knows when a step
+is finished; what it lost with Taylor was where it was. So the server keeps
+the place, the model reports when a step is finished, and where a step leaves
+something on disk the server checks that too.
 
-Each step has three parts:
+### The pieces
 
-1. **A short step line added to every turn.** `server/turn_context.py`
-   already adds a `[Context: …]` line to each turn. During onboarding the
-   server would add one more, e.g. "Onboarding step 3 of 6: set up one
-   reminder with them." Because the line comes back every turn, a detour like
-   the time-zone question can't end onboarding: the next turn still names the
-   step. This alone fixes the failure Taylor hit.
-2. **A check the server makes after each turn.** The queue's post-turn work
-   already commits the working tree and records fired one-offs, so the server
-   can see each step's result itself:
-   - name step: the user replied;
-   - reminder step: a new entry in `cron/schedules.json`;
-   - wrap-up: USER.md written.
+1. **A step line on every turn.** `server/turn_context.py` already adds a
+   `[Context: …]` line. During onboarding the server adds one more, naming the
+   current step and its instructions. It repeats until the step ends, so a step
+   can take several turns and a detour (the time-zone question) can't end
+   onboarding: the next turn names the same step. The line also says a real
+   request comes first: help with it, then come back.
+2. **An onboarding tool the model calls when a step ends.**
+   `mcp__onboarding__step_done(step, outcome, note)`: `outcome` is `done` or
+   `skipped` (they waved it off), `note` a line on what was learned. Its
+   **result is the next step's instructions**, so the model carries straight
+   on in the same reply. This is the main reason for a tool over a file write:
+   with a file, the next step only arrives on the next turn's line, so the
+   model finishes step 1 with nothing to ask next, which is Taylor's "it just
+   stopped" rebuilt.
+3. **The server decides.** After the turn it reads the tool calls out of the
+   stream and moves the user on only if the step's disk check passes too. A
+   claim the check rejects leaves the step open, and the next step line says
+   what's missing ("no reminder has been saved yet"). The model can run ahead
+   of the server for one turn at most; the step line pulls it back.
+4. **A turn cap per step.** After N user turns on one step, the server moves
+   on and the next line says so ("move on from X; they can come back to it").
+   Only chat turns count, never cron or system turns. A real request in the
+   middle of onboarding counts too: a count the model has to report is more
+   machinery than a slightly higher cap.
 
-   The next step starts only when the check passes. The model only declares
-   "done" where nothing on disk shows it ("asked what they want to stay on
-   top of"), and even there the user's reply is a better signal than the
-   model's claim.
-3. **Fixed text and app screens where no judgment is needed.** Today's
-   greeting is already fixed text. Some steps should be too: "here's what I
-   can do", what an approval is, "tap here to see your Schedule", and a
-   pointer to the mic. They could be fixed server messages, or app overlays
-   that wait for a tap. That is the video-game-tutorial feel, and it can't
-   drift.
+### Alternatives considered for the done signal
 
-Consequences: `FIRST-RUN.md` becomes a list of server-owned steps, each with
-its own instructions and check, instead of one long script the model reads
-once. The server keeps a small "which step is this user on" record. Both
-clients need the step screens.
+- **A tag in the reply text.** Replies stream to both clients
+  (`PartialTextTracker`, `--include-partial-messages`), so the tag would show
+  before the server could strip it, unless the streaming path learned to hold
+  back tag-shaped text.
+- **A file write** (`onboarding/done`). It works, but it needs a new write path
+  in `server/file_policy.py` (only `memory/`, `cron/schedules.json` and
+  `ideas/ideas.json` write without asking the phone), the file lands in every
+  identity commit, and it can't hand over the next step mid-turn.
+- **Only disk checks.** Conversational steps leave nothing on disk, so they
+  would advance on "the user replied", which is wrong for a step that takes
+  several exchanges.
 
-Phasing: parts 1 and 2 first, server only, with no app changes. Part 3 later,
-on both clients.
+### The steps
+
+Today's eight steps, regrouped so the ones with a result on disk are checked
+against it. Each turn gets the current step's instructions, not the script.
+
+| Step id | What | Disk check (besides the tool call) | Cap |
+|---|---|---|---|
+| `name` | what to call them | none | 3 |
+| `stay-on-top` | look at mail and calendar first, then ask what to stay on top of; reminder vs note | none | 6 |
+| `one-thing` | set up one thing while they watch | the turn's commit touched `cron/schedules.json` or a path under `memory/` | 4 |
+| `tour` | where it lives (avatar → Schedule), then things to try in a message of its own | none | 3 |
+| `runs-alone` | briefing and week-ahead asked about, check-in told | none | 4 |
+| `wrap-up` | up to two ideas, then USER.md, approval explained first | USER.md no longer contains "Not yet known" | 4 |
+
+`skipped` passes any step without its disk check. The caps are a first guess
+to tune from real runs. If `wrap-up` runs out with USER.md unwritten,
+onboarding ends anyway and the record says so; USER.md keeps the placeholder
+until normal use fills it, and nothing keys on it any more but the check.
+
+### State and the existing boxes
+
+- **The record** is server-owned, `onboarding.json` in the data dir (hidden
+  from the agent by the read denies and bwrap): current step id, chat turns on
+  it, each step's outcome and note, `finished` (true/false) and how it ended
+  (`done` or `capped`). Written only by the server's post-turn step.
+- **Active or not:** no record and USER.md still has the placeholder starts
+  onboarding (record created at step `name`). A record says whether it is
+  finished. No record and no placeholder is a box that finished before this
+  shipped: finished, written as such the first time it is checked, so no
+  existing user ever sees a step line.
+- **It replaces the text search.** `changes.onboarding_complete` reads the
+  record (the loose end in the START doc). It still fails open.
+
+### What changes in the identity
+
+`identity/FIRST-RUN.md` becomes the step file: a `## <step-id>` section per
+step, each with its instructions, nothing outside the sections except a
+one-paragraph header comment for authors. It stays product-owned (edit-denied,
+installed by `update.sh`). The cross-cutting rules (lead each step, short
+messages, detours return to the step, explain the first approval) move into
+the fixed wording of the step line. `identity/CLAUDE.md`'s "Read FIRST-RUN.md
+and follow it" becomes: onboarding arrives one step at a time on the step
+line; call the tool when a step ends. Plus a `changes.json` entry. All in the
+same PR.
+
+### Implementation chunks
+
+Feasible to hand to the `implementor` agent for chunks 1, 2 and 5. Chunks 3
+and 4 stay with the orchestrating session: 3 changes what `invoke.py` passes
+the CLI and the permission surface, 4 is wording. Order: 1, 2, 3, 4, 5, then
+`/code-review high` and `/security-review` (the tool surface changes). Write
+each test first and watch it fail.
+
+**Chunk 1: `server/onboarding.py`, the state machine.** No I/O beyond the
+record and USER.md; no `invoke`/`queue` imports.
+- `STEPS`: ordered tuple of `(id, cap, check)` with the ids and caps above;
+  `check` is one of `none`, `one-thing`, `user-md`.
+- `load_steps(path) -> dict[id, text]`: parse `## <id>` sections of
+  FIRST-RUN.md. Raise if the ids don't match `STEPS` exactly, in order (a test
+  runs it on the shipped `identity/FIRST-RUN.md`).
+- `state(record_path, user_path)`: the active/finished rule above, including
+  writing the "finished" record for an existing box.
+- `step_line(state, texts) -> str | None`: None when finished. Otherwise
+  "Onboarding step 2 of 6 (`stay-on-top`): …" + the step's text + the fixed
+  rules; plus "Not done yet: …" when the last claim was rejected, and "Move on
+  from X; they can come back to it" when the cap moved them.
+- `after_turn(state, calls, commit_paths, user_path) -> state`: `calls` is the
+  list of `(step, outcome)` from this turn's tool calls, in order. Increment
+  the turn count; for each call naming the current step, apply the check and
+  advance (several in one turn are fine); ignore a call naming any other step;
+  then apply the cap. Persist atomically (write temp, rename).
+- Tests: fresh install starts at `name`; existing box is finished and never
+  gets a line; done advances; a `one-thing` claim without a matching commit
+  path stays, with the "not done yet" line; `skipped` passes a failing check;
+  two steps in one turn; a call for a non-current step is ignored; the cap
+  advances on the Nth turn; finishing via `wrap-up`; the cap on `wrap-up`
+  finishes with `capped`; a corrupt record fails to "finished", never to a
+  restart; the shipped FIRST-RUN.md parses.
+
+**Chunk 2: `server/onboarding_mcp.py`, the tool.** Copy the shape of
+`server/weather_mcp.py`: stdlib only, no `server.*` imports, MCP stdio
+framing by hand (`initialize`, `tools/list`, `tools/call`), run with `-I`.
+- One tool, `step_done`, input schema `step` (string), `outcome` (enum
+  `done`/`skipped`), `note` (string, short). Description says: call it when a
+  step ends; the result is what to do next.
+- Argv: `--steps <json>`, a list of `{"id", "text"}` from the current step to
+  the end, built by the server each turn. It reads no file, keeps no state.
+- Result: the text of the step after the one named, or "Onboarding is
+  finished: close in a line." after the last; for an id not in the list,
+  "That isn't the current step; the current one is `<id>`."
+- Tests: the stdio exchange end to end through a subprocess, as
+  `tests/` does for weather; each result case; malformed input never crashes.
+
+**Chunk 3: wiring (not for the implementor).**
+- `invoke.py`: during an attended turn with onboarding active, add
+  `"onboarding"` beside `"weather"` in the `--mcp-config` JSON
+  (`alwaysLoad: True`), never on any other turn. Extend `_tool_target` to
+  record `step` and `outcome` for `mcp__onboarding__step_done` only, so the
+  existing `ToolCall` log carries them (it never copies `tool_input` whole).
+- `turn_context.py`: append `onboarding.step_line(...)` for chat turns.
+- `queue.py`, next to `commit_after_turn` (~line 1348): for chat turns, call
+  `onboarding.after_turn` with the turn's `tool_calls` and `commit.paths`.
+- `boundaries.py` vetted set + `deploy/marlow-settings.json` allow:
+  `mcp__onboarding__step_done`, lockstep-tested like the weather tools. It
+  takes no path and reaches nothing.
+- `changes.onboarding_complete` reads the record.
+- Tests: the config includes the server only for an attended onboarding turn,
+  never cron/system/compaction; the target extraction; the post-turn call; the
+  settings lockstep.
+
+**Chunk 4: identity (not for the implementor).** FIRST-RUN.md into step
+sections, CLAUDE.md's first-run paragraph, the step line's fixed wording, the
+`changes.json` entry.
+
+**Chunk 5: activity label, both clients.** `web/src/lib/activity.ts` and the
+iOS equivalent in `ios/Marlow/Marlow/Models/` map `mcp__onboarding__*` to
+"Setting things up…", beside the weather lines, with a test on each side.
+Small, but it is the one user-visible app change in phase 1, so it ships in
+the same PR.
+
+### Testing in a real run
+
+Whether the model follows the step line and calls the tool shows only in a
+real first run: a fresh install on the trial VM, which is also the
+stranger-install follow-up. Never by nesting `claude -p` in a build session.
+Write down what the run showed and what it didn't.
+
+### Phasing
+
+Phase 1: chunks 1–5. Phase 2, both clients: fixed screens where no judgment is
+needed (what an approval is, "tap here to see your Schedule", the mic), as
+overlays that wait for a tap, the "video game tutorial" feel. Scope iOS and
+`web/` together.
+
+Parked until a run shows the need: pausing onboarding as a whole ("not now,
+later"), and not counting real requests against the cap.
 
 Related, already parked in `friends-alpha.md` → "Pairing papercuts": the
 greeting wiping the big face, the device name, the QR opening the browser, the

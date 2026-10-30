@@ -272,6 +272,11 @@ emulator (see the off-tailnet row).
 | `--no-funnel` | Pass, one leftover | Exit 0. Uvicorn is back on `100.x.y.z:8443`, the tailnet gets 401, both relays get 000. But `tailscale serve status --json` keeps `{"AllowFunnel": {"…:8443": true}}` and `funnel status` says "Funnel on … but no serve config". Nothing is served, but a later `serve` handler on `:8443` would be public at once. `tailscale funnel --https=8443 off` fails ("handler does not exist"); `tailscale funnel reset` clears it, and Marlow uses no other serve config. **Fixed, uncommitted:** after `--tcp=<port> off`, `funnel reset` runs when `AllowFunnel` is all that's left, and other serve config is left alone with a warning. On the VM: `{}` and "No serve config" afterwards. |
 | Install notes (for the install feel-out run) | — | (Before the repo went public, `install.sh` checked Tailscale before it printed a deploy key, so a friend without `tailscale up` hit two stops; the deploy-key stop is gone.) A brand-new user's first screen is the "Marlow was updated" card listing every past change. |
 
+**Known gap (2026-10-30, left open on purpose):** `funnel.sh`'s 60 s timeout
+and rollback, added after the "waiting for approval" failure above, has no
+test and was not re-run on a VM. A test would put a fake `tailscale` that
+hangs on `PATH` and check the unit is moved back to the tailnet IP.
+
 Still needs a real phone: an iPhone with Tailscale off pairing over Funnel
 (row 3 above: text, an image, an approval inside 55 s, push, cold reopen), the
 iOS QR scanner on a camera, the web fragment flow in Android Chrome, and a

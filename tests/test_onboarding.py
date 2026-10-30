@@ -95,6 +95,27 @@ def test_missing_user_md_is_existing(paths):
     assert record.exists()
 
 
+def test_is_complete_never_writes(paths):
+    """/v1/changes asks from a request thread, off the queue. A read there that
+    wrote could put a fresh state back over the step after_turn just saved, so
+    it never persists; the queue's own reads (invoke, after_turn) do."""
+    record, _ = paths
+    assert onboarding.is_complete(*paths) is False
+    assert not record.exists()
+
+
+def test_an_existing_box_is_recorded_on_its_first_turn(paths):
+    """Written as finished then, so a later "Not yet known" anywhere in
+    USER.md can never start onboarding on a box that has been through it."""
+    record, user = paths
+    user.write_text(FILLED_USER, encoding="utf-8")
+    _go(paths, [])
+    user.write_text(PLACEHOLDER_USER, encoding="utf-8")
+    s = _fresh(paths)
+    assert s.finished and s.ended == "existing"
+    assert record.exists()
+
+
 def test_after_turn_on_finished_leaves_it_alone(paths):
     record, user = paths
     user.write_text(FILLED_USER, encoding="utf-8")

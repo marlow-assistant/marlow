@@ -1195,8 +1195,10 @@ def test_onboarding_turn_carries_the_step_line_and_the_tool(tmp_path, monkeypatc
     current one on (the tool's result is the next step's text)."""
     _onboarding_box(tmp_path, monkeypatch, user_text=_ONBOARDING_USER)
 
-    argv = asyncio.run(run_claude("hello", source="chat")).result_text.split("\x00")
+    result = asyncio.run(run_claude("hello", source="chat"))
+    argv = result.result_text.split("\x00")
 
+    assert result.onboarding_step == "name", "queue counts the turn against this step"
     servers = _mcp_servers(argv)
     assert set(servers) == {"weather", "onboarding"}
     server = servers["onboarding"]
@@ -1206,7 +1208,7 @@ def test_onboarding_turn_carries_the_step_line_and_the_tool(tmp_path, monkeypatc
     assert server["args"][2] == "--steps"
     steps = json.loads(server["args"][3])
     assert [s["id"] for s in steps][:2] == ["name", "stay-on-top"] and len(steps) == 6
-    assert "Onboarding step 1 of 6 (`name`)" in argv[-1] or "Onboarding step 1 of 6 (name)" in argv[-1]
+    assert "\n\n[Onboarding step 1 of 6 (name): " in argv[-1], "below the context block"
     assert argv[-1].rstrip().endswith("hello")
 
 
@@ -1224,8 +1226,10 @@ def test_onboarding_is_off_once_finished(tmp_path, monkeypatch):
     """A box past onboarding (no placeholder) never sees the line or the tool."""
     _onboarding_box(tmp_path, monkeypatch, user_text="## Everything else\nLikes boats.\n")
 
-    argv = asyncio.run(run_claude("hello", source="chat")).result_text.split("\x00")
+    result = asyncio.run(run_claude("hello", source="chat"))
+    argv = result.result_text.split("\x00")
 
+    assert result.onboarding_step is None
     assert set(_mcp_servers(argv)) == {"weather"}
     assert "Onboarding step" not in argv[-1]
 
@@ -1262,6 +1266,8 @@ def test_onboarding_survives_a_broken_step_file(tmp_path, monkeypatch):
         ({"step": "tour", "outcome": "maybe"}, None),
         ({"step": "Not A Step; rm", "outcome": "done"}, None),
         ({"outcome": "done"}, None),
+        ({"step": ["name"], "outcome": "done"}, None),
+        ({"step": "made-up", "outcome": "done"}, None),
     ],
 )
 def test_step_done_target_keeps_step_and_outcome_only(tool_input, expected):

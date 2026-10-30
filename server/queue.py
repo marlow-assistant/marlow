@@ -356,10 +356,13 @@ def _note_onboarding(turn: Turn, commit) -> None:
     the onboarding tool is "<step> <outcome>" (invoke._tool_target); the
     commit's paths are what the step's disk check looks at. Only a DONE chat
     turn counts: a cron job didn't spend the user's attention on the step, and
-    an errored turn shouldn't use up its cap. A no-op once onboarding is
-    finished.
+    an errored turn shouldn't use up its cap. Nor does a turn whose prompt
+    named no step (`InvocationResult.onboarding_step`): onboarding finished,
+    or the step file wouldn't load, and the user never saw a step to spend.
     """
     if turn.source not in active_turn.CHAT_SOURCES or turn.status != TurnStatus.DONE:
+        return
+    if turn.result is None or turn.result.onboarding_step is None:
         return
     calls = []
     for call in turn.tool_calls:

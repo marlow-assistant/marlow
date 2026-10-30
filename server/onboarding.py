@@ -65,7 +65,11 @@ _BY_ID = {s.id: s for s in STEPS}
 # FIRST-RUN.md, and that apply to every step alike. The detour rule is the one
 # the first outside user's run needed (a time-zone question ended setup,
 # 2026-10-17); the approval one is because a new user has never seen a prompt.
+# The first sentence is the old script's purpose: without it each step is done
+# to the letter and the whole reads as a tour.
 STEP_RULES = (
+    "This setup decides whether they keep using you: the aim is that they leave it with "
+    "real things you are already keeping on top of for them, not a tour. "
     "You lead setup: end each message with one concrete question or offer, never a bare "
     '"what do you need?", and keep messages short. If they ask for something else, help '
     "with that first, then go straight back to this step and say so (\"Back to setup: …\"). "
@@ -155,8 +159,12 @@ def _user_md_has_marker(user_path: Path) -> bool | None:
         return None
 
 
-def load(record_path: Path, user_path: Path) -> State:
+def load(record_path: Path, user_path: Path, *, persist: bool = True) -> State:
     """The current state, creating the record on first use.
+
+    `persist=False` for a reader off the work queue (`is_complete`, from a
+    request thread): only the queue's own reads may write, or a stale fresh
+    state could land over a step after_turn just saved.
 
     A record that exists but won't parse is a finished onboarding, not a fresh
     one, and is left on disk for a human to look at."""
@@ -180,7 +188,8 @@ def load(record_path: Path, user_path: Path) -> State:
         state = State(step=STEPS[0].id)
     else:
         state = _finished_state("existing")
-    _write(record_path, state)
+    if persist:
+        _write(record_path, state)
     return state
 
 
@@ -255,7 +264,7 @@ def after_turn(
 def is_complete(record_path: Path, user_path: Path) -> bool:
     """Fails open: if the answer can't be had, nothing is held back on it."""
     try:
-        return load(record_path, user_path).finished
+        return load(record_path, user_path, persist=False).finished
     except Exception:
         logger.exception("onboarding state unavailable, treating onboarding as complete")
         return True

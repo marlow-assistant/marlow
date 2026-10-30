@@ -1860,6 +1860,8 @@ def _onboarding_turn(source="chat", status=None, calls=()):
         turn_id="t1",
         source=source,
         status=status or TurnStatus.DONE,
+        # The step invoke put on the prompt; any id will do here.
+        result=SimpleNamespace(onboarding_step="name"),
         tool_calls=[ToolCall(name=n, target=t, at=0.0) for n, t in calls]
         or [ToolCall(name=ONBOARDING_TOOL, target="name done", at=0.0)],
     )
@@ -1944,3 +1946,19 @@ def test_other_tools_are_not_claims(tmp_path, monkeypatch):
 
     state = onboarding.load(record, user)
     assert state.step == "name" and state.turns == 1
+
+
+def test_a_turn_without_a_step_line_never_counts(tmp_path, monkeypatch):
+    """When invoke showed no step (a step file that won't parse, say), the
+    turn didn't spend the step, so it must not use up the cap and quietly
+    finish an onboarding the user never saw."""
+    from server import onboarding
+    from server.queue import _note_onboarding
+
+    record, user = _onboarding_paths(tmp_path, monkeypatch)
+    turn = _onboarding_turn(calls=[("Read", "USER.md")])
+    turn.result.onboarding_step = None
+
+    _note_onboarding(turn, None)
+
+    assert onboarding.load(record, user).turns == 0

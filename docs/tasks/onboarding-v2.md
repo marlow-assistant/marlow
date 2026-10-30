@@ -270,13 +270,18 @@ framing by hand (`initialize`, `tools/list`, `tools/call`), run with `-I`.
   (`alwaysLoad: True`), never on any other turn. Extend `_tool_target` to
   record `step` and `outcome` for `mcp__onboarding__step_done` only, so the
   existing `ToolCall` log carries them (it never copies `tool_input` whole).
-- `turn_context.py`: append `onboarding.step_line(...)` for chat turns.
-- `queue.py`, next to `commit_after_turn` (~line 1348): for chat turns, call
-  `onboarding.after_turn` with the turn's `tool_calls` and `commit.paths`.
+- `invoke._onboarding_for_turn` also builds the step line, put below the
+  `[Context: …]` block (not in `turn_context.py`: invoke needs the same state
+  for the tool's step list, and reads it once). It records the step it showed
+  as `InvocationResult.onboarding_step`.
+- `queue._note_onboarding`, after `commit_after_turn`: for a DONE chat turn
+  whose prompt named a step, call `onboarding.after_turn` with the turn's
+  `tool_calls` and `commit.paths`. A turn that showed no step never counts.
 - `boundaries.py` vetted set + `deploy/marlow-settings.json` allow:
   `mcp__onboarding__step_done`, lockstep-tested like the weather tools. It
   takes no path and reaches nothing.
-- `changes.onboarding_complete` reads the record.
+- `/v1/changes` reads the record through `onboarding.is_complete`, which never
+  writes (it runs off the queue; only the queue's reads persist).
 - Tests: the config includes the server only for an attended onboarding turn,
   never cron/system/compaction; the target extraction; the post-turn call; the
   settings lockstep.
@@ -296,7 +301,16 @@ the same PR.
 Whether the model follows the step line and calls the tool shows only in a
 real first run: a fresh install on the trial VM, which is also the
 stranger-install follow-up. Never by nesting `claude -p` in a build session.
-Write down what the run showed and what it didn't.
+Write down what the run showed and what it didn't. Two more things only a run
+answers:
+
+- **The tool set changes mid-session.** The onboarding server is in
+  `--mcp-config` only while a step is current, so the turn after wrap-up
+  `--resume`s with one tool fewer. Check that resume accepts that, and what it
+  costs the prompt cache (a changed tool list likely misses it once).
+- **A box partway through the old script at deploy** has no record and still
+  has the placeholder, so it restarts at `name`. Accepted: no box is
+  mid-onboarding today, and the cap moves a repeated step on in a few turns.
 
 ### Phasing
 

@@ -240,10 +240,3 @@ def test_the_tool_is_vetted_allowed_and_named_as_the_server_reads_it():
     policy = json.loads((Path(__file__).resolve().parent.parent / "deploy" / "marlow-settings.json").read_text())
     assert name in policy["permissions"]["allow"]
 
-
-def test_the_step_ids_are_the_state_machines():
-    """The id pattern invoke keeps in the activity log admits every real step."""
-    from server import onboarding
-    from server.invoke import _STEP_ID
-
-    assert all(_STEP_ID.fullmatch(s.id) for s in onboarding.STEPS)

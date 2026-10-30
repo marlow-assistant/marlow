@@ -202,6 +202,10 @@ class InvocationResult:
     # `--effort` this invocation passed; the CLI echoes it nowhere.
     model: str | None = None
     effort: str | None = None
+    # The onboarding step this turn's prompt named, or None when it named
+    # none (docs/tasks/onboarding-v2.md). queue.py counts a turn against the
+    # step's cap only when it did, so a turn that showed no step can't spend it.
+    onboarding_step: str | None = None
 
     @property
     def had_permission_denial(self) -> bool:
@@ -267,9 +271,10 @@ def _clip_target(value: str) -> str | None:
     return collapsed[: _MAX_TARGET_CHARS - 1].rstrip() + "…"
 
 
-# The onboarding tool (server/onboarding_mcp.py), and the shape of a step id.
+# The onboarding tool (server/onboarding_mcp.py), and the only step ids its
+# log target may carry.
 ONBOARDING_TOOL = "mcp__onboarding__step_done"
-_STEP_ID = re.compile(r"[a-z][a-z-]{0,31}")
+_STEP_IDS = frozenset(s.id for s in onboarding.STEPS)
 
 
 def _tool_target(name: str, tool_input: object) -> str | None:
@@ -301,7 +306,7 @@ def _tool_target(name: str, tool_input: object) -> str | None:
         # Step and outcome, which queue.py hands to server/onboarding.py after
         # the turn. Never the note: it is what the model learned about them.
         step, outcome = tool_input.get("step"), tool_input.get("outcome")
-        if isinstance(step, str) and _STEP_ID.fullmatch(step) and outcome in ("done", "skipped"):
+        if isinstance(step, str) and step in _STEP_IDS and outcome in ("done", "skipped"):
             return f"{step} {outcome}"
         return None
     if name == "WebSearch":
@@ -1453,6 +1458,7 @@ async def run_claude(
                 on_text=on_text,
                 on_tool_call=on_tool_call,
             )
+        result.onboarding_step = onboarding_steps[0]["id"] if onboarding_steps else None
         return result
 
 

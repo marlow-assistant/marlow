@@ -64,6 +64,12 @@ struct TurnActivity: Decodable, Equatable {
         guard let tool else { return "Using a tool…" }
 
         let normalized = tool.lowercased()
+        // Our own onboarding server (`mcp__onboarding__step_done`): the
+        // assistant reports a setup step finished. Prefix match, ahead of the
+        // substring checks below, so a later service word cannot claim it.
+        if normalized.hasPrefix("mcp__onboarding__") {
+            return "Setting things up…"
+        }
         if normalized.contains("calendar") {
             return "Checking your calendar…"
         }

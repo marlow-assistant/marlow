@@ -101,16 +101,14 @@ you finish something, mark it done there as well as here.
   clients (2026-10-23), after the morning-after checks all passed; on
   both of Mike's box's instances. Step 4, the seeded `morning.md`, not started.
 - **`onboarding-v2.md`** (2026-10-17): wording pass merged; harness
-  designed 2026-10-30, not built. The second user's first run: the script lost its place after a
+  phase 1 built 2026-10-30 on a branch, unmerged, no real run yet. The second user's first run: the script lost its place after a
   time-zone detour, and it set things up before explaining them. The harness:
   the server holds the step and adds it to every turn, the model calls an
   onboarding MCP tool when a step ends (its result is the next step), the
   server checks disk where a step leaves a result, and a turn cap moves on.
-  Split into five chunks, three of them implementor-ready. **Loose end:** the What's
-  new card waits on onboarding by grepping USER.md for "Not yet known"
-  (`changes.onboarding_complete`); replace it with that
-  server-checked completion when it lands, and keep the template's
-  placeholder, `FIRST-RUN.md`'s wrap-up and that string in step until then. Drive is parked
+  The What's new card now waits on the server's onboarding record, not
+  a search of USER.md. **Next:** a fresh install on the trial VM, to see the
+  model follow the step line and call the tool. Drive is parked
   upstream: probed on both accounts, the connector is Connected but gives
   `claude -p` no tools (Docs, Sheets and Slides do). Re-check after a CLI
   update with `scripts/probe-drive-connector.sh`.

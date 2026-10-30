@@ -1,5 +1,5 @@
 {
-  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 13.",
+  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 14.",
   "entries": [
     {
       "id": 1,
@@ -77,6 +77,13 @@
       "part": "app",
       "category": "feature",
       "text": "In the web app, pairing now has a Scan QR code button that reads the code with your camera, so the app installed on your home screen can pair itself instead of the code opening in your browser. The camera is used only to read the code, and nothing is saved."
+    },
+    {
+      "id": 13,
+      "date": "2026-10-30",
+      "part": "server",
+      "category": "feature",
+      "text": "Getting started with Marlow on a new install now goes one step at a time, and Marlow keeps its place: a question on the way no longer ends the setup, and a step you skip or leave for a while moves on by itself."
     }
   ]
 }

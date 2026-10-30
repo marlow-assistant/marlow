@@ -52,7 +52,7 @@ from pathlib import Path
 from typing import Callable
 from urllib.parse import urlsplit
 
-from server import active_turn
+from server import active_turn, onboarding
 from server.boundaries import (
     SECRET_PATHS,
     VETTED_BUILTIN_TOOLS,
@@ -267,6 +267,11 @@ def _clip_target(value: str) -> str | None:
     return collapsed[: _MAX_TARGET_CHARS - 1].rstrip() + "…"
 
 
+# The onboarding tool (server/onboarding_mcp.py), and the shape of a step id.
+ONBOARDING_TOOL = "mcp__onboarding__step_done"
+_STEP_ID = re.compile(r"[a-z][a-z-]{0,31}")
+
+
 def _tool_target(name: str, tool_input: object) -> str | None:
     """The one field of a tool's input the activity log may keep, or None.
 
@@ -292,6 +297,13 @@ def _tool_target(name: str, tool_input: object) -> str | None:
         if absolute.startswith(working_tree + os.sep):
             return _clip_target(os.path.relpath(absolute, working_tree))
         return _clip_target(absolute)
+    if name == ONBOARDING_TOOL:
+        # Step and outcome, which queue.py hands to server/onboarding.py after
+        # the turn. Never the note: it is what the model learned about them.
+        step, outcome = tool_input.get("step"), tool_input.get("outcome")
+        if isinstance(step, str) and _STEP_ID.fullmatch(step) and outcome in ("done", "skipped"):
+            return f"{step} {outcome}"
+        return None
     if name == "WebSearch":
         query = tool_input.get("query")
         return _clip_target(query) if isinstance(query, str) else None
@@ -1133,8 +1145,9 @@ def _confinement_prefix() -> list[str]:
     ]
 
 
-def weather_mcp_config() -> str:
-    """The `--mcp-config` JSON for server/weather_mcp.py.
+def weather_mcp_config(onboarding_steps: list[dict[str, str]] | None = None) -> str:
+    """The `--mcp-config` JSON for server/weather_mcp.py, plus
+    server/onboarding_mcp.py when `onboarding_steps` is given.
 
     `sys.executable` is the server's own venv interpreter, so the paths are
     right on any box without templating. `-I` is load-bearing: the CLI spawns
@@ -1160,7 +1173,52 @@ def weather_mcp_config() -> str:
         # runs. The price is three schemas on every turn, cron included.
         "alwaysLoad": True,
     }
-    return json.dumps({"mcpServers": {"weather": server}}, separators=(",", ":"))
+    servers: dict[str, dict] = {"weather": server}
+    if onboarding_steps:
+        # Only on an attended turn of a box still onboarding (see
+        # `_onboarding_for_turn`), so its schema costs nothing anywhere else.
+        # Stateless: the steps from the current one on ride in argv, and the
+        # tool's result is the next one's text, so the model carries on in the
+        # same reply. The server reads the call from the stream, not from the
+        # tool (docs/tasks/onboarding-v2.md, "Harness design").
+        servers["onboarding"] = {
+            "type": "stdio",
+            "command": sys.executable,
+            "args": [
+                "-I",
+                str(Path(__file__).resolve().with_name("onboarding_mcp.py")),
+                "--steps",
+                json.dumps(onboarding_steps, separators=(",", ":")),
+                "--log",
+                str(settings.log_dir / "onboarding.log"),
+            ],
+            "alwaysLoad": True,
+        }
+    return json.dumps({"mcpServers": servers}, separators=(",", ":"))
+
+
+def _onboarding_for_turn(source: str | None, raw_prompt: bool) -> tuple[str | None, list[dict[str, str]] | None]:
+    """The step line and the tool's step list for this turn, or (None, None).
+
+    Chat turns only: a cron job mid-onboarding just does its job, and a raw
+    prompt (compaction) gets no context at all. Never raises -- a broken step
+    file or record costs onboarding for this turn, not the turn.
+    """
+    if raw_prompt or source not in active_turn.CHAT_SOURCES:
+        return None, None
+    try:
+        state = onboarding.load(settings.data_dir / "onboarding.json", settings.user_path)
+        if state.finished:
+            return None, None
+        texts = onboarding.load_steps(settings.working_dir / "FIRST-RUN.md")
+        line = onboarding.step_line(state, texts)
+        steps = onboarding.remaining_steps(state, texts)
+    except Exception:
+        logger.exception("onboarding: no step line this turn")
+        return None, None
+    if not line or not steps:
+        return None, None
+    return f"[{line}]", steps
 
 
 def _is_dead_session_error(stderr: str, session_id: str) -> bool:
@@ -1324,12 +1382,18 @@ async def run_claude(
     # passed" on precisely the turn that needed it (review, 2026-08-07). Same
     # reasoning extends to the image line: a dead-session retry is the same
     # turn from the same caller and must still mention the same attachment.
+    onboarding_line, onboarding_steps = _onboarding_for_turn(source, raw_prompt)
     if not raw_prompt:
         # Directly above the message, below the context block: it describes
         # this message, and unlike the block it must not vanish if the block
         # fails to build.
         if spoken:
             prompt = f"{SPOKEN_TURN_NOTE}\n{prompt}"
+        # Every chat turn until onboarding ends, so a detour can't lose the
+        # place: the next turn names the same step (Taylor's first run,
+        # 2026-10-17, docs/tasks/onboarding-v2.md).
+        if onboarding_line:
+            prompt = f"{onboarding_line}\n\n{prompt}"
         prompt = prepend_turn_context(prompt, session_id=session_id, source=source, resume=resume)
         if attachment_paths:
             lines = "\n".join(f"[image attached: {path}]" for path in attachment_paths)
@@ -1351,6 +1415,7 @@ async def run_claude(
             turn_id=turn_id,
             queue_wait_seconds=queue_wait_seconds,
             effort=effort,
+            onboarding_steps=onboarding_steps,
             on_activity=on_activity,
             on_text=on_text,
             on_tool_call=on_tool_call,
@@ -1383,6 +1448,7 @@ async def run_claude(
                 # wait twice would overstate queueing in per-invocation rows.
                 queue_wait_seconds=None,
                 effort=effort,
+                onboarding_steps=onboarding_steps,
                 on_activity=on_activity,
                 on_text=on_text,
                 on_tool_call=on_tool_call,
@@ -1455,6 +1521,7 @@ async def _invoke_once(
     turn_id: str | None,
     queue_wait_seconds: float | None,
     effort: str | None,
+    onboarding_steps: list[dict[str, str]] | None = None,
     on_activity: Callable[[ActivityEvent], None] | None = None,
     on_text: Callable[[str], None] | None = None,
     on_tool_call: Callable[[ToolCall], None] | None = None,
@@ -1582,7 +1649,7 @@ async def _invoke_once(
         # Inline JSON, not a file, so there is no config on disk for the agent
         # to rewrite and nothing to add to AGENT_CONFIG_PATHS. Single token
         # for the --tools= reason above: the option is variadic.
-        f"--mcp-config={weather_mcp_config()}",
+        f"--mcp-config={weather_mcp_config(onboarding_steps)}",
     ]
 
     # Model/effort pin (docs/tasks/model-and-effort-config.md, pieces 1 and 3).

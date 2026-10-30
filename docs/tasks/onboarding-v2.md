@@ -1,7 +1,8 @@
 # Onboarding v2: a shorter, structured first run
 
-**Status:** wording pass merged 2026-10-18; harness
-designed and split into implementation chunks 2026-10-30, not built. The pass, ahead of the next user onboarding: new greeting; one
+**Status:** wording pass merged 2026-10-18; harness phase 1 (chunks 1–5
+below, server, identity and the activity label on both clients) built
+2026-10-30 on a branch, not merged, and not yet seen in a real first run. The pass, ahead of the next user onboarding: new greeting; one
 reminder, then the Schedule, then stop; reminder vs note explained; "things to
 try" as its own early message; the briefing and week-ahead asked about, the
 inbox check told not asked and shown as "Check-in" on both clients; USER.md and
@@ -147,7 +148,8 @@ something on disk the server checks that too.
    of the server for one turn at most; the step line pulls it back.
 4. **A turn cap per step.** After N user turns on one step, the server moves
    on and the next line says so ("move on from X; they can come back to it").
-   Only chat turns count, never cron or system turns. A real request in the
+   Only chat turns that finished count, never cron or system turns, and never
+   one that errored (the CLI down shouldn't use up a step). A real request in the
    middle of onboarding counts too: a count the model has to report is more
    machinery than a slightly higher cap.
 
@@ -174,7 +176,7 @@ against it. Each turn gets the current step's instructions, not the script.
 |---|---|---|---|
 | `name` | what to call them | none | 3 |
 | `stay-on-top` | look at mail and calendar first, then ask what to stay on top of; reminder vs note | none | 6 |
-| `one-thing` | set up one thing while they watch | the turn's commit touched `cron/schedules.json` or a path under `memory/` | 4 |
+| `one-thing` | set up one thing while they watch | some onboarding turn's commit touched `cron/schedules.json` or a path under `memory/` (sticky: saved in one turn, claimed in the next, still counts) | 4 |
 | `tour` | where it lives (avatar → Schedule), then things to try in a message of its own | none | 3 |
 | `runs-alone` | briefing and week-ahead asked about, check-in told | none | 4 |
 | `wrap-up` | up to two ideas, then USER.md, approval explained first | USER.md no longer contains "Not yet known" | 4 |
@@ -188,8 +190,12 @@ until normal use fills it, and nothing keys on it any more but the check.
 
 - **The record** is server-owned, `onboarding.json` in the data dir (hidden
   from the agent by the read denies and bwrap): current step id, chat turns on
-  it, each step's outcome and note, `finished` (true/false) and how it ended
-  (`done` or `capped`). Written only by the server's post-turn step.
+  it, each step's outcome, whether anything has been saved yet, `finished`
+  and how it ended (`done`, `capped`, or `existing` for a box that onboarded
+  before this). Written only by the server's post-turn step. The tool's `note`
+  is not kept: it is what the model learned about them, it belongs in USER.md,
+  and asking for it is enough to make the model sum the step up. The activity
+  log keeps step and outcome only (`invoke._tool_target`).
 - **Active or not:** no record and USER.md still has the placeholder starts
   onboarding (record created at step `name`). A record says whether it is
   finished. No record and no placeholder is a box that finished before this

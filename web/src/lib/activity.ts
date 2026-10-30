@@ -51,6 +51,10 @@ export function activityLabel(activity: Pick<TurnActivity, "kind" | "tool">): st
   if (tool == null) return USING_A_TOOL;
 
   const n = tool.toLowerCase();
+  // Our own onboarding server (`mcp__onboarding__step_done`): the assistant
+  // reports a setup step finished. Prefix match, ahead of the substring
+  // checks below, so a later service word cannot claim it.
+  if (n.startsWith("mcp__onboarding__")) return "Setting things up…";
   if (n.includes("calendar")) return "Checking your calendar…";
   // Our own weather server (docs/tasks/weather-mcp.md): `mcp__weather__*`.
   // Its route tool routes and times a drive before any weather, so it gets

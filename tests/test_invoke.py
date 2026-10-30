@@ -950,7 +950,7 @@ def test_the_source_is_published_for_both_attempts_and_cleared_after(monkeypatch
 
     async def _fake_invoke(
         prompt, *, session_id, resume, cwd, source, turn_id, queue_wait_seconds,
-        effort, on_activity=None, on_text=None, on_tool_call=None,
+        effort, onboarding_steps=None, on_activity=None, on_text=None, on_tool_call=None,
     ):
         seen.append(active_turn.current_source())
         queue_waits.append(queue_wait_seconds)
@@ -1134,3 +1134,138 @@ def test_weather_mcp_config_is_one_inline_token_ahead_of_the_separator(tmp_path,
     # national weather service would be noticed.
     assert server["args"][2:] == ["--log", str(real_settings.log_dir / "weather.log")]
     assert os.access(server["command"], os.X_OK)
+
+
+# --- Onboarding (docs/tasks/onboarding-v2.md, "Harness design") -------------
+
+_ARGV_ECHO_CLAUDE = """\
+#!/usr/bin/env python3
+import json, sys
+print(json.dumps({
+    "is_error": False,
+    "subtype": "success",
+    "result": "\\x00".join(sys.argv[1:]),
+    "session_id": "s1",
+    "permission_denials": [],
+}))
+"""
+
+
+def _onboarding_box(tmp_path, monkeypatch, *, user_text: str) -> None:
+    """A working dir with the shipped step file and the given USER.md, its own
+    data dir, and a claude that echoes its argv."""
+    from pathlib import Path
+
+    wd = tmp_path / "wd"
+    (wd / "memory").mkdir(parents=True)
+    (wd / "SOUL.md").write_text("Test SOUL.\n")
+    (wd / "USER.md").write_text(user_text)
+    shipped = Path(__file__).resolve().parent.parent / "identity" / "FIRST-RUN.md"
+    (wd / "FIRST-RUN.md").write_text(shipped.read_text())
+    (tmp_path / "data").mkdir()
+    fake_bin = tmp_path / "claude"
+    fake_bin.write_text(_ARGV_ECHO_CLAUDE)
+    fake_bin.chmod(0o755)
+    monkeypatch.setattr(
+        "server.invoke.settings",
+        dataclasses.replace(
+            real_settings,
+            claude_bin=str(fake_bin),
+            working_dir=wd,
+            user_path=wd / "USER.md",
+            soul_path=wd / "SOUL.md",
+            memory_dir=wd / "memory",
+            data_dir=tmp_path / "data",
+        ),
+    )
+
+
+def _mcp_servers(argv: list[str]) -> dict:
+    flags = [arg for arg in argv if arg.startswith("--mcp-config=")]
+    assert len(flags) == 1, flags
+    return json.loads(flags[0].removeprefix("--mcp-config="))["mcpServers"]
+
+
+_ONBOARDING_USER = "## Everything else\nNot yet known.\n"
+
+
+def test_onboarding_turn_carries_the_step_line_and_the_tool(tmp_path, monkeypatch):
+    """A chat turn on a box still onboarding gets the current step on the
+    prompt and the onboarding server beside weather, handed the steps from the
+    current one on (the tool's result is the next step's text)."""
+    _onboarding_box(tmp_path, monkeypatch, user_text=_ONBOARDING_USER)
+
+    argv = asyncio.run(run_claude("hello", source="chat")).result_text.split("\x00")
+
+    servers = _mcp_servers(argv)
+    assert set(servers) == {"weather", "onboarding"}
+    server = servers["onboarding"]
+    assert server["type"] == "stdio" and server["alwaysLoad"] is True
+    assert server["args"][0] == "-I"
+    assert os.path.isfile(server["args"][1]) and server["args"][1].endswith("onboarding_mcp.py")
+    assert server["args"][2] == "--steps"
+    steps = json.loads(server["args"][3])
+    assert [s["id"] for s in steps][:2] == ["name", "stay-on-top"] and len(steps) == 6
+    assert "Onboarding step 1 of 6 (`name`)" in argv[-1] or "Onboarding step 1 of 6 (name)" in argv[-1]
+    assert argv[-1].rstrip().endswith("hello")
+
+
+def test_onboarding_is_never_on_an_unattended_turn(tmp_path, monkeypatch):
+    """Cron runs mid-onboarding just do their job: no step line, no tool."""
+    _onboarding_box(tmp_path, monkeypatch, user_text=_ONBOARDING_USER)
+
+    argv = asyncio.run(run_claude("job", source="cron")).result_text.split("\x00")
+
+    assert set(_mcp_servers(argv)) == {"weather"}
+    assert "Onboarding step" not in argv[-1]
+
+
+def test_onboarding_is_off_once_finished(tmp_path, monkeypatch):
+    """A box past onboarding (no placeholder) never sees the line or the tool."""
+    _onboarding_box(tmp_path, monkeypatch, user_text="## Everything else\nLikes boats.\n")
+
+    argv = asyncio.run(run_claude("hello", source="chat")).result_text.split("\x00")
+
+    assert set(_mcp_servers(argv)) == {"weather"}
+    assert "Onboarding step" not in argv[-1]
+
+
+def test_onboarding_skips_a_raw_prompt(tmp_path, monkeypatch):
+    """raw_prompt turns (compaction) get no context, so no onboarding either."""
+    _onboarding_box(tmp_path, monkeypatch, user_text=_ONBOARDING_USER)
+
+    argv = asyncio.run(run_claude("compact", source="chat", raw_prompt=True)).result_text.split("\x00")
+
+    assert set(_mcp_servers(argv)) == {"weather"}
+    assert "Onboarding step" not in argv[-1]
+
+
+def test_onboarding_survives_a_broken_step_file(tmp_path, monkeypatch):
+    """A step file that doesn't parse costs onboarding for the turn, never the
+    turn: it still runs, with weather and without the tool."""
+    _onboarding_box(tmp_path, monkeypatch, user_text=_ONBOARDING_USER)
+    (tmp_path / "wd" / "FIRST-RUN.md").write_text("## wrong\nnope\n")
+
+    result = asyncio.run(run_claude("hello", source="chat"))
+
+    assert not result.is_error
+    argv = result.result_text.split("\x00")
+    assert set(_mcp_servers(argv)) == {"weather"}
+    assert "Onboarding step" not in argv[-1]
+
+
+@pytest.mark.parametrize(
+    "tool_input, expected",
+    [
+        ({"step": "one-thing", "outcome": "done", "note": "the dentist"}, "one-thing done"),
+        ({"step": "tour", "outcome": "skipped"}, "tour skipped"),
+        ({"step": "tour", "outcome": "maybe"}, None),
+        ({"step": "Not A Step; rm", "outcome": "done"}, None),
+        ({"outcome": "done"}, None),
+    ],
+)
+def test_step_done_target_keeps_step_and_outcome_only(tool_input, expected):
+    """The activity log keeps step and outcome, never the free-text note."""
+    from server.invoke import _tool_target
+
+    assert _tool_target("mcp__onboarding__step_done", tool_input) == expected

@@ -1846,3 +1846,101 @@ def test_activities_are_capped_dropping_the_oldest(monkeypatch):
     assert len(turn.activities) == MAX_TURN_ACTIVITIES
     assert turn.activities[-1].tool == f"Tool{MAX_TURN_ACTIVITIES + 9}"
     assert turn.activities[0].tool == "Tool10"
+
+
+# --- Onboarding after a turn (docs/tasks/onboarding-v2.md) ------------------
+
+def _onboarding_turn(source="chat", status=None, calls=()):
+    from types import SimpleNamespace
+
+    from server.invoke import ONBOARDING_TOOL, ToolCall
+    from server.queue import TurnStatus
+
+    return SimpleNamespace(
+        turn_id="t1",
+        source=source,
+        status=status or TurnStatus.DONE,
+        tool_calls=[ToolCall(name=n, target=t, at=0.0) for n, t in calls]
+        or [ToolCall(name=ONBOARDING_TOOL, target="name done", at=0.0)],
+    )
+
+
+def _onboarding_paths(tmp_path, monkeypatch):
+    import dataclasses
+
+    from server.config import settings as real
+
+    user = tmp_path / "USER.md"
+    user.write_text("## Everything else\nNot yet known.\n")
+    monkeypatch.setattr(
+        "server.queue.settings", dataclasses.replace(real, data_dir=tmp_path, user_path=user)
+    )
+    return tmp_path / "onboarding.json", user
+
+
+def test_a_chat_turn_moves_onboarding_on(tmp_path, monkeypatch):
+    from server import onboarding
+    from server.queue import _note_onboarding
+
+    record, user = _onboarding_paths(tmp_path, monkeypatch)
+
+    _note_onboarding(_onboarding_turn(), None)
+
+    assert onboarding.load(record, user).step == "stay-on-top"
+
+
+def test_the_commit_paths_reach_the_check(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from server import onboarding
+    from server.invoke import ONBOARDING_TOOL
+    from server.queue import _note_onboarding
+
+    record, user = _onboarding_paths(tmp_path, monkeypatch)
+    for step in ("name", "stay-on-top"):
+        _note_onboarding(_onboarding_turn(calls=[(ONBOARDING_TOOL, f"{step} done")]), None)
+    claim = _onboarding_turn(calls=[(ONBOARDING_TOOL, "one-thing done")])
+
+    _note_onboarding(claim, SimpleNamespace(sha="x", paths=()))
+    assert onboarding.load(record, user).rejected == "one-thing"
+
+    _note_onboarding(claim, SimpleNamespace(sha="y", paths=("cron/schedules.json",)))
+    assert onboarding.load(record, user).step == "tour"
+
+
+@pytest.mark.parametrize("source", ["cron", "system", "compaction"])
+def test_unattended_turns_never_count(tmp_path, monkeypatch, source):
+    from server import onboarding
+    from server.queue import _note_onboarding
+
+    record, user = _onboarding_paths(tmp_path, monkeypatch)
+
+    _note_onboarding(_onboarding_turn(source=source), None)
+
+    state = onboarding.load(record, user)
+    assert state.step == "name" and state.turns == 0
+
+
+def test_a_failed_turn_never_counts(tmp_path, monkeypatch):
+    """A turn that errored (the CLI was down, say) didn't spend the user's
+    patience on the step, so it must not use up the cap."""
+    from server import onboarding
+    from server.queue import TurnStatus, _note_onboarding
+
+    record, user = _onboarding_paths(tmp_path, monkeypatch)
+
+    _note_onboarding(_onboarding_turn(status=TurnStatus.ERROR), None)
+
+    assert onboarding.load(record, user).turns == 0
+
+
+def test_other_tools_are_not_claims(tmp_path, monkeypatch):
+    from server import onboarding
+    from server.queue import _note_onboarding
+
+    record, user = _onboarding_paths(tmp_path, monkeypatch)
+
+    _note_onboarding(_onboarding_turn(calls=[("Read", "name done"), ("mcp__onboarding__step_done", None)]), None)
+
+    state = onboarding.load(record, user)
+    assert state.step == "name" and state.turns == 1

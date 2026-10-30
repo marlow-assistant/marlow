@@ -87,23 +87,28 @@ def test_the_endpoint_serves_only_server_entries(monkeypatch, paired_device_toke
     assert [e["id"] for e in body["changes"]] == [3, 1]
 
 
-def test_onboarding_is_incomplete_while_user_md_has_the_starter_marker(tmp_path):
-    user = tmp_path / "USER.md"
-    user.write_text("## Everything else\nNot yet known. Fill this in.\n")
-    assert changes.onboarding_complete(user) is False
-    user.write_text("## Everything else\nWorks in marine biology.\n")
-    assert changes.onboarding_complete(user) is True
-    assert changes.onboarding_complete(tmp_path / "missing.md") is True
+def test_the_endpoint_reports_onboarding_from_the_record(monkeypatch, tmp_path, paired_device_token):
+    """The server's onboarding record, not a search of USER.md: an onboarding
+    the cap ended with USER.md unwritten still releases the card, and a box
+    that onboarded before the record existed counts as finished."""
+    from server import onboarding
 
-
-def test_the_endpoint_reports_onboarding(monkeypatch, tmp_path, paired_device_token):
     user = tmp_path / "USER.md"
-    user.write_text("Not yet known.")
+    user.write_text("## Everything else\nNot yet known.\n")
+    record = tmp_path / "onboarding.json"
     monkeypatch.setattr(
-        "server.app.settings", dataclasses.replace(app_module.settings, user_path=user)
+        "server.app.settings",
+        dataclasses.replace(app_module.settings, user_path=user, data_dir=tmp_path),
     )
     headers = {"Authorization": f"Bearer {paired_device_token}"}
     with TestClient(public_app) as client:
         assert client.get("/v1/changes", headers=headers).json()["onboarding_complete"] is False
-        user.write_text("Done.")
+        for step in onboarding.STEPS:
+            onboarding.after_turn(record, user, [(step.id, "skipped")], ())
+        assert "Not yet known" in user.read_text()
+        assert client.get("/v1/changes", headers=headers).json()["onboarding_complete"] is True
+
+    record.unlink()
+    user.write_text("## Everything else\nWorks in marine biology.\n")
+    with TestClient(public_app) as client:
         assert client.get("/v1/changes", headers=headers).json()["onboarding_complete"] is True

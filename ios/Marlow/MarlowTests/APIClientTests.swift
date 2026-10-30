@@ -143,6 +143,7 @@ struct APIClientTests {
         ("mcp__GMAIL__search_messages", "Checking your mail…"),
         ("mcp__weather__forecast", "Checking the weather…"),
         ("mcp__weather__route_forecast", "Planning the route…"),
+        ("mcp__onboarding__step_done", "Setting things up…"),
         ("UnknownTool", "Using a tool…"),
     ])
     func toolActivityUsesFriendlyLabels(tool: String, expected: String) {

@@ -53,8 +53,7 @@ usage: sudo deploy/install.sh --user-name NAME --email ADDRESS [--timezone ZONE]
                 Mozilla's) as the contact for this box's notifications; asked for
                 if left off
   --timezone    your home IANA zone (default: this box's zone, unless that is UTC)
-  --repo        where to clone the software from (default: Marlow's public GitHub repo
-                over HTTPS; a git@ URL reads a private one with a deploy key)
+  --repo        where to clone the software from (default: Marlow's public GitHub repo)
   --ref         branch to install (default: main)
   --instance    a second instance's Linux user (its own Claude login, its own port)
   --public-port that instance's tailnet port (not 8443, which the first one has)
@@ -134,7 +133,7 @@ fi
 # Same rule, and same reason, as update.sh's --branch: a ref that starts with
 # `-` reaches git as an option however it is quoted.
 [[ "$REF" =~ ^[A-Za-z0-9._/][A-Za-z0-9._/-]*$ ]] || die "--ref is not a plain branch name: $REF"
-[[ "$REPO_URL" =~ ^(https://|git@)[A-Za-z0-9._:/@~-]+$ ]] || die "--repo must be an https:// or git@ URL"
+[[ "$REPO_URL" =~ ^https://[A-Za-z0-9._:/@~-]+$ ]] || die "--repo must be an https:// URL"
 # These land in a systemd drop-in and a cron line, so the same rule as the
 # name: refuse anything that isn't plain rather than escape it.
 if [[ -n "$INSTANCE" ]]; then
@@ -163,7 +162,6 @@ fi
 REPO_DIR="$HOME_DIR/marlow-server"
 VENV="$HOME_DIR/.venvs/marlow-server"
 CLAUDE_BIN="$HOME_DIR/.local/bin/claude"
-GITHUB_HOST_KEY="github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
 
 # Runs a fixed command as marlow. Arguments go through as argv, never through a
 # shell string, so nothing typed on the command line is ever re-parsed.
@@ -263,45 +261,6 @@ step "getting the software"
 if [[ -d "$REPO_DIR/.git" ]]; then
     echo "   $REPO_DIR already cloned"
 else
-    if [[ "$REPO_URL" == git@* ]]; then
-        # A private repo is read with a per-box deploy key: read-only, this
-        # repo only, and revocable without touching anyone's account.
-        as_marlow mkdir -p "$HOME_DIR/.ssh"
-        as_marlow chmod 700 "$HOME_DIR/.ssh"
-        if [[ ! -f "$HOME_DIR/.ssh/id_ed25519" ]]; then
-            as_marlow ssh-keygen -q -t ed25519 -N "" -C "marlow@$TAILNET_NAME" -f "$HOME_DIR/.ssh/id_ed25519"
-        fi
-        # GitHub's published host key (api.github.com/meta, SHA256:+DiY3wvvV6T
-        # uJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU), not ssh-keyscan's answer: root runs
-        # code from this clone, so a key taken on trust from whoever answered
-        # port 22 during the install would let an on-path attacker choose it
-        # (/security-review, 2026-10-02). If GitHub rotates it, update it here.
-        if ! grep -q '^github.com ' "$HOME_DIR/.ssh/known_hosts" 2>/dev/null; then
-            echo "$GITHUB_HOST_KEY" | as_marlow tee -a "$HOME_DIR/.ssh/known_hosts" >/dev/null
-        fi
-        if ! as_marlow env GIT_TERMINAL_PROMPT=0 git ls-remote "$REPO_URL" >/dev/null 2>&1; then
-            cat <<EOF
-
-This box can't read the repository yet.
-
-Send this key to whoever gave you access to Marlow, and ask them to add it as a
-read-only deploy key on the repository:
-
-    $(cat "$HOME_DIR/.ssh/id_ed25519.pub")
-
-EOF
-            if [[ -t 0 && -t 1 ]]; then
-                until as_marlow env GIT_TERMINAL_PROMPT=0 git ls-remote "$REPO_URL" >/dev/null 2>&1; do
-                    read -r -p "Press Enter once they've added it (Ctrl-C to stop; running the install again resumes here): " _ || exit 3
-                    echo "   checking..."
-                done
-                echo "   the repository is readable"
-            else
-                echo "STOPPED: once they have, run the same install command again."
-                exit 3
-            fi
-        fi
-    fi
     # A public repo over HTTPS needs no credential. A wrong URL there makes
     # GitHub ask for one, and git would stop at a Username prompt that reads
     # as the installer's own question.

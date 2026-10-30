@@ -191,7 +191,7 @@ fetch_failure_hint() {
     if [[ -z "$url" && "$err" == *https://* ]]; then
         url=https://
     fi
-    if grep -qiE 'authentication failed|could not read (username|password)|invalid username|permission denied \(publickey\)|repository not found|returned error: (401|403)' <<<"$err"; then
+    if grep -qiE 'authentication failed|could not read (username|password)|invalid username|repository not found|returned error: (401|403)' <<<"$err"; then
         auth=1
     fi
     if [[ $auth == 1 && "$url" == https://* ]]; then
@@ -201,11 +201,6 @@ fetch_failure_hint() {
         echo "private fork read with a token, the token has most likely lapsed: make a"
         echo "new read-only one (Contents: read), put it in"
         echo "${MARLOW_USER:-the instance user}'s git credentials in place of the old one,"
-        echo "and run update.sh again."
-    elif [[ $auth == 1 ]]; then
-        echo "GitHub refused this box's deploy key for $url."
-        echo "The key has probably been removed from the repo's Deploy keys, or the repo"
-        echo "has moved. Add the key back read-only, or point origin at the new repo,"
         echo "and run update.sh again."
     else
         echo "Could not fetch $url (git's error is above)."

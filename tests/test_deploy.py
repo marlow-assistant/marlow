@@ -880,6 +880,9 @@ def test_install_refuses_a_name_that_is_not_plain(name) -> None:
          "--ref", "--upload-pack=x"],
         ["--user-name", "Priya", "--timezone", "Europe/London", "--email", "priya@example.com",
          "--repo", "ext::sh -c touch% /tmp/x"],
+        # The repo is public: an SSH URL (the old deploy-key path) is refused.
+        ["--user-name", "Priya", "--timezone", "Europe/London", "--email", "priya@example.com",
+         "--repo", "git@github.com:example-org/marlow.git"],
         ["--user-name", "Priya", "--timezone", "Europe/London", "--email", "priya@example.com", "--bogus"],
         # No --email, and no terminal to ask on: refused, not defaulted.
         ["--user-name", "Priya", "--timezone", "Europe/London"],
@@ -1285,13 +1288,11 @@ def test_install_accepts_a_real_or_explicit_zone(zone, args, tmp_path) -> None:
     assert "run with sudo" in r.stderr
 
 
-def test_install_pins_githubs_host_key_rather_than_scanning_for_it() -> None:
-    """Root runs code from the clone, so the host key it is fetched under must
-    not be whatever answered port 22 during the install."""
-    install = INSTALL.read_text()
-    code = [l for l in install.splitlines() if not l.lstrip().startswith("#")]
-    assert not [l for l in code if "ssh-keyscan" in l]
-    assert "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl" in install
+def test_install_clones_over_https_and_creates_no_ssh_key() -> None:
+    """Root runs code from the clone. With the repo public there is no SSH
+    path, so no host key to pin and no key to generate on the box."""
+    code = [l for l in INSTALL.read_text().splitlines() if not l.lstrip().startswith("#")]
+    assert not [l for l in code if "ssh-keyscan" in l or "ssh-keygen" in l or "known_hosts" in l]
 
 
 def test_install_prints_the_pairing_link_as_marlow() -> None:
@@ -1647,7 +1648,6 @@ def _fetch_hint(url: str, stderr: str) -> str:
 
 
 HTTPS = "https://github.com/example-org/marlow.git"
-SSH = "git@github.com:example-org/marlow.git"
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
@@ -1676,24 +1676,10 @@ def test_fetch_hint_names_an_expired_token_over_https(stderr) -> None:
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
-@pytest.mark.parametrize("stderr", [
-    "git@github.com: Permission denied (publickey).\nfatal: Could not read from "
-    "remote repository.",
-    "ERROR: Repository not found.\nfatal: Could not read from remote repository.",
-])
-def test_fetch_hint_names_the_deploy_key_over_ssh(stderr) -> None:
-    hint = _fetch_hint(SSH, stderr)
-    assert "deploy key" in hint
-    assert "token" not in hint
-    assert "Nothing on this box has changed" in hint
-
-
-@pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
-@pytest.mark.parametrize("url", [HTTPS, SSH])
-def test_fetch_hint_does_not_blame_credentials_for_a_network_failure(url) -> None:
+def test_fetch_hint_does_not_blame_credentials_for_a_network_failure() -> None:
     stderr = ("fatal: unable to access 'https://github.com/example-org/marlow.git/': "
               "Could not resolve host: github.com")
-    hint = _fetch_hint(url, stderr)
+    hint = _fetch_hint(HTTPS, stderr)
     assert "token" not in hint and "deploy key" not in hint
     assert "Nothing on this box has changed" in hint
 

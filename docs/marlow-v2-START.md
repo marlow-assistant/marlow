@@ -43,8 +43,8 @@ you finish something, mark it done there as well as here.
   **Decided 2026-10-25: iPhone friends use the home-screen web app**
   (Safari push and the unread mark work). TestFlight and a push
   relay are parked. The ordered list of what comes before the next invite
-  is at the top of `friends-alpha.md`. Repo filtering gates *every* new
-  invite.
+  is at the top of `friends-alpha.md`. The repo is public (2026-10-28), so
+  invitees need no repo access.
 - **`box-upgrades.md`**: done. Both boxes are converted (the second box
   2026-10-14), so `update.sh` alone delivers identity changes.
 - **`portable-web-client.md`**: shipped (2026-10-02), live on the box. Still
@@ -112,10 +112,21 @@ you finish something, mark it done there as well as here.
   upstream: probed on both accounts, the connector is Connected but gives
   `claude -p` no tools (Docs, Sheets and Slides do). Re-check after a CLI
   update with `scripts/probe-drive-connector.sh`.
-- **Internet-accessible TLS endpoint** (`funnel-ingress.md`): **next**, before
-  inviting more users (Mike, 2026-10-24); priority rose with each new user. Tailscale on
-  phones costs battery and is one more install. Blockers 2 and 4 in
-  `phone-access-without-vpn.md` come first and are right on the tailnet too.
+- **Internet-accessible TLS endpoint** (`funnel-ingress.md`): built and
+  merged (2026-10-25), **Funnel off on every box**. QR invite pairing,
+  revocation (`devices.sh`), request caps, `/health` behind the token and the
+  public-surface test all ship on the tailnet too. A throwaway-VM run
+  (2026-10-24) passed relay reach, reboot and `--no-funnel`, but
+  `update.sh --funnel` failed while Tailscale waited for the nodeAttr
+  approval, leaving the server on loopback. `deploy/funnel.sh` now times that
+  step out after 60 s and puts the server back on the tailnet; no test or VM
+  run has exercised that rollback yet. Still open, on real hardware: an iPhone off Tailscale over
+  Funnel, the iOS QR scanner, the web fragment flow in Android Chrome, and a
+  revoked iPhone falling back to the pairing screen. They wait for the first box
+  that turns Funnel on, most likely the Android user's (`update.sh --funnel`
+  plus the tailnet's `funnel` nodeAttr). The branch was reviewed
+  (2026-10-24); the task doc says to `/security-review` steps 1–6 as a set
+  before the switch. Not a blocker for the next invite.
 - **`hosted-marlow.md`** (2026-10-17): far future. Install the app, connect
   Claude Pro, done, with Marlow on Mike's infra. Today's setup is
   enthusiast-only.

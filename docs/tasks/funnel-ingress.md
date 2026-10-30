@@ -270,7 +270,12 @@ emulator (see the off-tailnet row).
 | Off-tailnet reach | Pass, after a delay | curl `--resolve` to each relay IP over `en0`, with the real cert verified. `.35.209` worked at once. `.34.11` failed TLS (`SSL_ERROR_SYSCALL`) for about 3 minutes after enabling, and once more right after the reboot; tailscaled logged `Drop: … funnel-ingress-node … no rules matched` for each try. It cleared by itself both times. A client that draws that address in the window fails, so the docs could say "if it fails in the first few minutes, wait". Over the relay: pair 200, `/health` 200, `/v1/transcript` 200, a 2 MB unauthenticated `/v1/pair` → 413, revoke → 401. `GET /internal/*` returns the web app's `index.html`; `POST /internal/admin/invite` → 404. The Android emulator wasn't used: it resolves through the Mac's MagicDNS and rides the Mac's tailnet, so it isn't off-tailnet. |
 | Reboot | Pass | Funnel status, both bindings, the tailnet's 401 and both relays' 401 came back with no action (one relay after about a minute). |
 | `--no-funnel` | Pass, one leftover | Exit 0. Uvicorn is back on `100.x.y.z:8443`, the tailnet gets 401, both relays get 000. But `tailscale serve status --json` keeps `{"AllowFunnel": {"…:8443": true}}` and `funnel status` says "Funnel on … but no serve config". Nothing is served, but a later `serve` handler on `:8443` would be public at once. `tailscale funnel --https=8443 off` fails ("handler does not exist"); `tailscale funnel reset` clears it, and Marlow uses no other serve config. **Fixed, uncommitted:** after `--tcp=<port> off`, `funnel reset` runs when `AllowFunnel` is all that's left, and other serve config is left alone with a warning. On the VM: `{}` and "No serve config" afterwards. |
-| Install notes (for the install feel-out run) | — | `install.sh` checks Tailscale before it prints the deploy key, so a friend without `tailscale up` hits two stops. A brand-new user's first screen is the "Marlow was updated" card listing every past change. |
+| Install notes (for the install feel-out run) | — | (Before the repo went public, `install.sh` checked Tailscale before it printed a deploy key, so a friend without `tailscale up` hit two stops; the deploy-key stop is gone.) A brand-new user's first screen is the "Marlow was updated" card listing every past change. |
+
+**Known gap (2026-10-30, left open on purpose):** `funnel.sh`'s 60 s timeout
+and rollback, added after the "waiting for approval" failure above, has no
+test and was not re-run on a VM. A test would put a fake `tailscale` that
+hangs on `PATH` and check the unit is moved back to the tailnet IP.
 
 Still needs a real phone: an iPhone with Tailscale off pairing over Funnel
 (row 3 above: text, an image, an approval inside 55 s, push, cold reopen), the

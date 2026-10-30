@@ -53,8 +53,7 @@ content may ever enter `marlow-server`'s git.** Therefore:
 
 Post-first-light: split `seed-identity.sh` into "seed static identity once" vs.
 "sync living files repeatedly," and wire a read-only deploy key for the private
-`marlow-identity` repo so the box can clone it (same pattern as the
-marlow-server deploy key).
+`marlow-identity` repo so the box can clone it.
 
 ## Loading — how identity reaches the model
 

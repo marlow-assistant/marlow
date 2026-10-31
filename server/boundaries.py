@@ -823,6 +823,12 @@ VETTED_PATHLESS_TOOLS: frozenset[str] = frozenset({
     "mcp__weather__geocode",
     "mcp__weather__forecast",
     "mcp__weather__route_forecast",
+    # Our own onboarding server (server/onboarding_mcp.py,
+    # docs/tasks/onboarding-v2.md). It takes no path, reaches nothing and
+    # writes nothing: its result is the next step's text. Offered only on a
+    # chat turn of a box still onboarding, and a phone prompt there would be
+    # the new user's first, for nothing.
+    "mcp__onboarding__step_done",
 })
 
 

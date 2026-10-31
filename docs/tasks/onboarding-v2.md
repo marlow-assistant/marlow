@@ -1,7 +1,8 @@
 # Onboarding v2: a shorter, structured first run
 
-**Status:** wording pass merged 2026-10-18; harness
-designed and split into implementation chunks 2026-10-30, not built. The pass, ahead of the next user onboarding: new greeting; one
+**Status:** wording pass merged 2026-10-18; harness phase 1 (chunks 1–5
+below, server, identity and the activity label on both clients) built
+2026-10-30 on a branch, not merged, and not yet seen in a real first run. The pass, ahead of the next user onboarding: new greeting; one
 reminder, then the Schedule, then stop; reminder vs note explained; "things to
 try" as its own early message; the briefing and week-ahead asked about, the
 inbox check told not asked and shown as "Check-in" on both clients; USER.md and
@@ -139,7 +140,12 @@ something on disk the server checks that too.
    on in the same reply. This is the main reason for a tool over a file write:
    with a file, the next step only arrives on the next turn's line, so the
    model finishes step 1 with nothing to ask next, which is Taylor's "it just
-   stopped" rebuilt.
+   stopped" rebuilt. **One step per turn**: the reply opens the next step
+   with its question and stops. A second `step_done` in the same turn gets
+   "Not yet" from the tool (one process per turn, so it remembers), and the
+   record advances at most once a turn whatever the model calls. A trial-VM
+   run without this limit (2026-10-30) chained steps the user never answered
+   and finished setup in four messages.
 3. **The server decides.** After the turn it reads the tool calls out of the
    stream and moves the user on only if the step's disk check passes too. A
    claim the check rejects leaves the step open, and the next step line says
@@ -147,7 +153,8 @@ something on disk the server checks that too.
    of the server for one turn at most; the step line pulls it back.
 4. **A turn cap per step.** After N user turns on one step, the server moves
    on and the next line says so ("move on from X; they can come back to it").
-   Only chat turns count, never cron or system turns. A real request in the
+   Only chat turns that finished count, never cron or system turns, and never
+   one that errored (the CLI down shouldn't use up a step). A real request in the
    middle of onboarding counts too: a count the model has to report is more
    machinery than a slightly higher cap.
 
@@ -174,8 +181,8 @@ against it. Each turn gets the current step's instructions, not the script.
 |---|---|---|---|
 | `name` | what to call them | none | 3 |
 | `stay-on-top` | look at mail and calendar first, then ask what to stay on top of; reminder vs note | none | 6 |
-| `one-thing` | set up one thing while they watch | the turn's commit touched `cron/schedules.json` or a path under `memory/` | 4 |
-| `tour` | where it lives (avatar → Schedule), then things to try in a message of its own | none | 3 |
+| `one-thing` | set up one thing while they watch | some onboarding turn's commit touched `cron/schedules.json` or a path under `memory/` (sticky: saved in one turn, claimed in the next, still counts) | 4 |
+| `tour` | where it lives (avatar → Schedule), then one thing to try, and a response to it | none | 4 |
 | `runs-alone` | briefing and week-ahead asked about, check-in told | none | 4 |
 | `wrap-up` | up to two ideas, then USER.md, approval explained first | USER.md no longer contains "Not yet known" | 4 |
 
@@ -188,8 +195,12 @@ until normal use fills it, and nothing keys on it any more but the check.
 
 - **The record** is server-owned, `onboarding.json` in the data dir (hidden
   from the agent by the read denies and bwrap): current step id, chat turns on
-  it, each step's outcome and note, `finished` (true/false) and how it ended
-  (`done` or `capped`). Written only by the server's post-turn step.
+  it, each step's outcome, whether anything has been saved yet, `finished`
+  and how it ended (`done`, `capped`, or `existing` for a box that onboarded
+  before this). Written only by the server's post-turn step. The tool's `note`
+  is not kept: it is what the model learned about them, it belongs in USER.md,
+  and asking for it is enough to make the model sum the step up. The activity
+  log keeps step and outcome only (`invoke._tool_target`).
 - **Active or not:** no record and USER.md still has the placeholder starts
   onboarding (record created at step `name`). A record says whether it is
   finished. No record and no placeholder is a box that finished before this
@@ -264,13 +275,18 @@ framing by hand (`initialize`, `tools/list`, `tools/call`), run with `-I`.
   (`alwaysLoad: True`), never on any other turn. Extend `_tool_target` to
   record `step` and `outcome` for `mcp__onboarding__step_done` only, so the
   existing `ToolCall` log carries them (it never copies `tool_input` whole).
-- `turn_context.py`: append `onboarding.step_line(...)` for chat turns.
-- `queue.py`, next to `commit_after_turn` (~line 1348): for chat turns, call
-  `onboarding.after_turn` with the turn's `tool_calls` and `commit.paths`.
+- `invoke._onboarding_for_turn` also builds the step line, put below the
+  `[Context: …]` block (not in `turn_context.py`: invoke needs the same state
+  for the tool's step list, and reads it once). It records the step it showed
+  as `InvocationResult.onboarding_step`.
+- `queue._note_onboarding`, after `commit_after_turn`: for a DONE chat turn
+  whose prompt named a step, call `onboarding.after_turn` with the turn's
+  `tool_calls` and `commit.paths`. A turn that showed no step never counts.
 - `boundaries.py` vetted set + `deploy/marlow-settings.json` allow:
   `mcp__onboarding__step_done`, lockstep-tested like the weather tools. It
   takes no path and reaches nothing.
-- `changes.onboarding_complete` reads the record.
+- `/v1/changes` reads the record through `onboarding.is_complete`, which never
+  writes (it runs off the queue; only the queue's reads persist).
 - Tests: the config includes the server only for an attended onboarding turn,
   never cron/system/compaction; the target extraction; the post-turn call; the
   settings lockstep.
@@ -290,7 +306,16 @@ the same PR.
 Whether the model follows the step line and calls the tool shows only in a
 real first run: a fresh install on the trial VM, which is also the
 stranger-install follow-up. Never by nesting `claude -p` in a build session.
-Write down what the run showed and what it didn't.
+Write down what the run showed and what it didn't. Two more things only a run
+answers:
+
+- **The tool set changes mid-session.** The onboarding server is in
+  `--mcp-config` only while a step is current, so the turn after wrap-up
+  `--resume`s with one tool fewer. Check that resume accepts that, and what it
+  costs the prompt cache (a changed tool list likely misses it once).
+- **A box partway through the old script at deploy** has no record and still
+  has the placeholder, so it restarts at `name`. Accepted: no box is
+  mid-onboarding today, and the cap moves a repeated step on in a few turns.
 
 ### Phasing
 

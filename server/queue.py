@@ -12,13 +12,13 @@ import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 
-from server import active_turn, activity_log, auth_monitor, transcript
+from server import active_turn, activity_log, auth_monitor, onboarding, transcript
 from server.attachments import cleanup_attachment, sweep_orphaned_attachments
 from server.config import settings
 from server.identity_git import commit_after_turn
 from server.idle_compaction import SOURCE as COMPACTION_SOURCE
 from server.idle_compaction import idle_compaction_watcher
-from server.invoke import ActivityEvent, InvocationResult, InvokeError, ToolCall, run_claude
+from server.invoke import ONBOARDING_TOOL, ActivityEvent, InvocationResult, InvokeError, ToolCall, run_claude
 from server.log import get_logger
 from server.push import PushPayload, PushType
 from server.push import broadcast_nowait as push_broadcast_nowait
@@ -347,6 +347,34 @@ def _record_tool_call(turn: Turn):
         turn.tool_calls.append(call)
 
     return _append
+
+
+def _note_onboarding(turn: Turn, commit) -> None:
+    """Move onboarding on after a finished chat turn (docs/tasks/onboarding-v2.md).
+
+    The step claims come from the turn's own tool-call log, whose target for
+    the onboarding tool is "<step> <outcome>" (invoke._tool_target); the
+    commit's paths are what the step's disk check looks at. Only a DONE chat
+    turn counts: a cron job didn't spend the user's attention on the step, and
+    an errored turn shouldn't use up its cap. Nor does a turn whose prompt
+    named no step (`InvocationResult.onboarding_step`): onboarding finished,
+    or the step file wouldn't load, and the user never saw a step to spend.
+    """
+    if turn.source not in active_turn.CHAT_SOURCES or turn.status != TurnStatus.DONE:
+        return
+    if turn.result is None or turn.result.onboarding_step is None:
+        return
+    calls = []
+    for call in turn.tool_calls:
+        if call.name == ONBOARDING_TOOL and call.target:
+            step, _, outcome = call.target.partition(" ")
+            calls.append((step, outcome))
+    onboarding.after_turn(
+        settings.data_dir / "onboarding.json",
+        settings.user_path,
+        calls,
+        commit.paths if commit else (),
+    )
 
 
 def _record_text(turn: Turn):
@@ -1348,6 +1376,13 @@ class WorkQueue:
                 commit = await asyncio.to_thread(commit_after_turn, turn_id, turn.source)
             except Exception:
                 logger.exception("identity git commit failed for turn %s", turn_id)
+
+            # After the commit, whose paths the step checks read. Guarded for
+            # the commit's reason: nothing here may kill the consumer loop.
+            try:
+                await asyncio.to_thread(_note_onboarding, turn, commit)
+            except Exception:
+                logger.exception("onboarding update failed for turn %s", turn_id)
 
             # The activity log (docs/tasks/ux-lane.md §2a). After the commit
             # because the record names the files it staged. Compaction is

@@ -31,7 +31,8 @@ systemctl stop marlow-server
 stash=/var/tmp/onboarding-reset-$(date +%Y%m%d-%H%M%S)
 mkdir -p "$stash"
 for f in "$DATA"/transcript.db* "$DATA"/session_state.json \
-         "$DATA"/device_tokens.json "$DATA"/pairing_challenges.json; do
+         "$DATA"/device_tokens.json "$DATA"/pairing_challenges.json \
+         "$DATA"/onboarding.json; do
     if [ -e "$f" ]; then mv "$f" "$stash"/; fi
 done
 echo "old server state moved to $stash"

@@ -33,6 +33,7 @@ describe("activity labels (STR-10)", () => {
     ["mcp__GMAIL__search_messages", "Checking your mail…"],
     ["mcp__weather__forecast", "Checking the weather…"],
     ["mcp__weather__route_forecast", "Planning the route…"],
+    ["mcp__onboarding__step_done", "Setting things up…"],
     ["UnknownTool", "Using a tool…"],
   ];
   for (const [tool, expected] of cases) {

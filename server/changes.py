@@ -81,20 +81,3 @@ _ENTRIES = load()
 
 def server_entries() -> list[dict[str, Any]]:
     return [dict(e) for e in _ENTRIES if e["part"] == "server"]
-
-
-# The marker identity/CLAUDE.md keys first-run onboarding on: FIRST-RUN.md ends
-# by replacing it. A stopgap, not a design: see the loose end on
-# `get_changes` in app.py. The clients have no onboarding state of their own, so the
-# box reports it and they hold the update card back until it is gone.
-_ONBOARDING_MARKER = "Not yet known"
-
-
-def onboarding_complete(user_path: Path) -> bool:
-    """False only while USER.md still carries the starter's marker. Fails open
-    (True): an unreadable file costs a card shown early, never one withheld
-    forever."""
-    try:
-        return _ONBOARDING_MARKER not in user_path.read_text(encoding="utf-8")
-    except OSError:
-        return True

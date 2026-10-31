@@ -73,9 +73,10 @@ def test_seed_template_fills_every_placeholder(tmp_path) -> None:
 
 
 # The phrase a fresh USER.md opens its "Everything else" section with. The
-# starter CLAUDE.md sends the assistant to FIRST-RUN.md while USER.md still says
-# it, and FIRST-RUN.md tells it to replace that line to finish. Nothing reads it
-# but the model, so a reword on any one side would silently end onboarding
+# server starts onboarding on a fresh box while USER.md still says it
+# (server/onboarding.py), the starter CLAUDE.md tells the assistant what it
+# means, and FIRST-RUN.md's wrap-up tells it to replace that line, which is
+# the wrap-up step's check. A reword on any one side would end onboarding
 # before it started, or never.
 FIRST_RUN_MARKER = "Not yet known"
 
@@ -88,21 +89,21 @@ def test_seeded_identity_starts_in_first_run(tmp_path) -> None:
     assert everything_else.strip().startswith(FIRST_RUN_MARKER)
     pointer = (wd / "CLAUDE.md").read_text().split("## First run", 1)[1].split("\n## ", 1)[0]
     assert f'"{FIRST_RUN_MARKER}"' in pointer
-    assert "FIRST-RUN.md" in pointer
+    assert "`step_done`" in pointer, "names the tool that ends a step"
     assert f'"{FIRST_RUN_MARKER}"' in (wd / "FIRST-RUN.md").read_text(), "seeded, and says what ends it"
 
 
 def test_first_run_names_only_seeded_jobs() -> None:
-    """FIRST-RUN.md's "What runs on its own" step introduces jobs by id. Rename
+    """FIRST-RUN.md's `runs-alone` step introduces jobs by id. Rename
     one in the seed and the script would quietly stop mentioning it, with
     nothing failing. The check-in is told, not offered, and isn't a store
     entry since the harness took it over (default-infrastructure.md), so the
     step points at its Settings row instead."""
     identity = Path(__file__).resolve().parent.parent / "identity"
     script = (identity / "FIRST-RUN.md").read_text()
-    # Up to the next numbered step, whatever its number.
-    step = re.split(r"\n\d+\. ", script.split("**What runs on its own.**", 1)[1], maxsplit=1)[0]
-    named = set(re.findall(r"^\s+- `([a-z0-9-]+)`", step, re.MULTILINE))
+    # Up to the next step's heading.
+    step = script.split("\n## runs-alone\n", 1)[1].split("\n## ", 1)[0]
+    named = set(re.findall(r"^\s*- `([a-z0-9-]+)`", step, re.MULTILINE))
     seed = json.loads((identity / "cron" / "schedules.json").read_text())
     assert named == {"morning", "week-ahead"}
     assert '"Check-ins"' in step

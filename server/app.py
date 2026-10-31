@@ -31,7 +31,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from server import active_turn, activity_log, changes, deny_detail, health, ideas, schedules, transcribe, transcript, transparency, usage_report, web_static, webpush
+from server import active_turn, activity_log, changes, deny_detail, health, ideas, onboarding, schedules, transcribe, transcript, transparency, usage_report, web_static, webpush
 from server.auth_monitor import auth_watcher
 from server.body_limit import BodyLimitMiddleware
 from server.request_deadline import RequestDeadlineProtocol
@@ -787,15 +787,15 @@ def get_changes(token: str = Depends(require_device_token)) -> dict[str, Any]:
     onboarding ends; clients show no card before then and count what they
     would have shown as seen.
 
-    Loose end: that flag is a grep of USER.md for the starter's "Not yet
-    known" placeholder (`changes.onboarding_complete`), and nothing but the
-    first-run script's wrap-up step keeps the two in step. The phrase written
-    anywhere else in USER.md would hold the card back for good. Accepted until
-    onboarding-v2's server-checked completion replaces it
-    (docs/tasks/onboarding-v2.md)."""
+    Read from the server's onboarding record (server/onboarding.py,
+    docs/tasks/onboarding-v2.md). It replaced a search of USER.md for the
+    starter's "Not yet known" placeholder, which the phrase written anywhere
+    else in USER.md would have held back for good. Fails open."""
     return {
         "changes": changes.server_entries(),
-        "onboarding_complete": changes.onboarding_complete(settings.user_path),
+        "onboarding_complete": onboarding.is_complete(
+            settings.data_dir / "onboarding.json", settings.user_path
+        ),
     }
 
 

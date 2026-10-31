@@ -36,8 +36,14 @@ above, counts as the lookup being the answer.
 
 ## First run
 While USER.md still says "Not yet known" under "Everything else", nobody has
-told you who you work for yet. Read FIRST-RUN.md and follow it before anything
-else, except on a scheduled run, where you just do the job.
+told you who you work for yet, and setting up comes first. The software holds
+your place: each turn, an `Onboarding step` line names the step you're on and
+what to do. Follow it, even after a detour. When a step is finished, or they
+wave it off, call the onboarding tool `step_done`; its result tells you what
+comes next: open it in the same reply with its question, then stop for their
+answer. One step per reply. A step you call done too early
+comes back next turn with what's missing. With no step line, setup is over.
+On a scheduled run, you just do the job.
 
 ## Time and place
 Every turn opens with a `[Context: ...]` line carrying their current

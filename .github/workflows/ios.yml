@@ -143,7 +143,9 @@ jobs:
       # The generic destination is load-bearing: given the booting device's
       # id, xcodebuild sat ~3.5 min before even resolving packages, waiting on
       # CoreSimulator, and the build ran 7m19 (2026-10-31). The products are
-      # the same; only the test step needs the real device.
+      # the same; only the test step needs the real device. ARCHS because a
+      # generic destination otherwise builds x86_64 too, doubling the compile
+      # (480 SwiftCompile per arch, 2026-10-31).
       - name: Build
         working-directory: ios/Marlow
         run: |
@@ -151,6 +153,7 @@ jobs:
             -scheme Marlow \
             -sdk iphonesimulator \
             -destination "generic/platform=iOS Simulator" \
+            ARCHS=arm64 \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \

@@ -7,6 +7,7 @@ import textwrap
 
 import pytest
 
+from conftest import write_executable
 from server import activity_log
 from server.config import settings as real_settings
 from server.invoke import InvocationResult, _scrubbed_env, parse_init_mcp_status, run_claude
@@ -119,8 +120,7 @@ _CLI = '''
 @pytest.fixture
 def fake_cli(tmp_path, monkeypatch):
     path = tmp_path / "claude"
-    path.write_text("#!/usr/bin/env python3\n" + textwrap.dedent(_CLI))
-    path.chmod(0o755)
+    write_executable(path, "#!/usr/bin/env python3\n" + textwrap.dedent(_CLI))
     monkeypatch.setattr(
         "server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(path))
     )
@@ -148,13 +148,12 @@ def test_a_chat_turn_still_records_what_was_pending(fake_cli):
 def test_a_failed_exit_still_records_what_was_pending(tmp_path, monkeypatch):
     # A blind turn that then errors is exactly one worth seeing in the log.
     path = tmp_path / "claude"
-    path.write_text("#!/usr/bin/env python3\n" + textwrap.dedent('''
+    write_executable(path, "#!/usr/bin/env python3\n" + textwrap.dedent('''
         import json, sys
         print(json.dumps({"type": "system", "subtype": "init", "tools": [], "mcp_servers": [
             {"name": "claude.ai Gmail", "status": "pending"}]}))
         sys.exit(1)
     '''))
-    path.chmod(0o755)
     monkeypatch.setattr(
         "server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(path))
     )

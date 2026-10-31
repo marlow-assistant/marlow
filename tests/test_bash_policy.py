@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import FAKE_HOME, FAKE_TREE
+from conftest import FAKE_HOME, FAKE_TREE, write_executable
 from server import boundaries
 from server.boundaries import (
     VETTED_GIT_SUBCOMMAND_OPTS,
@@ -1104,8 +1104,7 @@ def test_no_vetted_command_runs_anything_but_its_own_verb(command, tmp_path) -> 
     for name in ("cat", "grep", "head", "tail", "nl", "wc", "sort", "uniq",
                  "cut", "tr", "ls", "echo", "date", "git", "id", "curl", "rm", "sh"):
         stub = stub_dir / name
-        stub.write_text(f'#!/bin/sh\necho {name} >> "{log}"\nexit 0\n')
-        stub.chmod(0o755)
+        write_executable(stub, f'#!/bin/sh\necho {name} >> "{log}"\nexit 0\n')
 
     tree = tmp_path / "tree"
     tree.mkdir()

@@ -6,8 +6,10 @@ fixture function (which would run too late).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import stat
 import subprocess
 import tempfile
 import textwrap
@@ -17,12 +19,120 @@ from types import SimpleNamespace
 
 import pytest
 
+# --- fake CLIs and stubs -------------------------------------------------------
+#
+# macOS runs a Gatekeeper scan (syspolicyd, including a notarization lookup)
+# the first time each new file is exec'd: ~150ms, and one at a time across the
+# whole machine. The suite wrote a fresh script per test and paid it 232 times
+# a run -- ~35s of a 51s parallel run, and the floor that more xdist workers
+# could not lower, while a 4-core Linux runner took 30s (2026-10-31). Running
+# the file through an interpreter (`sh f`) skips the scan, but the server
+# execs claude_bin directly, so the stubs have to be real executables.
+#
+# The verdict sticks to the inode, so each distinct script is written once,
+# into a per-user cache that outlives the run, and hardlinked to where a test
+# wants it. A script that embeds a per-test path misses the cache every time:
+# pass the path in through the environment instead.
+
+
+def _exec_cache_dir() -> Path:
+    return Path(tempfile.gettempdir()) / f"marlow-test-exec-{os.getuid()}"
+
+
+def _private_dir(d: Path) -> bool:
+    """Ours alone. On a shared /tmp anyone could plant a script under a hash."""
+    try:
+        d.mkdir(mode=0o700, exist_ok=True)
+        st = d.lstat()
+    except OSError:
+        return False
+    return stat.S_ISDIR(st.st_mode) and st.st_uid == os.getuid() and st.st_mode & 0o077 == 0
+
+
+def _cached_executable(text: str) -> Path | None:
+    # Root writes straight through the read-only mode below, so a test that
+    # rewrote its stub would rewrite every other test's. The scan this exists
+    # for is macOS-only, where nobody runs the suite as root.
+    if os.geteuid() == 0:
+        return None
+    d = _exec_cache_dir()
+    if not _private_dir(d):
+        return None
+    data = text.encode()
+    entry = d / hashlib.sha256(data).hexdigest()
+    try:
+        st = entry.lstat()
+        # Read-only, so a test rewriting its linked stub fails instead of
+        # editing every other test's. A chmod through a link still reaches
+        # it, so check rather than trust.
+        if stat.S_ISREG(st.st_mode) and st.st_mode & 0o777 == 0o555 and entry.read_bytes() == data:
+            return entry
+    except FileNotFoundError:
+        pass
+    except OSError:
+        return None
+    # Built under a private name and renamed into place, so a parallel worker
+    # never sees a half-written entry. Two racing workers each get an inode of
+    # their own: one extra scan, once.
+    fd, tmp = tempfile.mkstemp(dir=d)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.chmod(tmp, 0o555)
+        os.replace(tmp, entry)
+    except OSError:
+        Path(tmp).unlink(missing_ok=True)
+        return None
+    return entry
+
+
+def _prune_exec_cache(max_age_seconds: float = 86400) -> None:
+    """Drop entries nothing links to that are over a day old. A script with a
+    per-test path in it is a new entry every run and never reused, ~1.5MB a
+    run. Pruning one still wanted costs a single scan, never a wrong result:
+    a worker that loses the race to link it falls back to a plain file."""
+    d = _exec_cache_dir()
+    if not _private_dir(d):
+        return
+    cutoff = time.time() - max_age_seconds
+    for entry in d.iterdir():
+        try:
+            st = entry.lstat()
+            if st.st_nlink == 1 and st.st_mtime < cutoff:
+                entry.unlink()
+        except OSError:
+            pass
+
+
+def write_executable(path: Path, text: str) -> Path:
+    """`text` at `path`, executable. Hardlinked from the cache when it can be,
+    a plain 0o755 file when it can't (no private cache dir, or a cross-device
+    link): the test is the same either way, only slower on macOS."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() or path.is_symlink():
+        path.unlink()
+    entry = _cached_executable(text)
+    if entry is not None:
+        try:
+            os.link(entry, path)
+            return path
+        except OSError:
+            pass
+    path.write_text(text)
+    path.chmod(0o755)
+    return path
+
+
+_prune_exec_cache()
+
 _sandbox = Path(tempfile.mkdtemp(prefix="marlow-test-"))
 
 _bin_dir = _sandbox / "bin"
 _bin_dir.mkdir()
 FAKE_CLAUDE = _bin_dir / "claude"
-FAKE_CLAUDE.write_text(
+write_executable(
+    FAKE_CLAUDE,
     textwrap.dedent(
         """\
         #!/usr/bin/env python3
@@ -56,9 +166,8 @@ FAKE_CLAUDE.write_text(
         else:
             print(json.dumps(envelope))
         """
-    )
+    ),
 )
-FAKE_CLAUDE.chmod(0o755)
 
 _creds_path = _sandbox / "credentials.json"
 _creds_path.write_text(

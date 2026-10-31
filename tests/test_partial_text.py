@@ -22,6 +22,7 @@ import textwrap
 
 import pytest
 
+from conftest import write_executable
 from server.config import settings as real_settings
 from server.invoke import (
     ActivityEvent,
@@ -185,8 +186,7 @@ _PARTIAL_CLI = '''
 
 def _cli(tmp_path, monkeypatch, body=_PARTIAL_CLI):
     path = tmp_path / "claude"
-    path.write_text("#!/usr/bin/env python3\n" + textwrap.dedent(body))
-    path.chmod(0o755)
+    write_executable(path, "#!/usr/bin/env python3\n" + textwrap.dedent(body))
     monkeypatch.setattr(
         "server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(path))
     )

@@ -1,7 +1,31 @@
 # Task — make the test suite faster
 
-**Status: second round DONE 2026-10-31: pytest-xdist in the hook (`-n 4`) and
-CI (`-n auto`).** At ~2,680 tests the serial suite reached 125–140s on the dev
+**Status: third round DONE 2026-10-31: the macOS Gatekeeper scan.** The 4-core
+CI runner beat the 14-core Mac (30s vs 49s), which made no sense until it was
+measured. macOS's syspolicyd scans each *new file* the first time it is exec'd:
+~150ms, including a notarization lookup, and one scan at a time across the
+whole machine. A copy of an already-run script pays again; a hardlink to it
+doesn't. Running the file through an interpreter skips the scan, but the
+server execs `claude_bin` directly. The suite wrote a fresh stub per test: 232
+scans a run, ~35s, and that was the floor at 4 workers.
+
+`tests/conftest.py:write_executable` caches each distinct script, read-only,
+and hardlinks it into place. Stubs that embed a per-test path miss the cache;
+`test_funnel` and `test_install_voice` (the two biggest) now take theirs
+through `FAKE_CALLS_LOG` instead. 232 scans → 33.
+
+| dev Mac | before | after |
+|---|---|---|
+| serial | 140.5s | 92.3s |
+| `-n 4` | ~49s | ~26.5s |
+| `-n 8` (the hook now) | ~50s | ~18s (30s on a cold cache) |
+
+**Still open, if it is ever felt:** the 33 remaining scans, mostly stubs that
+embed a tmp path. Count them with `log show --predicate 'process ==
+"syspolicyd" AND eventMessage CONTAINS "GK performScan"'` over a run's window.
+
+## Second round, 2026-10-31: pytest-xdist in the hook and CI (`-n auto`)
+ At ~2,680 tests the serial suite reached 125–140s on the dev
 Mac, and Mike felt the wait on every push, so the trigger below was met.
 
 | | serial | parallel |
@@ -11,7 +35,7 @@ Mac, and Mike felt the wait on every push, so the trigger below was met.
 
 Locally, 2 workers took 71s, and 4, 8 and 14 all took ~49s. At 4 workers about
 1.2 cores are busy: the suite waits on subprocess spawns, not CPU. That is why
-the hook uses 4 rather than `auto`.
+the hook used 4 rather than `auto` (8 since the third round, above).
 
 **The flaky-sleep warning below still stands.** There are 79 fixed sleeps in
 tests/, and they were not audited. Every run passed: 6 at 14 workers and 4 at

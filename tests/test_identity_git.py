@@ -14,7 +14,7 @@ import subprocess
 
 import pytest
 
-from conftest import safe_git_init
+from conftest import safe_git_init, write_executable
 
 from server import boundaries, identity_git
 from server.identity_git import commit_after_turn
@@ -290,8 +290,7 @@ def test_a_repo_hook_cannot_block_or_hijack_the_commit(repo):
     WRITABLE_SUBTREE, so writing one PROMPTS rather than being denied — an
     approved hook would otherwise run as this server process on every turn."""
     hook = repo / ".git" / "hooks" / "pre-commit"
-    hook.write_text("#!/bin/sh\nexit 1\n")
-    hook.chmod(0o755)
+    write_executable(hook, "#!/bin/sh\nexit 1\n")
     (repo / "memory" / "fact.md").write_text("x\n")
     assert commit_after_turn("turn-1", "chat")
 

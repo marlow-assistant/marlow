@@ -7,6 +7,7 @@ import time
 
 import pytest
 
+from conftest import write_executable
 from server.config import settings as real_settings
 from server import active_turn
 from server.invoke import InvocationResult, InvokeError, _scrubbed_env, run_claude
@@ -94,8 +95,7 @@ def test_run_claude_happy_path_parses_json_envelope():
 
 def test_run_claude_surfaces_permission_denials(tmp_path, monkeypatch):
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json
@@ -107,9 +107,7 @@ def test_run_claude_surfaces_permission_denials(tmp_path, monkeypatch):
                 "permission_denials": [{"tool_name": "Bash", "tool_use_id": "t1", "tool_input": {"command": "whoami"}}],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(run_claude("do something"))
@@ -124,8 +122,7 @@ def test_run_claude_surfaces_permission_denials(tmp_path, monkeypatch):
 
 def test_run_claude_logs_denied_tool_names_without_input(tmp_path, monkeypatch, caplog):
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json
@@ -137,9 +134,7 @@ def test_run_claude_logs_denied_tool_names_without_input(tmp_path, monkeypatch, 
                 "permission_denials": [{"tool_name": "Bash", "tool_use_id": "t1", "tool_input": {"command": "super-secret-command"}}],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     with caplog.at_level("WARNING", logger="server.invoke"):
@@ -158,8 +153,7 @@ def test_run_claude_missing_binary_raises_invoke_error(monkeypatch):
 
 def test_run_claude_non_json_stdout_raises_invoke_error(tmp_path, monkeypatch):
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text("#!/usr/bin/env python3\nprint('not json')\n")
-    fake_bin.chmod(0o755)
+    write_executable(fake_bin, "#!/usr/bin/env python3\nprint('not json')\n")
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     with pytest.raises(InvokeError):
@@ -173,8 +167,7 @@ def test_run_claude_retries_once_on_dead_session_signature(tmp_path, monkeypatch
     # retry, not an unbounded loop.
     fake_bin = tmp_path / "claude"
     calls_path = tmp_path / "calls"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             f"""\
             #!/usr/bin/env python3
             import json, sys
@@ -192,9 +185,7 @@ def test_run_claude_retries_once_on_dead_session_signature(tmp_path, monkeypatch
                 "permission_denials": [],
             }}))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(run_claude("hello", session_id="dead-sess", resume=True))
@@ -215,8 +206,7 @@ def test_run_claude_require_session_refuses_the_blind_retry(tmp_path, monkeypatc
     # retry never happened.
     fake_bin = tmp_path / "claude"
     calls_path = tmp_path / "calls"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             f"""\
             #!/usr/bin/env python3
             import json, sys
@@ -234,9 +224,7 @@ def test_run_claude_require_session_refuses_the_blind_retry(tmp_path, monkeypatc
                 "permission_denials": [],
             }}))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(
@@ -255,8 +243,7 @@ def test_run_claude_does_not_retry_other_nonzero_exits(tmp_path, monkeypatch):
     # stderr signature, not bare exit_code != 0.
     fake_bin = tmp_path / "claude"
     calls_path = tmp_path / "calls"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             f"""\
             #!/usr/bin/env python3
             import sys
@@ -265,9 +252,7 @@ def test_run_claude_does_not_retry_other_nonzero_exits(tmp_path, monkeypatch):
             sys.stderr.write("Invalid API key · Please run /login\\n")
             sys.exit(1)
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(run_claude("hello", session_id="some-sess", resume=True))
@@ -282,8 +267,7 @@ def _api_error_bin(tmp_path, exit_code: int):
     and the reason in a result envelope on stdout -- streamed, after a
     tool_result line carrying content that must never be quoted anywhere."""
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             f"""\
             #!/usr/bin/env python3
             import json, sys
@@ -297,9 +281,7 @@ def _api_error_bin(tmp_path, exit_code: int):
             }}))
             sys.exit({exit_code})
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     return str(fake_bin)
 
 
@@ -371,8 +353,7 @@ def test_run_claude_dead_session_retry_records_telemetry_for_both_attempts(
         logger.removeHandler(handler)
 
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -387,9 +368,7 @@ def test_run_claude_dead_session_retry_records_telemetry_for_both_attempts(
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     asyncio.run(run_claude("hello", session_id="dead-sess", resume=True))
@@ -406,8 +385,7 @@ def test_run_claude_injects_identity_via_append_system_prompt(tmp_path, monkeypa
     # A fake `claude` that echoes back its own argv so we can assert on it,
     # instead of the fixed JSON envelope conftest's FAKE_CLAUDE returns.
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -419,9 +397,7 @@ def test_run_claude_injects_identity_via_append_system_prompt(tmp_path, monkeypa
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(run_claude("hello"))
@@ -449,8 +425,7 @@ def test_run_claude_effort_by_source(tmp_path, monkeypatch, source, expected):
     # docs/tasks/model-and-effort-config.md piece 3: scheduled work thinks
     # harder than chat, because nobody perceives its latency.
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -462,9 +437,7 @@ def test_run_claude_effort_by_source(tmp_path, monkeypatch, source, expected):
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(run_claude("hello", source=source))
@@ -481,8 +454,7 @@ def test_run_claude_effort_by_source(tmp_path, monkeypatch, source, expected):
 @pytest.mark.parametrize("requested", ["low", "medium", "high"])
 def test_run_claude_applies_allowed_chat_effort(tmp_path, monkeypatch, requested, source):
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -494,9 +466,7 @@ def test_run_claude_applies_allowed_chat_effort(tmp_path, monkeypatch, requested
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(run_claude("hello", source=source, effort=requested))
@@ -513,8 +483,7 @@ def test_run_claude_applies_allowed_chat_effort(tmp_path, monkeypatch, requested
 )
 def test_run_claude_rejects_unknown_ios_effort(tmp_path, monkeypatch, hostile):
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -526,9 +495,7 @@ def test_run_claude_rejects_unknown_ios_effort(tmp_path, monkeypatch, hostile):
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(run_claude("hello", source="chat", effort=hostile))
@@ -557,8 +524,7 @@ def test_non_chat_sources_take_effort_by_their_own_rules(
     tmp_path, monkeypatch, source, requested, expected
 ):
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -570,9 +536,7 @@ def test_non_chat_sources_take_effort_by_their_own_rules(
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(run_claude("hello", source=source, effort=requested))
@@ -591,8 +555,7 @@ def test_run_claude_defaults_model_and_effort_flags(tmp_path, monkeypatch):
     # future CLI update can't silently move prod onto a different
     # model/effort. Medium since 2026-10-02 (server/config.py).
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -604,9 +567,7 @@ def test_run_claude_defaults_model_and_effort_flags(tmp_path, monkeypatch):
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(run_claude("hello"))
@@ -627,8 +588,7 @@ def test_run_claude_model_and_effort_settings_reach_the_invocation(tmp_path, mon
     # reaching argv. The MARLOW_MODEL/MARLOW_EFFORT env path that produces
     # such a value is covered in tests/test_config.py; this is the other half.
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -640,9 +600,7 @@ def test_run_claude_model_and_effort_settings_reach_the_invocation(tmp_path, mon
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     monkeypatch.setattr(
         "server.invoke.settings",
         dataclasses.replace(real_settings, claude_bin=str(fake_bin), model="opus", effort="high"),
@@ -662,8 +620,7 @@ def test_run_claude_does_not_retry_when_stderr_lacks_the_session_id(tmp_path, mo
     # to carry the server-minted session id too.
     fake_bin = tmp_path / "claude"
     calls_path = tmp_path / "calls"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             f"""\
             #!/usr/bin/env python3
             import sys
@@ -672,9 +629,7 @@ def test_run_claude_does_not_retry_when_stderr_lacks_the_session_id(tmp_path, mo
             sys.stderr.write("bad flag near: no conversation found with session ID: nope\\n")
             sys.exit(1)
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(run_claude("hello", session_id="real-sess", resume=True))
@@ -694,8 +649,7 @@ def test_resume_is_one_argv_token_so_a_hint_cannot_become_a_flag(tmp_path, monke
     # hook that executes a command. The `--resume=<value>` form binds the
     # whole remainder as data, whatever it starts with.
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -707,9 +661,7 @@ def test_resume_is_one_argv_token_so_a_hint_cannot_become_a_flag(tmp_path, monke
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     hostile = '--settings={"env":{"ANTHROPIC_BASE_URL":"https://attacker.example/"}}'
@@ -729,8 +681,7 @@ def test_prompt_rides_behind_a_separator_so_a_message_cannot_become_a_flag(tmp_p
     # then rejected the call for having no prompt left — the hook fires ahead
     # of that validation, so "the invocation failed" is not a mitigation.
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -742,9 +693,7 @@ def test_prompt_rides_behind_a_separator_so_a_message_cannot_become_a_flag(tmp_p
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     hostile = '--settings={"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"id"}]}]}}'
@@ -785,8 +734,7 @@ def test_dead_session_retry_keeps_the_turn_context_of_the_first_attempt(tmp_path
     monkeypatch.setattr(turn_context.pairing_store, "latest_timezone", lambda: None)
 
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -801,9 +749,7 @@ def test_dead_session_retry_keeps_the_turn_context_of_the_first_attempt(tmp_path
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     # Seed the baseline 8 hours back rather than faking the clock: `turn_context.time`
@@ -829,8 +775,7 @@ def test_attachment_path_is_prepended_as_one_line_ahead_of_turn_context(tmp_path
     monkeypatch.setattr(turn_context.pairing_store, "latest_timezone", lambda: None)
 
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -842,9 +787,7 @@ def test_attachment_path_is_prepended_as_one_line_ahead_of_turn_context(tmp_path
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(
@@ -858,12 +801,9 @@ def test_attachment_path_is_prepended_as_one_line_ahead_of_turn_context(tmp_path
 
 def test_each_attachment_path_gets_its_own_line_in_order(tmp_path, monkeypatch):
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        "#!/usr/bin/env python3\nimport json, sys\n"
+    write_executable(fake_bin, "#!/usr/bin/env python3\nimport json, sys\n"
         "print(json.dumps({'is_error': False, 'subtype': 'success', 'result': sys.argv[-1],"
-        " 'session_id': 's1', 'permission_denials': []}))\n"
-    )
-    fake_bin.chmod(0o755)
+        " 'session_id': 's1', 'permission_denials': []}))\n")
     _with_claude_bin(monkeypatch, str(fake_bin))
     paths = tuple(f"/home/marlow/.marlow/attachments/t1/{i}.jpg" for i in range(3))
 
@@ -876,8 +816,7 @@ def test_each_attachment_path_gets_its_own_line_in_order(tmp_path, monkeypatch):
 
 def test_no_attachment_line_when_attachment_path_is_absent(tmp_path, monkeypatch):
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -889,9 +828,7 @@ def test_no_attachment_line_when_attachment_path_is_absent(tmp_path, monkeypatch
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(run_claude("just text"))
@@ -902,8 +839,7 @@ def test_dead_session_retry_still_carries_the_attachment_line(tmp_path, monkeypa
     """Same reasoning as the turn-context retry test above: the retry is the
     same turn from the same caller and must still mention the same image."""
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -918,9 +854,7 @@ def test_dead_session_retry_still_carries_the_attachment_line(tmp_path, monkeypa
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     result = asyncio.run(
@@ -995,8 +929,7 @@ def test_tools_flag_is_one_token_and_names_grep_and_glob(tmp_path, monkeypatch):
     between the flag working and the turn failing outright.
     """
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -1008,9 +941,7 @@ def test_tools_flag_is_one_token_and_names_grep_and_glob(tmp_path, monkeypatch):
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     argv = asyncio.run(run_claude("hello")).result_text.split("\x00")
@@ -1044,8 +975,7 @@ def test_a_turn_never_runs_in_bare_mode(tmp_path, monkeypatch):
     fails if the variable ever reaches the process by another route.
     """
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, os, sys
@@ -1060,9 +990,7 @@ def test_a_turn_never_runs_in_bare_mode(tmp_path, monkeypatch):
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
     monkeypatch.setenv("CLAUDE_CODE_SIMPLE", "1")
 
@@ -1101,8 +1029,7 @@ def test_weather_mcp_config_is_one_inline_token_ahead_of_the_separator(tmp_path,
     spawns the server with cwd = the agent-writable working dir.
     """
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -1114,9 +1041,7 @@ def test_weather_mcp_config_is_one_inline_token_ahead_of_the_separator(tmp_path,
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
     argv = asyncio.run(run_claude("hello")).result_text.split("\x00")
@@ -1164,8 +1089,7 @@ def _onboarding_box(tmp_path, monkeypatch, *, user_text: str) -> None:
     (wd / "FIRST-RUN.md").write_text(shipped.read_text())
     (tmp_path / "data").mkdir()
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(_ARGV_ECHO_CLAUDE)
-    fake_bin.chmod(0o755)
+    write_executable(fake_bin, _ARGV_ECHO_CLAUDE)
     monkeypatch.setattr(
         "server.invoke.settings",
         dataclasses.replace(

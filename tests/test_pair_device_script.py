@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import write_executable
+
 SCRIPT = Path(__file__).resolve().parent.parent / "deploy" / "pair-device.sh"
 
 pytestmark = pytest.mark.skipif(
@@ -68,8 +70,7 @@ def test_no_tailnet_name_prints_a_placeholder_not_another_box(stub, tmp_path) ->
     sock, _ = stub
     fake = tmp_path / "bin"
     fake.mkdir()
-    (fake / "tailscale").write_text("#!/bin/sh\nexit 1\n")
-    (fake / "tailscale").chmod(0o755)
+    write_executable(fake / "tailscale", "#!/bin/sh\nexit 1\n")
     r = _run(sock, tailnet=None, path=f"{fake}:{os.environ['PATH']}")
     assert r.returncode == 0, r.stderr
     assert "<this box>.<your-tailnet>.ts.net" in r.stdout
@@ -79,8 +80,7 @@ def test_no_tailnet_name_prints_a_placeholder_not_another_box(stub, tmp_path) ->
 def _fake_qrencode(tmp_path: Path) -> str:
     fake = tmp_path / "bin"
     fake.mkdir()
-    (fake / "qrencode").write_text('#!/bin/sh\necho "QR:$*"\n')
-    (fake / "qrencode").chmod(0o755)
+    write_executable(fake / "qrencode", '#!/bin/sh\necho "QR:$*"\n')
     return f"{fake}:{os.environ['PATH']}"
 
 
@@ -95,8 +95,7 @@ def test_prints_a_qr_code_of_the_url_when_qrencode_is_there(stub, tmp_path) -> N
 def test_no_qr_code_of_the_placeholder(stub, tmp_path) -> None:
     sock, _ = stub
     path = _fake_qrencode(tmp_path)
-    (tmp_path / "bin" / "tailscale").write_text("#!/bin/sh\nexit 1\n")
-    (tmp_path / "bin" / "tailscale").chmod(0o755)
+    write_executable(tmp_path / "bin" / "tailscale", "#!/bin/sh\nexit 1\n")
     r = _run(sock, tailnet=None, path=path)
     assert r.returncode == 0, r.stderr
     assert "QR:" not in r.stdout

@@ -13,6 +13,7 @@ import textwrap
 
 import pytest
 
+from conftest import write_executable
 from server.config import settings as real_settings
 from server.idle_compaction import IdleCompactionWatcher, _sum_prefix_tokens
 from server.invoke import (
@@ -254,8 +255,7 @@ def _fake_cli(tmp_path, monkeypatch, events, *, exit_code=0):
         sys.exit({exit_code})
     """
     path = tmp_path / "claude"
-    path.write_text(textwrap.dedent(body))
-    path.chmod(0o755)
+    write_executable(path, textwrap.dedent(body))
     monkeypatch.setattr(
         "server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(path))
     )

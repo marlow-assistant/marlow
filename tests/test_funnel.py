@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import write_executable
+
 DEPLOY = Path(__file__).resolve().parent.parent / "deploy"
 
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
@@ -28,22 +30,20 @@ def box(tmp_path):
         # `timeout` returns when Tailscale sat waiting for approval).
         # TS_NO_FUNNEL: the tailnet policy doesn't grant this node Funnel.
         # TS_SERVE_JSON: what `serve status --json` reports.
-        stub.write_text(
-            '#!/bin/bash\n'
-            f'echo "{name} $*" >> "{log}"\n'
+        # The log comes in as FAKE_CALLS_LOG, not baked into the text, so every
+        # test shares one cached stub (conftest.write_executable).
+        write_executable(stub, '#!/bin/bash\n'
+            f'echo "{name} $*" >> "$FAKE_CALLS_LOG"\n'
             'if [[ "$*" == "status --json" ]]; then\n'
             '  if [[ -n "${TS_NO_FUNNEL:-}" ]]; then echo \'{"Self": {"ID": "nTESTNODE", "CapMap": {}}}\';\n'
             '  else echo \'{"Self": {"ID": "nTESTNODE", "CapMap": {"funnel": null}}}\'; fi; exit 0\n'
             'fi\n'
             'if [[ "$*" == "serve status --json" ]]; then echo "${TS_SERVE_JSON:-"{}"}"; exit 0; fi\n'
             'if [[ "$1" == "funnel" && "$*" == *"--bg"* && -n "${TAILSCALE_FAIL_ON:-}" ]]; then exit "$TAILSCALE_FAIL_ON"; fi\n'
-            'exit 0\n'
-        )
-        stub.chmod(0o755)
+            'exit 0\n')
     # macOS has no `timeout`; the box's coreutils one runs the command, and so does this.
     stub = bindir / "timeout"
-    stub.write_text(f'#!/bin/bash\necho "timeout $1" >> "{log}"\nshift\nexec "$@"\n')
-    stub.chmod(0o755)
+    write_executable(stub, '#!/bin/bash\necho "timeout $1" >> "$FAKE_CALLS_LOG"\nshift\nexec "$@"\n')
     systemd = tmp_path / "systemd"
     systemd.mkdir()
     return type("Box", (), {"bin": bindir, "log": log, "systemd": systemd, "tmp": tmp_path})
@@ -67,6 +67,7 @@ source "{DEPLOY}/funnel.sh"
     env = {
         "PATH": f"{box.bin}:{os.environ['PATH']}" if path_has_tailscale else "/usr/bin:/bin",
         "FUNNEL_SYSTEMD_DIR": str(box.systemd),
+        "FAKE_CALLS_LOG": str(box.log),
     }
     if fail:
         env["TAILSCALE_FAIL_ON"] = fail
@@ -255,8 +256,7 @@ def health_server():
 def _check(url: str, tmp_path: Path):
     state = tmp_path / "state"
     notify = tmp_path / "notify.sh"
-    notify.write_text(f'#!/bin/bash\necho "$@" >> "{tmp_path}/notified"\n')
-    notify.chmod(0o755)
+    write_executable(notify, f'#!/bin/bash\necho "$@" >> "{tmp_path}/notified"\n')
     env = {
         "PATH": os.environ["PATH"],
         "MARLOW_DEADMANS_HEALTH_URL": url,

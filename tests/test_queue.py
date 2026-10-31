@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from conftest import write_executable
 from server import auth_monitor, transcript
 from server.attachments import turn_attachment_dir, write_attachments
 from server.config import settings as real_settings
@@ -385,17 +386,14 @@ def test_a_failed_turn_does_not_move_the_conversation(tmp_path, monkeypatch):
     assert good
 
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import sys
             sys.stderr.write("boom\\n")
             sys.exit(1)
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     monkeypatch.setattr("server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(fake_bin)))
 
     async def _body():
@@ -850,8 +848,7 @@ def test_require_session_turn_errors_instead_of_running_blind_on_dead_session(tm
 
     fake_bin = tmp_path / "claude"
     calls_path = tmp_path / "calls"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             f"""\
             #!/usr/bin/env python3
             import json, sys
@@ -868,9 +865,7 @@ def test_require_session_turn_errors_instead_of_running_blind_on_dead_session(tm
                 "permission_denials": [],
             }}))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     monkeypatch.setattr("server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(fake_bin)))
 
     async def _body():
@@ -944,17 +939,14 @@ def test_errored_retiring_turn_does_not_retire_anything(tmp_path, monkeypatch):
     import textwrap
 
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import sys
             sys.stderr.write("No conversation found with session ID: dead-sess\\n")
             sys.exit(1)
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     monkeypatch.setattr("server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(fake_bin)))
 
     async def _body():
@@ -1657,17 +1649,14 @@ def _activity_cli(tmp_path, gap: str = "0.4"):
     the finished turn could not tell this feature from a no-op.
     """
     path = tmp_path / "claude"
-    path.write_text(
-        "#!/usr/bin/env python3\n"
+    write_executable(path, "#!/usr/bin/env python3\n"
         "import json, sys, time\n"
         'if "stream-json" in sys.argv[1:]:\n'
         '    print(json.dumps({"type": "assistant", "message": {"content": ['
         '{"type": "tool_use", "name": "Read"}]}}), flush=True)\n'
         f"    time.sleep({gap})\n"
         'print(json.dumps({"type": "result", "is_error": False, "subtype": "success",'
-        ' "result": "done", "session_id": "s1", "permission_denials": []}), flush=True)\n'
-    )
-    path.chmod(0o755)
+        ' "result": "done", "session_id": "s1", "permission_denials": []}), flush=True)\n')
     return path
 
 
@@ -1785,8 +1774,7 @@ def test_a_fast_tool_call_survives_until_the_client_can_poll(tmp_path, monkeypat
     that used to leave only the last one behind.
     """
     path = tmp_path / "claude"
-    path.write_text(
-        "#!/usr/bin/env python3\n"
+    write_executable(path, "#!/usr/bin/env python3\n"
         "import json, sys, time\n"
         'if "stream-json" in sys.argv[1:]:\n'
         '    for line in [\n'
@@ -1800,9 +1788,7 @@ def test_a_fast_tool_call_survives_until_the_client_can_poll(tmp_path, monkeypat
         "        print(json.dumps(line), flush=True)\n"
         "    time.sleep(0.5)\n"
         'print(json.dumps({"type": "result", "is_error": False, "subtype": "success",'
-        ' "result": "done", "session_id": "s1", "permission_denials": []}), flush=True)\n'
-    )
-    path.chmod(0o755)
+        ' "result": "done", "session_id": "s1", "permission_denials": []}), flush=True)\n')
     monkeypatch.setattr(
         "server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(path))
     )

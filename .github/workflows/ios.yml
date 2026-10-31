@@ -48,7 +48,7 @@ jobs:
     # cannot hang: awaitPendingWork(timeout:) and Gate.waitOpened(timeout:)
     # both bail at 10s and fail loudly. So a timeout here means the build,
     # simulator boot, or the runner itself — not a test.
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -140,13 +140,17 @@ jobs:
       - name: Boot simulator
         run: nohup xcrun simctl boot "${{ steps.sim.outputs.udid }}" >/dev/null 2>&1 &
 
+      # The generic destination is load-bearing: given the booting device's
+      # id, xcodebuild sat ~3.5 min before even resolving packages, waiting on
+      # CoreSimulator, and the build ran 7m19 (2026-10-31). The products are
+      # the same; only the test step needs the real device.
       - name: Build
         working-directory: ios/Marlow
         run: |
           xcodebuild build-for-testing \
             -scheme Marlow \
             -sdk iphonesimulator \
-            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -destination "generic/platform=iOS Simulator" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \

@@ -141,4 +141,10 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM=""
+            DEVELOPMENT_TEAM="" \
+            AppIdentifierPrefix="CITEAM0000."
+        # AppIdentifierPrefix: an unsigned build has no team, so the setting
+        # is empty and NotificationSharedTests' keychain-group test fails. The
+        # repo carries no team ID (2026-10-26), so CI supplies an obvious
+        # placeholder of the right shape; the test still checks that the Swift
+        # string is built from the setting, which is what it guards.

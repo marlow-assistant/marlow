@@ -128,761 +128,84 @@ struct ChatView: View {
     #endif
 
     var body: some View {
-        VStack(spacing: 0) {
-            // One strip, not five banners (docs/tasks/ios-chat-ux-gaps.md
-            // item 13). What used to be here was five independent `if`s, any
-            // number of which could be true at once — so a three-second
-            // dictation error got the same full-width permanent-looking bar as
-            // a server that has stopped accepting work, and a bad moment could
-            // eat four rows off the top of the transcript at once.
-            //
-            // The split that fixes it is persistent vs transient, not
-            // important vs unimportant. A persistent state is a fact about the
-            // server that is still true a minute from now and that Mike has to
-            // go *do* something about (SSH in and reauthorize); it belongs at
-            // the top, it outranks the others, and it is never dismissible —
-            // reauth in particular must not be closable into invisibility,
-            // which is why nothing here has a close button. A transient notice
-            // is the echo of an action he just took, it expires on its own, and
-            // it has moved to sit beside the control that caused it: the
-            // permission notice to the foot of the transcript (with
-            // FetchIndicator, for the same reason given there — the bottom is
-            // where you are already looking), the dictation error to just above
-            // the mic.
-            StatusStrip(statuses: activeStatuses, usageText: usageHighText)
-
-            ScrollViewReader { proxy in
-                // Computed once per body evaluation, not per row: `ForEach`
-                // still keys identity on the message's own stable `id`
-                // (never the array position, which would misbehave the day
-                // a message is ever inserted mid-transcript rather than only
-                // appended — see ios-chat-ux-gaps.md §7), but finding "does
-                // this message start a new time gap" no longer needs a full
-                // `Array(store.messages.enumerated())` copy on every publish.
-                let timestampIds = messageIdsNeedingTimestamp
-                let failedReplies = failedReplyByUserMessage
-                ZStack(alignment: .bottomTrailing) {
-                    ScrollView {
-                        // The measuring sentinel is a sibling of the row
-                        // stack, not its last child — a distinction that
-                        // mattered while the rows were lazy: scrolling up far
-                        // enough to want the jump button was exactly what
-                        // evicted the bottom row, which withdrew the
-                        // preference, which reset it to `defaultValue` (0), so
-                        // the button was hidden by the very gesture meant to
-                        // summon it (found on device, 2026-08-23). The rows
-                        // are eager now and cannot be evicted, but the sentinel
-                        // stays out here: it costs nothing and it is what makes
-                        // the measurement independent of how the rows are
-                        // built, rather than correct only by luck.
-                        VStack(spacing: 0) {
-                            // Eager, NOT `LazyVStack` — see the type comment
-                            // on `ChatView` and ios-transcript-scaling.md.
-                            VStack(alignment: .leading, spacing: 12) {
-                                if store.hasEarlierMessages {
-                                    EarlierMessagesButton {
-                                        revealEarlierMessages(proxy: proxy)
-                                    }
-                                }
-                                // The window, not the whole transcript: every
-                                // row here is built before the first frame, so
-                                // how many there are IS the cold-launch pause
-                                // (see `TranscriptWindow`).
-                                ForEach(store.visibleMessages, id: \.id) { message in
-                                    if timestampIds.contains(message.id) {
-                                        // Measured with the row when followed:
-                                        // `scrollTo(id)` targets this whole
-                                        // ForEach element, divider included,
-                                        // so a pin to `.top` lands the divider
-                                        // there, not the bubble. Measuring the
-                                        // bubble alone let the last follow step
-                                        // carry the divider under the header
-                                        // and the pin then moved the view back
-                                        // down ~30pt (simulator, 2026-09-29).
-                                        TimestampDivider(date: message.createdAt)
-                                            .modifier(FollowFrameReporter(
-                                                id: message.id,
-                                                isActive: followedExchange?.contains(message.id) == true
-                                            ))
-                                    }
-                                    MessageRow(
-                                        message: message, onRetry: { store.retry($0) },
-                                        loadImage: { store.loadedImage(filename: $0) },
-                                        failedReplyId: failedReplies[message.id],
-                                        isAttachedFailure: message.clientMsgId
-                                            .flatMap(UUID.init(uuidString:))
-                                            .map { failedReplies[$0] == message.id } ?? false,
-                                        reportsFrame: followedExchange?.contains(message.id) == true
-                                    ).id(message.id)
-                                }
-                            }
-                            // Arrivals only: see `MessageRow.arrivalAnimation`.
-                            // Keyed on the LAST id so revealing earlier rows
-                            // (which moves the first) and the cold load (no
-                            // change at all) insert without it.
-                            .animation(MessageRow.arrivalAnimation, value: store.messages.last?.id)
-                            .padding()
-
-                            Color.clear
-                                .frame(height: 1)
-                                .background {
-                                    GeometryReader { bottom in
-                                        Color.clear.preference(
-                                            key: TranscriptBottomKey.self,
-                                            value: bottom.frame(in: .named("transcript")).maxY
-                                        )
-                                    }
-                                }
-                        }
-                    }
-                    // Places the first rendered frame at the bottom outright,
-                    // so nothing has to scroll there afterwards — see the
-                    // `onAppear` below for why that mattered.
-                    .modifier(InitialBottomScrollAnchor())
-                    .coordinateSpace(name: "transcript")
-                    .onPreferenceChange(TranscriptBottomKey.self) { bottomY in
-                        // Compare before writing. `bottomY` is measured in the
-                        // transcript's own coordinate space, so it changes on
-                        // *every frame of every scroll* — and a SwiftUI
-                        // `@State` setter doesn't dedupe, so assigning `false`
-                        // over `false` still invalidated the whole ChatView
-                        // body: the ScrollView, the ForEach and every row,
-                        // sixty-plus times a second while a finger was down.
-                        // Only a threshold *crossing* is news.
-                        //
-                        // Honest history: this was written believing the churn
-                        // explained the blank-transcript bug. It did not — the
-                        // device instrumentation showed the rows were never
-                        // built at all (see the type comment above). The
-                        // dedupe is worth keeping on its own merits; it just
-                        // isn't the fix it was thought to be, and the next
-                        // person should not read it as one.
-                        //
-                        // Nothing to compare against until the background
-                        // reader has reported. `viewportHeight` starts at 0,
-                        // and deciding against 0 makes the threshold
-                        // `max(160, 0)` — which a full transcript clears
-                        // instantly, so the jump-to-bottom button would appear
-                        // at launch, sitting there until a scroll produced the
-                        // next preference change to correct it. A hidden
-                        // button is the right answer while the answer is
-                        // unknown.
-                        guard viewportHeight > 0 else { return }
-                        let far = bottomY > viewportHeight + max(160, viewportHeight / 3)
-                        if far != isFarFromBottom {
-                            isFarFromBottom = far
-                            // Scrolling back down to the tail clears the mark
-                            // as surely as tapping the button does — the
-                            // arrival has been seen either way, and leaving a
-                            // dot on a button that is about to disappear would
-                            // strand the flag set for the next time the user
-                            // scrolls up.
-                            if !far { hasUnseenArrival = false }
-                        }
-                    }
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
-                        if h != readableHeight { readableHeight = h }
-                    }
-                    .onPreferenceChange(FollowedRowFramesKey.self) { frames in
-                        followStreamingReply(frames: frames, proxy: proxy)
-                    }
-                    // A finger on the transcript ends following for this
-                    // turn: auto-scroll must never fight one. Scroll phase,
-                    // not a gesture, where the OS has it — a drag gesture
-                    // added to a ScrollView competes with its own.
-                    .modifier(TouchEndsFollowing(isFollowing: followedExchange != nil) {
-                        followedExchange = nil
-                    })
-                    // The standard affordance (Messages, Discord, Slack
-                    // all do this): dragging the transcript lets the
-                    // keyboard follow the gesture down and dismiss
-                    // interactively, rather than it sitting there forever
-                    // once the text field has been tapped once.
-                    // `.interactively` (not `.immediately`) is what makes
-                    // it follow the drag instead of vanishing the moment
-                    // scrolling starts — a small flick shouldn't punt the
-                    // keyboard away when the intent was just to glance up
-                    // at older messages.
-                    .scrollDismissesKeyboard(.interactively)
-                    // An overlay, not a row: it is not a message, is never
-                    // persisted, and must not be something Copy or a scroll
-                    // anchor can find. A stand-in for a real first-run
-                    // onboarding, which is wanted eventually (Mike,
-                    // 2026-09-28); a blank screen read as broken.
-                    .overlay {
-                        if store.messages.isEmpty && !store.hasEarlierMessages {
-                            EmptyChatGreeting(loading: store.awaitingFirstFetch)
-                        }
-                    }
-                    // An inset, not a sibling in the VStack: rows scroll up
-                    // UNDER the header and fade out through its gradient,
-                    // while at rest the first row still starts below it.
-                    // Attached to the ScrollView itself so the jump button's
-                    // ZStack and the viewport measurement behind it keep the
-                    // geometry they had (see the type comment before moving
-                    // either).
-                    .safeAreaInset(edge: .top, spacing: 0) {
-                        PresenceHeader(
-                            presence: ChatPresence.of(store.messages),
-                            ideasHaveNews: ideasStore.showsDot,
-                            onSettings: { showingSettings = true },
-                            onAvatar: { showingMarlow = true },
-                            onIdeas: { showingIdeas = true }
-                        )
-                    }
-
-                    if isFarFromBottom, let last = store.messages.last {
-                        Button {
-                            // Unanimated, deliberately, and repeated a
-                            // run-loop turn later. A tap that lands while
-                            // the transcript is still gliding loses to the
-                            // momentum: the scroll view finishes its
-                            // deceleration and an animated scrollTo is
-                            // simply discarded, so the button looks dead —
-                            // it only worked once the scroll had settled
-                            // (found on device, 2026-08-23). Setting the
-                            // offset outright is what cancels deceleration,
-                            // and animating is what stops it doing so. The
-                            // deferred repeat covers a first call swallowed
-                            // mid-glide and is a no-op when it wasn't.
-                            hasUnseenArrival = false
-                            proxy.scrollTo(last.id, anchor: .bottom)
-                            DispatchQueue.main.async {
-                                proxy.scrollTo(last.id, anchor: .bottom)
-                            }
-                        } label: {
-                            Image(systemName: "arrow.down")
-                                .font(.headline.bold())
-                                .frame(width: 44, height: 44)
-                                // Same material and hairline as the gear in
-                                // `PresenceHeader` (`FloatingIconButton`), so
-                                // the two floating controls read as one family.
-                                .background(.regularMaterial, in: Circle())
-                                .overlay(Circle().stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
-                                .shadow(radius: 3, y: 1)
-                                // A dot, not a count
-                                // (docs/tasks/ios-chat-ux-gaps.md item 14): the
-                                // client has no settled answer for whether an
-                                // ingested cron turn, a retry, and two
-                                // assistant rows from one turn are one arrival
-                                // or four, and a number is a promise to have
-                                // one. A dot says the only thing that is
-                                // certainly true.
-                                //
-                                // Overlaid outside the `.background` circle so
-                                // the material doesn't tint it, and drawn with
-                                // a background-coloured ring so it reads as a
-                                // badge rather than a smudge on the shadow.
-                                .overlay(alignment: .topTrailing) {
-                                    if hasUnseenArrival {
-                                        Circle()
-                                            .fill(Color.accentColor)
-                                            .frame(width: 10, height: 10)
-                                            .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
-                                            .offset(x: -2, y: 2)
-                                    }
-                                }
-                        }
-                        // Deliberately NOT tied to the app-icon badge
-                        // (`APNsRegistrar.marksChatUnread`). That one means
-                        // "something arrived while you were away" and survives
-                        // until the app opens; this one means "something
-                        // arrived while you were scrolled up" and dies the
-                        // moment you look. Same word, different lifetimes —
-                        // sharing state between them would make one of the two
-                        // wrong.
-                        .accessibilityLabel(
-                            hasUnseenArrival
-                            ? "New message. Jump to newest message"
-                            : "Jump to newest message"
-                        )
-                        .padding(12)
-                        }
-                }
-                // The stand-in for the approval card while dictating
-                // (`permissionCardRequest`). An overlay, not a row, so it
-                // never moves the transcript; it floats just above the
-                // composer, where the recording is.
-                .overlay(alignment: .bottom) {
-                    if let request = permissionPillRequest {
-                        PermissionPendingPill(
-                            request: request,
-                            onTap: { dictation.stop() },
-                            onExpire: { store.expirePermissionSheet(requestId: request.requestId) }
-                        )
-                        .padding(.bottom, 10)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                }
-                .animation(.snappy(duration: 0.25), value: permissionPillRequest?.requestId)
-                // The viewport height, measured from the BACKGROUND, not by wrapping the
-                // transcript in a `GeometryReader`. A GeometryReader as a
-                // container hands its child an unstable size proposal during
-                // the first layout pass, and on device that was enough to stop
-                // the rows being built at all (see the type comment above).
-                // Reading the size from behind the view leaves the
-                // transcript's own layout path alone.
-                //
-                // `onAppear`/`onChange` rather than a preference: a preference
-                // set inside `.background` does not propagate out to the
-                // backed view, so the height read back as 0 — which silently
-                // pinned the jump-button threshold to its floor.
-                .background {
-                    GeometryReader { g in
-                        Color.clear
-                            .onAppear {
-                                if g.size.height != viewportHeight { viewportHeight = g.size.height }
-                            }
-                            .onChange(of: g.size.height) { _, h in
-                                if h != viewportHeight { viewportHeight = h }
-                            }
-                    }
-                }
-                .onChange(of: store.messages.count) { _, _ in
-                    if let last = store.messages.last, !isFarFromBottom {
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                    }
-                }
-                .onChange(of: scrollToBottomRequest) { _, _ in
-                    // An accepted local send is different from an incoming
-                    // message: even while reading older history, the sender
-                    // needs immediate confirmation that their new message and
-                    // its status placeholder entered the transcript.
-                    guard let last = store.messages.last else { return }
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                    // Then keep the reply in view as it streams — this path
-                    // only, never an incoming turn, which keeps the
-                    // `!isFarFromBottom` rule above (`ReplyFollow`).
-                    let messages = store.messages
-                    if messages.count >= 2, last.role == .assistant,
-                       messages[messages.count - 2].role == .user {
-                        followTracker = FollowTracker()
-                        followedExchange = FollowedExchange(
-                            userId: messages[messages.count - 2].id, replyId: last.id
-                        )
-                    }
-                }
-                // A turn that finishes, errors or is merged away ends
-                // following — as does anything landing after it. A run-loop
-                // turn later, so the layout that shows the final text still
-                // gets one follow decision: the finished reply can be longer
-                // than the typing had reached.
-                .onChange(of: followedReplyIsStreaming) { _, streaming in
-                    guard !streaming else { return }
-                    DispatchQueue.main.async { followedExchange = nil }
-                }
-                // Cold open lands at the top of a restored transcript, because
-                // the count never changed — nothing was appended, the messages
-                // were decoded from disk. Tapping a "Marlow has something for
-                // you" notification is exactly that path, so the one moment the
-                // newest message matters most is the one it wasn't shown
-                // (found on device, 2026-08-07). Unanimated: this is where the
-                // view should already have been, not a movement to watch.
-                .onAppear {
-                    // Only where `InitialBottomScrollAnchor` is a no-op. Where
-                    // it isn't, this call is not merely redundant, it is the
-                    // bug: scrolling to a row is exactly what the anchor
-                    // exists to avoid having to do.
-                    guard #unavailable(iOS 18.0) else { return }
-                    guard let last = store.messages.last else { return }
-                    // Deferred a run-loop turn so the layout pass triggered
-                    // by this same appearance finishes before the scroll is
-                    // asked for. That deferral used to be load-bearing and
-                    // unreliable, because the rows were lazy and might not
-                    // exist yet; with eager rows there is a real position to
-                    // scroll to by the time this runs.
-                    DispatchQueue.main.async {
-                        proxy.scrollTo(last.id, anchor: .bottom)
-                    }
+        chatWithLifecycle
+        // No navigation bar: `PresenceHeader` floats over the transcript and
+        // carries everything the bar did — the face and the gear (the
+        // "Sonnet/Low" diagnostic Mike asked for on 2026-08-27 lived here as
+        // a chip until 2026-10-12; it is in Settings now). Hidden rather than
+        // restyled because a bar reserves its height whether or not anything
+        // scrolls under it, and the point of floating is that the transcript
+        // gets that height back.
+        .toolbar(.hidden, for: .navigationBar)
+        // One `.sheet`, not two independent ones: SwiftUI only ever presents
+        // one sheet at a time from a given view, and stacking a second
+        // `.sheet(isPresented:)` for Settings alongside the permission
+        // sheet let Settings silently block an incoming permission request
+        // until dismissed — up to the server's ~55s auto-deny timeout, on a
+        // modal that's meant to be un-swipeable and unmissable
+        // (docs/tasks/ios-permission-round-trip-ui.md §4).
+        //
+        // The approval is no longer one of the sheets (2026-10-02: a card
+        // over the conversation, `PermissionOverlay`, below), but the lesson
+        // stands: nothing presented here may sit on top of it. So
+        // `activeSheet` is nil while a request is pending, which makes SwiftUI
+        // dismiss a Settings/Marlow sheet that is open, and the card sits in
+        // ChatView's own view tree where no sheet can cover it. The flags are
+        // left alone for that dismissal — the setter below only clears them
+        // when the user dismissed — so answering the request brings Settings
+        // back underneath, rather than dumping the user out to the transcript.
+        .sheet(item: Binding(get: { activeSheet }, set: {
+            if $0 == nil && store.pendingPermission == nil {
+                showingSettings = false
+                showingMarlow = false
+                showingIdeas = false
+                // OK and a swipe both land here.
+                // Not on the approval card's dismissal, which skips this
+                // block: the card comes back once the request is answered.
+                if showingWhatsNew {
+                    whatsNew.acknowledge()
+                    showingWhatsNew = false
                 }
             }
-
-            // The foot of the conversation, NOT the banner stack at the top.
-            // Two reasons. Mike's (2026-09-07): a word like "Checking" is too
-            // big a thing to say for what is happening, and the place you are
-            // already staring at after thumbing a notification is the bottom
-            // of the transcript, where the message you were promised should
-            // appear. And ios-chat-ux-gaps.md item 13's: those banners give
-            // temporary state the same permanent-looking treatment as a server
-            // that has stopped, and there are already five of them.
-            //
-            // Outside the ScrollView rather than appended after the last row.
-            // Inside, `scrollTo(last.id, anchor: .bottom)` — which runs on
-            // launch, on every arrival, and on the jump button — would park
-            // the last MESSAGE against the bottom edge and push the indicator
-            // out of sight, hiding it in exactly the moment it exists for.
-            FetchIndicator(activity: store.connectionActivity)
-
-            // The permission notice, demoted from the banner stack
-            // (docs/tasks/ios-chat-ux-gaps.md item 13). It is the echo of a
-            // tap Mike just made on the permission sheet — "Allowed", "Too
-            // late" — and `ChatStore.showPermissionNotice` already clears it
-            // after three seconds. Three seconds is not a banner. It sits here
-            // for the same reason FetchIndicator does: the sheet dismissing
-            // leaves him looking at the bottom of the transcript, and that is
-            // where the answer to "did that land?" should appear.
-            if let notice = store.permissionNotice {
-                TransientNotice(text: notice)
+        })) { sheet in
+            switch sheet {
+            case .settings:
+                SettingsView(store: store, whatsNew: whatsNew, stopDictation: { dictation.stop() })
+            case .marlow:
+                MarlowView(marlow: makeMarlowStore(), activity: makeActivityStore(), usage: makeUsageStore())
+            case .ideas:
+                IdeasPanel(store: ideasStore, onDoIt: doIt)
+            case .whatsNew:
+                WhatsNewSheet(store: whatsNew)
             }
-
-            if !pendingImages.isEmpty {
-                // One 64x64 thumbnail per staged image, three across, so six
-                // are two rows (CMP-5). A single row of six at 44pt left a
-                // remove control too small to hit with confidence on a phone
-                // (Mike, 2026-10-24); three across leaves room for both.
-                LazyVGrid(
-                    columns: Array(repeating: GridItem(.fixed(64), spacing: 18), count: 3),
-                    alignment: .leading, spacing: 18
-                ) {
-                        ForEach(Array(pendingImages.enumerated()), id: \.offset) { index, data in
-                            // A staged image that will not decode still counts
-                            // toward the cap and is still sent, so it still
-                            // gets a tile and a remove control: a gray one.
-                            Group {
-                                if let preview = UIImage(data: data) {
-                                    Image(uiImage: preview)
-                                        .resizable()
-                                        .scaledToFill()
-                                } else {
-                                    Color.gray.opacity(0.25)
-                                }
-                            }
-                            .frame(width: 64, height: 64)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(alignment: .topTrailing) {
-                                Button {
-                                    // By content, not the captured index: a
-                                    // second tap before the re-render would
-                                    // otherwise remove whichever image has
-                                    // slid into this slot.
-                                    if let at = pendingImages.firstIndex(of: data) {
-                                        pendingImages.remove(at: at)
-                                    }
-                                } label: {
-                                    // A 36pt target centred on the corner, as
-                                    // on the web: a 44pt one over the tile
-                                    // covered most of it, so touching a photo
-                                    // removed it. The grid's 18pt spacing keeps
-                                    // it off the next tile.
-                                    Image(systemName: "xmark.circle.fill")
-                                        .font(.system(size: 26))
-                                        .symbolRenderingMode(.palette)
-                                        .foregroundStyle(.white, .black.opacity(0.65))
-                                        .frame(width: 36, height: 36)
-                                        .contentShape(Rectangle())
-                                }
-                                .offset(x: 18, y: -18)
-                                .accessibilityLabel("Remove image \(index + 1) of \(pendingImages.count)")
-                            }
-                        }
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 18)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        // Above everything in ChatView, the floating `PresenceHeader`
+        // included, and an overlay rather than a row so the transcript's
+        // layout is untouched: no scroll jump when a request arrives or is
+        // answered. Not while dictating — see `permissionPillRequest`.
+        // Under the approval card, never over it: a request that arrives
+        // while Mike is talking has to show, with its tap, on this screen.
+        .overlay {
+            if showingVoiceMode {
+                VoiceModeView(store: store) { showingVoiceMode = false }
+                    .transition(.opacity)
             }
-
-            // The spotlight: the one idea Marlow thinks is worth interrupting
-            // for (docs/tasks/ideas-panel.md). Between the transcript and the
-            // composer, never a row in the transcript, so it is out of the
-            // context and gone the moment it is answered. Not while dictating,
-            // for the reason on `permissionCardRequest`: a card appearing must
-            // not move the recording controls under a thumb.
-            if let spotlight = ideasStore.spotlight, !dictation.isRecording {
-                SpotlightCard(
-                    idea: spotlight,
-                    onOpen: { showingIdeas = true },
-                    onDoIt: { doIt(spotlight) },
-                    onNotNow: { Task { await ideasStore.dismiss(spotlight) } }
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
-            // The dictation error, demoted from the banner stack
-            // (docs/tasks/ios-chat-ux-gaps.md item 13) and moved next to the
-            // control it is about. Every string that reaches
-            // `dictation.errorMessage` is the result of pressing the mic or
-            // pressing send — mic permission refused, recognition failed — so
-            // it reads as a caption on the button, and putting it at the top of
-            // the screen made the user find the connection between a bar up
-            // there and a tap down here.
-            if let dictationError = dictation.errorMessage {
-                TransientNotice(text: dictationError)
-            }
-
-            // spacing 0, because each control below carries its own 34x44 tap
-            // target — the transparent margin inside those frames *is* the gap
-            // now. Leaving the old 8pt on top of it stacked two spacings and
-            // left the composer full of holes (Mike, on device, 2026-08-23).
-            // 34 wide rather than a square 44: the row's height is free, its
-            // width is not, and 34 keeps the four controls near the pitch they
-            // had before the tap targets went in.
-            //
-            // One rounded field holding every control, rather than a bordered
-            // text field with icons around it (2026-09-28 polish): the row
-            // reads as one thing to type into, and the divider that used to
-            // fence it off from the transcript is gone.
-            HStack(alignment: .bottom, spacing: 0) {
-                // One attachment button, not two
-                // (docs/tasks/ios-chat-ux-gaps.md item 11). Photo Library and
-                // Paste used to sit here as separate icons, which gave four
-                // controls equal visual weight around a text field and made
-                // the row read as a toolbar with a field wedged into it.
-                //
-                // 44 wide here where the others are 34: that comment below
-                // about width being the scarce dimension is still true, which
-                // is exactly why collapsing two 34s into one 44 is affordable
-                // — it hands the text field back 24pt *and* gives the one
-                // remaining attachment control the full square tap target item
-                // 11 asks for. Camera (ios-image-input.md step 2) is the
-                // third item; that is what the menu is for.
-                // Hidden while dictating: attaching mid-recording makes no
-                // sense, and the meter gets the room (Mike, 2026-10-17).
-                if !dictation.isRecording {
-                    Menu {
-                        if CameraPicker.isAvailable {
-                            Button {
-                                if hasRoomForAnotherImage() { showingCamera = true }
-                            } label: {
-                                Label("Take Photo", systemImage: "camera")
-                            }
-                            .accessibilityLabel("Take a photo")
-                            .accessibilityHint("Attaches a photo from the camera")
-                        }
-                        Button {
-                            if hasRoomForAnotherImage() { showingPhotoPicker = true }
-                        } label: {
-                            Label("Photo Library", systemImage: "photo.on.rectangle")
-                        }
-                        .accessibilityLabel("Choose a photo")
-                        .accessibilityHint("Attaches an image from the photo library")
-                        // Still reads the pasteboard only when tapped, never
-                        // reactively — the original reasoning survives the move: a
-                        // `UIPasteboard.general.hasImages` check would have to be
-                        // polled to notice a pasteboard change, and it is not worth
-                        // it to grey out an item that is a harmless no-op when
-                        // empty.
-                        Button {
-                            if hasRoomForAnotherImage(),
-                               let image = UIPasteboard.general.image,
-                               let downscaled = ImageDownscaler.downscaledJPEG(from: image) {
-                                appendPendingImages([downscaled])
-                            }
-                        } label: {
-                            Label("Paste Image", systemImage: "doc.on.clipboard")
-                        }
-                        .accessibilityLabel("Paste image")
-                        .accessibilityHint("Attaches an image from the clipboard")
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 20, weight: .medium))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 44, height: 44)
-                    }
-                    .accessibilityLabel("Add attachment")
-                    .accessibilityHint(CameraPicker.isAvailable
-                        ? "Attach an image from the camera, the photo library or the clipboard"
-                        : "Attach an image from the photo library or the clipboard")
-                }
-                // Swaps in for the text field while dictating — the Claude
-                // iOS app does the same thing: replace the thing you'd type
-                // into with a live "yes, I hear you" indicator, since a tap
-                // to start gives no other feedback that the mic caught
-                // anything until the transcript lands on send.
-                if dictation.isRecording {
-                    LevelMeterView(levelMeter: dictation.levelMeter)
-                        .frame(height: 36)
-                        .padding(.vertical, 4)
-                        // Air before the stop button so it reads as its own
-                        // control, not the meter's last bar.
-                        .padding(.trailing, 10)
-                        // The + is hidden while recording; keep the bars off
-                        // the pill's rounded edge.
-                        .padding(.leading, 12)
-                } else if dictation.isTranscribing {
-                    // Recognition now runs over the whole recording *after*
-                    // Mike stops (DictationController, "record first,
-                    // transcribe once"), so there is a real gap here where
-                    // nothing has landed yet. Without this the field snaps
-                    // back to empty and it reads as the mic having failed.
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text("Transcribing…").foregroundStyle(.secondary)
-                    }
-                    .frame(height: 36, alignment: .leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 4)
-                } else {
-                    // Plain, inside the pill: the pill is the border now.
-                    // Vertical padding centres one line against the 44pt
-                    // controls and lets further lines grow the pill upward.
-                    TextField("Message Marlow", text: $draft, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .lineLimit(1...5)
-                        .focused($draftFocused)
-                        .padding(.vertical, 11)
-                }
-                // Push-to-dictate (docs/tasks/voice-mode.md): tap to start,
-                // tap again to stop. Which button ends it decides where the
-                // transcript goes — stop means "let me look at it," send means
-                // "send it" (see DictationController.Endpoint). While recording
-                // the mic becomes a stop square: a filled mic read as "still
-                // listening, tap to talk" and Taylor didn't find the way to end
-                // it (2026-10-17). The thin ring says "button" next to the
-                // meter bars without competing with the filled send arrow.
-                Button {
-                    dictation.toggle { text, endpoint in
-                        receiveDictation(text, endpoint: endpoint)
-                    }
-                } label: {
-                    Image(systemName: dictation.isRecording ? "stop.circle" : "mic")
-                        .font(.system(size: dictation.isRecording ? 28 : 20, weight: dictation.isRecording ? .light : .regular))
-                        .foregroundStyle(dictation.isRecording ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
-                        .frame(width: dictation.isRecording ? 40 : 34, height: 44)
-                }
-                .accessibilityLabel(dictation.isRecording ? "Stop dictation" : "Start dictation")
-                .accessibilityHint(
-                    dictation.isRecording
-                    ? "Stops recording and places the transcript in the message field"
-                    : "Starts recording a dictated message"
-                )
-                .disabled(dictation.isTranscribing)
-                // Shown only when pressing it would do something, rather than
-                // sitting there greyed out: an idle composer is just the field
-                // and the mic, and the arrow arriving is itself the cue that
-                // the message is ready. The condition is exactly the old
-                // `.disabled` one inverted, so nothing that could be sent
-                // before is unsendable now.
-                if canSend {
-                    Button {
-                        // While dictating there is nothing in `draft` to submit —
-                        // the field is swapped out for the level meter. Send means
-                        // "finish and send," which is Mike's ask (2026-08-16) and
-                        // the reason this button is no longer inert mid-dictation.
-                        if dictation.isRecording {
-                            dictation.stopAndSend()
-                        } else {
-                            submitDraft()
-                        }
-                    } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 30))
-                            .foregroundStyle(Color.accentColor)
-                            .frame(width: 40, height: 44)
-                    }
-                    .accessibilityLabel(dictation.isRecording ? "Stop dictation and send" : "Send message")
-                    .transition(.scale(scale: 0.5).combined(with: .opacity))
-                } else if !dictation.isTranscribing {
-                    // Voice mode lives in send's slot whenever there is nothing
-                    // to send (Mike, 2026-10-20) — the same pattern as the
-                    // send arrow appearing only when it has a job.
-                    Button {
-                        draftFocused = false
-                        showingVoiceMode = true
-                    } label: {
-                        Image(systemName: "waveform.circle.fill")
-                            .font(.system(size: 30))
-                            .foregroundStyle(Color.accentColor)
-                            .frame(width: 40, height: 44)
-                    }
-                    .accessibilityLabel("Voice mode")
-                    .accessibilityHint("Talk to Marlow and hear the replies read aloud")
-                    .transition(.scale(scale: 0.5).combined(with: .opacity))
-                }
-            }
-            .animation(.snappy(duration: 0.2), value: canSend)
-            .padding(.horizontal, 4)
-            .background(
-                Color(.secondarySystemBackground),
-                in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+        }
+        .animation(.easeInOut(duration: 0.2), value: showingVoiceMode)
+        .overlay {
+            PermissionOverlay(
+                request: permissionCardRequest,
+                onDecision: { decision in await store.answerPermission(decision: decision) },
+                onExpire: { store.expirePermissionSheet(requestId: $0.requestId) }
             )
-            .padding(.horizontal, 12)
-            .padding(.top, 6)
-            .padding(.bottom, 8)
-            // Presented from the composer row rather than from the menu item,
-            // for the reason on `showingPhotoPicker`. Still `PhotosPicker`
-            // rather than `PHPickerViewController`
-            // (docs/tasks/ios-image-input.md step 1) — no Info.plist
-            // usage-description string needed either way.
-            .photosPicker(
-                isPresented: $showingPhotoPicker, selection: $selectedPhotoItems,
-                maxSelectionCount: max(1, ChatMessage.maxImages - pendingImages.count), matching: .images
-            )
-            .onChange(of: selectedPhotoItems) { _, items in
-                guard !items.isEmpty else { return }
-                Task {
-                    // In pick order. A pick that fails to load or decode is
-                    // dropped on its own and the rest still attach, but it is
-                    // said out loud, as on the web: one missing thumbnail in
-                    // six is easy to miss, and the caption may count them.
-                    var loaded: [Data] = []
-                    for item in items {
-                        if let data = try? await item.loadTransferable(type: Data.self),
-                           let downscaled = ImageDownscaler.downscaledJPEG(from: data) {
-                            loaded.append(downscaled)
-                        }
-                    }
-                    appendPendingImages(loaded)
-                    let failed = items.count - loaded.count
-                    if failed > 0 {
-                        store.showPermissionNotice(
-                            failed == 1 ? "Couldn't read one of those photos." : "Couldn't read \(failed) of those photos."
-                        )
-                    }
-                    selectedPhotoItems = []
-                }
-            }
-            // Full screen, not a sheet: the capture UI is built to own the
-            // whole display, and a sheet leaves the shutter under the grabber.
-            .fullScreenCover(isPresented: $showingCamera) {
-                CameraPicker(
-                    onCapture: { image in
-                        // Off the main thread: a camera image is always the
-                        // full sensor (12-48MP), unlike a pasted screenshot,
-                        // and redrawing it would hitch the cover's dismissal.
-                        Task.detached(priority: .userInitiated) {
-                            let downscaled = ImageDownscaler.downscaledJPEG(from: image)
-                            await MainActor.run {
-                                if let downscaled { appendPendingImages([downscaled]) }
-                            }
-                        }
-                    },
-                    onFinish: { showingCamera = false }
-                )
-                .ignoresSafeArea()
-            }
         }
-        .onChange(of: scenePhase) { _, newPhase in
-            if newPhase == .active {
-                clearUnreadBadge()
-                store.handleDidBecomeActive()
-                Task { await ideasStore.refresh() }
-                Task { await pullPreferences() }
-                // A box can be updated while the app sits in the background.
-                // The present covers news that waited behind something else.
-                Task { await whatsNew.refresh() }
-                presentWhatsNewIfDue()
-                // The initial `.active` never reaches `onChange`; launch is
-                // covered by the `.task` below.
-                Self.ensureDictationAssets()
-            } else if newPhase == .background {
-                // True backgrounding only — not `.inactive`, which also
-                // fires for transient interruptions (Control Center, a
-                // system alert) that don't mean the user left the app and
-                // shouldn't cut off an in-progress dictation.
-                dictation.stop()
-            }
-        }
-        .task { Self.ensureDictationAssets() }
-        // Launch fetch; later foregrounds go through `onChange(of: scenePhase)`.
-        .task { await ideasStore.refresh() }
-        .task { await pullPreferences() }
-        .task { await whatsNew.refresh() }
-        .onChange(of: whatsNew.pending) { _, _ in presentWhatsNewIfDue() }
-        .animation(.snappy(duration: 0.25), value: ideasStore.spotlight?.id)
-        // Collapsed "Not now" rows are for the panel's open lifetime only.
-        .onChange(of: showingIdeas) { _, showing in
-            if !showing { ideasStore.panelClosed() }
-        }
+    }
+
+    // The scene-phase, launch and arrival handlers, applied before the
+    // toolbar, sheet and overlays in `body`, in the order they always were.
+    // Split from `body` for the same type-checking reason as `chatColumn`.
+    private var chatWithLifecycle: some View {
+        chatWithSceneHandlers
         .onChange(of: store.completedAssistantTurns) { _, completed in
             guard !completed.isEmpty else { return }
             // Drain unconditionally, before the scene-phase check: a turn that
@@ -963,75 +286,785 @@ struct ChatView: View {
         .onChange(of: store.pendingPermission?.requestId) { _, new in
             if new != nil && !showingVoiceMode && !dictation.isRecording { ChatSoundPlayer.playApproval() }
         }
-        // No navigation bar: `PresenceHeader` floats over the transcript and
-        // carries everything the bar did — the face and the gear (the
-        // "Sonnet/Low" diagnostic Mike asked for on 2026-08-27 lived here as
-        // a chip until 2026-10-12; it is in Settings now). Hidden rather than
-        // restyled because a bar reserves its height whether or not anything
-        // scrolls under it, and the point of floating is that the transcript
-        // gets that height back.
-        .toolbar(.hidden, for: .navigationBar)
-        // One `.sheet`, not two independent ones: SwiftUI only ever presents
-        // one sheet at a time from a given view, and stacking a second
-        // `.sheet(isPresented:)` for Settings alongside the permission
-        // sheet let Settings silently block an incoming permission request
-        // until dismissed — up to the server's ~55s auto-deny timeout, on a
-        // modal that's meant to be un-swipeable and unmissable
-        // (docs/tasks/ios-permission-round-trip-ui.md §4).
-        //
-        // The approval is no longer one of the sheets (2026-10-02: a card
-        // over the conversation, `PermissionOverlay`, below), but the lesson
-        // stands: nothing presented here may sit on top of it. So
-        // `activeSheet` is nil while a request is pending, which makes SwiftUI
-        // dismiss a Settings/Marlow sheet that is open, and the card sits in
-        // ChatView's own view tree where no sheet can cover it. The flags are
-        // left alone for that dismissal — the setter below only clears them
-        // when the user dismissed — so answering the request brings Settings
-        // back underneath, rather than dumping the user out to the transcript.
-        .sheet(item: Binding(get: { activeSheet }, set: {
-            if $0 == nil && store.pendingPermission == nil {
-                showingSettings = false
-                showingMarlow = false
-                showingIdeas = false
-                // OK and a swipe both land here.
-                // Not on the approval card's dismissal, which skips this
-                // block: the card comes back once the request is answered.
-                if showingWhatsNew {
-                    whatsNew.acknowledge()
-                    showingWhatsNew = false
+    }
+
+    // Scene phase and the launch fetches, applied first.
+    private var chatWithSceneHandlers: some View {
+        chatColumn
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                clearUnreadBadge()
+                store.handleDidBecomeActive()
+                Task { await ideasStore.refresh() }
+                Task { await pullPreferences() }
+                // A box can be updated while the app sits in the background.
+                // The present covers news that waited behind something else.
+                Task { await whatsNew.refresh() }
+                presentWhatsNewIfDue()
+                // The initial `.active` never reaches `onChange`; launch is
+                // covered by the `.task` below.
+                Self.ensureDictationAssets()
+            } else if newPhase == .background {
+                // True backgrounding only — not `.inactive`, which also
+                // fires for transient interruptions (Control Center, a
+                // system alert) that don't mean the user left the app and
+                // shouldn't cut off an in-progress dictation.
+                dictation.stop()
+            }
+        }
+        .task { Self.ensureDictationAssets() }
+        // Launch fetch; later foregrounds go through `onChange(of: scenePhase)`.
+        .task { await ideasStore.refresh() }
+        .task { await pullPreferences() }
+        .task { await whatsNew.refresh() }
+        .onChange(of: whatsNew.pending) { _, _ in presentWhatsNewIfDue() }
+        .animation(.snappy(duration: 0.25), value: ideasStore.spotlight?.id)
+        // Collapsed "Not now" rows are for the panel's open lifetime only.
+        .onChange(of: showingIdeas) { _, showing in
+            if !showing { ideasStore.panelClosed() }
+        }
+    }
+
+    // `body` is split into the properties below because as one expression
+    // (~900 lines) it took over 4s to type-check on the dev Mac and hit the
+    // compiler's "unable to type-check this expression in reasonable time"
+    // limit on CI's slower runner (Xcode 26.3, 2026-10-31). Same view tree;
+    // a new piece of the screen belongs in one of these, not back in `body`.
+    private var chatColumn: some View {
+        VStack(spacing: 0) {
+            // One strip, not five banners (docs/tasks/ios-chat-ux-gaps.md
+            // item 13). What used to be here was five independent `if`s, any
+            // number of which could be true at once — so a three-second
+            // dictation error got the same full-width permanent-looking bar as
+            // a server that has stopped accepting work, and a bad moment could
+            // eat four rows off the top of the transcript at once.
+            //
+            // The split that fixes it is persistent vs transient, not
+            // important vs unimportant. A persistent state is a fact about the
+            // server that is still true a minute from now and that Mike has to
+            // go *do* something about (SSH in and reauthorize); it belongs at
+            // the top, it outranks the others, and it is never dismissible —
+            // reauth in particular must not be closable into invisibility,
+            // which is why nothing here has a close button. A transient notice
+            // is the echo of an action he just took, it expires on its own, and
+            // it has moved to sit beside the control that caused it: the
+            // permission notice to the foot of the transcript (with
+            // FetchIndicator, for the same reason given there — the bottom is
+            // where you are already looking), the dictation error to just above
+            // the mic.
+            StatusStrip(statuses: activeStatuses, usageText: usageHighText)
+
+            transcript
+
+            // The foot of the conversation, NOT the banner stack at the top.
+            // Two reasons. Mike's (2026-09-07): a word like "Checking" is too
+            // big a thing to say for what is happening, and the place you are
+            // already staring at after thumbing a notification is the bottom
+            // of the transcript, where the message you were promised should
+            // appear. And ios-chat-ux-gaps.md item 13's: those banners give
+            // temporary state the same permanent-looking treatment as a server
+            // that has stopped, and there are already five of them.
+            //
+            // Outside the ScrollView rather than appended after the last row.
+            // Inside, `scrollTo(last.id, anchor: .bottom)` — which runs on
+            // launch, on every arrival, and on the jump button — would park
+            // the last MESSAGE against the bottom edge and push the indicator
+            // out of sight, hiding it in exactly the moment it exists for.
+            FetchIndicator(activity: store.connectionActivity)
+
+            // The permission notice, demoted from the banner stack
+            // (docs/tasks/ios-chat-ux-gaps.md item 13). It is the echo of a
+            // tap Mike just made on the permission sheet — "Allowed", "Too
+            // late" — and `ChatStore.showPermissionNotice` already clears it
+            // after three seconds. Three seconds is not a banner. It sits here
+            // for the same reason FetchIndicator does: the sheet dismissing
+            // leaves him looking at the bottom of the transcript, and that is
+            // where the answer to "did that land?" should appear.
+            if let notice = store.permissionNotice {
+                TransientNotice(text: notice)
+            }
+
+            pendingImageTray
+
+            // The spotlight: the one idea Marlow thinks is worth interrupting
+            // for (docs/tasks/ideas-panel.md). Between the transcript and the
+            // composer, never a row in the transcript, so it is out of the
+            // context and gone the moment it is answered. Not while dictating,
+            // for the reason on `permissionCardRequest`: a card appearing must
+            // not move the recording controls under a thumb.
+            if let spotlight = ideasStore.spotlight, !dictation.isRecording {
+                SpotlightCard(
+                    idea: spotlight,
+                    onOpen: { showingIdeas = true },
+                    onDoIt: { doIt(spotlight) },
+                    onNotNow: { Task { await ideasStore.dismiss(spotlight) } }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
+            // The dictation error, demoted from the banner stack
+            // (docs/tasks/ios-chat-ux-gaps.md item 13) and moved next to the
+            // control it is about. Every string that reaches
+            // `dictation.errorMessage` is the result of pressing the mic or
+            // pressing send — mic permission refused, recognition failed — so
+            // it reads as a caption on the button, and putting it at the top of
+            // the screen made the user find the connection between a bar up
+            // there and a tap down here.
+            if let dictationError = dictation.errorMessage {
+                TransientNotice(text: dictationError)
+            }
+
+            composer
+        }
+    }
+
+    private var transcript: some View {
+        ScrollViewReader { proxy in
+            // Computed once per body evaluation, not per row: `ForEach`
+            // still keys identity on the message's own stable `id`
+            // (never the array position, which would misbehave the day
+            // a message is ever inserted mid-transcript rather than only
+            // appended — see ios-chat-ux-gaps.md §7), but finding "does
+            // this message start a new time gap" no longer needs a full
+            // `Array(store.messages.enumerated())` copy on every publish.
+            let timestampIds = messageIdsNeedingTimestamp
+            let failedReplies = failedReplyByUserMessage
+            ZStack(alignment: .bottomTrailing) {
+                ScrollView {
+                    // The measuring sentinel is a sibling of the row
+                    // stack, not its last child — a distinction that
+                    // mattered while the rows were lazy: scrolling up far
+                    // enough to want the jump button was exactly what
+                    // evicted the bottom row, which withdrew the
+                    // preference, which reset it to `defaultValue` (0), so
+                    // the button was hidden by the very gesture meant to
+                    // summon it (found on device, 2026-08-23). The rows
+                    // are eager now and cannot be evicted, but the sentinel
+                    // stays out here: it costs nothing and it is what makes
+                    // the measurement independent of how the rows are
+                    // built, rather than correct only by luck.
+                    VStack(spacing: 0) {
+                        // Eager, NOT `LazyVStack` — see the type comment
+                        // on `ChatView` and ios-transcript-scaling.md.
+                        VStack(alignment: .leading, spacing: 12) {
+                            if store.hasEarlierMessages {
+                                EarlierMessagesButton {
+                                    revealEarlierMessages(proxy: proxy)
+                                }
+                            }
+                            // The window, not the whole transcript: every
+                            // row here is built before the first frame, so
+                            // how many there are IS the cold-launch pause
+                            // (see `TranscriptWindow`).
+                            ForEach(store.visibleMessages, id: \.id) { message in
+                                if timestampIds.contains(message.id) {
+                                    // Measured with the row when followed:
+                                    // `scrollTo(id)` targets this whole
+                                    // ForEach element, divider included,
+                                    // so a pin to `.top` lands the divider
+                                    // there, not the bubble. Measuring the
+                                    // bubble alone let the last follow step
+                                    // carry the divider under the header
+                                    // and the pin then moved the view back
+                                    // down ~30pt (simulator, 2026-09-29).
+                                    TimestampDivider(date: message.createdAt)
+                                        .modifier(FollowFrameReporter(
+                                            id: message.id,
+                                            isActive: followedExchange?.contains(message.id) == true
+                                        ))
+                                }
+                                MessageRow(
+                                    message: message, onRetry: { store.retry($0) },
+                                    loadImage: { store.loadedImage(filename: $0) },
+                                    failedReplyId: failedReplies[message.id],
+                                    isAttachedFailure: message.clientMsgId
+                                        .flatMap(UUID.init(uuidString:))
+                                        .map { failedReplies[$0] == message.id } ?? false,
+                                    reportsFrame: followedExchange?.contains(message.id) == true
+                                ).id(message.id)
+                            }
+                        }
+                        // Arrivals only: see `MessageRow.arrivalAnimation`.
+                        // Keyed on the LAST id so revealing earlier rows
+                        // (which moves the first) and the cold load (no
+                        // change at all) insert without it.
+                        .animation(MessageRow.arrivalAnimation, value: store.messages.last?.id)
+                        .padding()
+
+                        Color.clear
+                            .frame(height: 1)
+                            .background {
+                                GeometryReader { bottom in
+                                    Color.clear.preference(
+                                        key: TranscriptBottomKey.self,
+                                        value: bottom.frame(in: .named("transcript")).maxY
+                                    )
+                                }
+                            }
+                    }
+                }
+                // Places the first rendered frame at the bottom outright,
+                // so nothing has to scroll there afterwards — see the
+                // `onAppear` below for why that mattered.
+                .modifier(InitialBottomScrollAnchor())
+                .coordinateSpace(name: "transcript")
+                .onPreferenceChange(TranscriptBottomKey.self) { bottomY in
+                    // Compare before writing. `bottomY` is measured in the
+                    // transcript's own coordinate space, so it changes on
+                    // *every frame of every scroll* — and a SwiftUI
+                    // `@State` setter doesn't dedupe, so assigning `false`
+                    // over `false` still invalidated the whole ChatView
+                    // body: the ScrollView, the ForEach and every row,
+                    // sixty-plus times a second while a finger was down.
+                    // Only a threshold *crossing* is news.
+                    //
+                    // Honest history: this was written believing the churn
+                    // explained the blank-transcript bug. It did not — the
+                    // device instrumentation showed the rows were never
+                    // built at all (see the type comment above). The
+                    // dedupe is worth keeping on its own merits; it just
+                    // isn't the fix it was thought to be, and the next
+                    // person should not read it as one.
+                    //
+                    // Nothing to compare against until the background
+                    // reader has reported. `viewportHeight` starts at 0,
+                    // and deciding against 0 makes the threshold
+                    // `max(160, 0)` — which a full transcript clears
+                    // instantly, so the jump-to-bottom button would appear
+                    // at launch, sitting there until a scroll produced the
+                    // next preference change to correct it. A hidden
+                    // button is the right answer while the answer is
+                    // unknown.
+                    guard viewportHeight > 0 else { return }
+                    let far = bottomY > viewportHeight + max(160, viewportHeight / 3)
+                    if far != isFarFromBottom {
+                        isFarFromBottom = far
+                        // Scrolling back down to the tail clears the mark
+                        // as surely as tapping the button does — the
+                        // arrival has been seen either way, and leaving a
+                        // dot on a button that is about to disappear would
+                        // strand the flag set for the next time the user
+                        // scrolls up.
+                        if !far { hasUnseenArrival = false }
+                    }
+                }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { h in
+                    if h != readableHeight { readableHeight = h }
+                }
+                .onPreferenceChange(FollowedRowFramesKey.self) { frames in
+                    followStreamingReply(frames: frames, proxy: proxy)
+                }
+                // A finger on the transcript ends following for this
+                // turn: auto-scroll must never fight one. Scroll phase,
+                // not a gesture, where the OS has it — a drag gesture
+                // added to a ScrollView competes with its own.
+                .modifier(TouchEndsFollowing(isFollowing: followedExchange != nil) {
+                    followedExchange = nil
+                })
+                // The standard affordance (Messages, Discord, Slack
+                // all do this): dragging the transcript lets the
+                // keyboard follow the gesture down and dismiss
+                // interactively, rather than it sitting there forever
+                // once the text field has been tapped once.
+                // `.interactively` (not `.immediately`) is what makes
+                // it follow the drag instead of vanishing the moment
+                // scrolling starts — a small flick shouldn't punt the
+                // keyboard away when the intent was just to glance up
+                // at older messages.
+                .scrollDismissesKeyboard(.interactively)
+                // An overlay, not a row: it is not a message, is never
+                // persisted, and must not be something Copy or a scroll
+                // anchor can find. A stand-in for a real first-run
+                // onboarding, which is wanted eventually (Mike,
+                // 2026-09-28); a blank screen read as broken.
+                .overlay {
+                    if store.messages.isEmpty && !store.hasEarlierMessages {
+                        EmptyChatGreeting(loading: store.awaitingFirstFetch)
+                    }
+                }
+                // An inset, not a sibling in the VStack: rows scroll up
+                // UNDER the header and fade out through its gradient,
+                // while at rest the first row still starts below it.
+                // Attached to the ScrollView itself so the jump button's
+                // ZStack and the viewport measurement behind it keep the
+                // geometry they had (see the type comment before moving
+                // either).
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    PresenceHeader(
+                        presence: ChatPresence.of(store.messages),
+                        ideasHaveNews: ideasStore.showsDot,
+                        onSettings: { showingSettings = true },
+                        onAvatar: { showingMarlow = true },
+                        onIdeas: { showingIdeas = true }
+                    )
+                }
+
+                if isFarFromBottom, let last = store.messages.last {
+                    Button {
+                        // Unanimated, deliberately, and repeated a
+                        // run-loop turn later. A tap that lands while
+                        // the transcript is still gliding loses to the
+                        // momentum: the scroll view finishes its
+                        // deceleration and an animated scrollTo is
+                        // simply discarded, so the button looks dead —
+                        // it only worked once the scroll had settled
+                        // (found on device, 2026-08-23). Setting the
+                        // offset outright is what cancels deceleration,
+                        // and animating is what stops it doing so. The
+                        // deferred repeat covers a first call swallowed
+                        // mid-glide and is a no-op when it wasn't.
+                        hasUnseenArrival = false
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                        DispatchQueue.main.async {
+                            proxy.scrollTo(last.id, anchor: .bottom)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.down")
+                            .font(.headline.bold())
+                            .frame(width: 44, height: 44)
+                            // Same material and hairline as the gear in
+                            // `PresenceHeader` (`FloatingIconButton`), so
+                            // the two floating controls read as one family.
+                            .background(.regularMaterial, in: Circle())
+                            .overlay(Circle().stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
+                            .shadow(radius: 3, y: 1)
+                            // A dot, not a count
+                            // (docs/tasks/ios-chat-ux-gaps.md item 14): the
+                            // client has no settled answer for whether an
+                            // ingested cron turn, a retry, and two
+                            // assistant rows from one turn are one arrival
+                            // or four, and a number is a promise to have
+                            // one. A dot says the only thing that is
+                            // certainly true.
+                            //
+                            // Overlaid outside the `.background` circle so
+                            // the material doesn't tint it, and drawn with
+                            // a background-coloured ring so it reads as a
+                            // badge rather than a smudge on the shadow.
+                            .overlay(alignment: .topTrailing) {
+                                if hasUnseenArrival {
+                                    Circle()
+                                        .fill(Color.accentColor)
+                                        .frame(width: 10, height: 10)
+                                        .overlay(Circle().stroke(Color(.systemBackground), lineWidth: 2))
+                                        .offset(x: -2, y: 2)
+                                }
+                            }
+                    }
+                    // Deliberately NOT tied to the app-icon badge
+                    // (`APNsRegistrar.marksChatUnread`). That one means
+                    // "something arrived while you were away" and survives
+                    // until the app opens; this one means "something
+                    // arrived while you were scrolled up" and dies the
+                    // moment you look. Same word, different lifetimes —
+                    // sharing state between them would make one of the two
+                    // wrong.
+                    .accessibilityLabel(
+                        hasUnseenArrival
+                        ? "New message. Jump to newest message"
+                        : "Jump to newest message"
+                    )
+                    .padding(12)
+                    }
+            }
+            // The stand-in for the approval card while dictating
+            // (`permissionCardRequest`). An overlay, not a row, so it
+            // never moves the transcript; it floats just above the
+            // composer, where the recording is.
+            .overlay(alignment: .bottom) {
+                if let request = permissionPillRequest {
+                    PermissionPendingPill(
+                        request: request,
+                        onTap: { dictation.stop() },
+                        onExpire: { store.expirePermissionSheet(requestId: request.requestId) }
+                    )
+                    .padding(.bottom, 10)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-        })) { sheet in
-            switch sheet {
-            case .settings:
-                SettingsView(store: store, whatsNew: whatsNew, stopDictation: { dictation.stop() })
-            case .marlow:
-                MarlowView(marlow: makeMarlowStore(), activity: makeActivityStore(), usage: makeUsageStore())
-            case .ideas:
-                IdeasPanel(store: ideasStore, onDoIt: doIt)
-            case .whatsNew:
-                WhatsNewSheet(store: whatsNew)
+            .animation(.snappy(duration: 0.25), value: permissionPillRequest?.requestId)
+            // The viewport height, measured from the BACKGROUND, not by wrapping the
+            // transcript in a `GeometryReader`. A GeometryReader as a
+            // container hands its child an unstable size proposal during
+            // the first layout pass, and on device that was enough to stop
+            // the rows being built at all (see the type comment above).
+            // Reading the size from behind the view leaves the
+            // transcript's own layout path alone.
+            //
+            // `onAppear`/`onChange` rather than a preference: a preference
+            // set inside `.background` does not propagate out to the
+            // backed view, so the height read back as 0 — which silently
+            // pinned the jump-button threshold to its floor.
+            .background {
+                GeometryReader { g in
+                    Color.clear
+                        .onAppear {
+                            if g.size.height != viewportHeight { viewportHeight = g.size.height }
+                        }
+                        .onChange(of: g.size.height) { _, h in
+                            if h != viewportHeight { viewportHeight = h }
+                        }
+                }
+            }
+            .onChange(of: store.messages.count) { _, _ in
+                if let last = store.messages.last, !isFarFromBottom {
+                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                }
+            }
+            .onChange(of: scrollToBottomRequest) { _, _ in
+                // An accepted local send is different from an incoming
+                // message: even while reading older history, the sender
+                // needs immediate confirmation that their new message and
+                // its status placeholder entered the transcript.
+                guard let last = store.messages.last else { return }
+                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                // Then keep the reply in view as it streams — this path
+                // only, never an incoming turn, which keeps the
+                // `!isFarFromBottom` rule above (`ReplyFollow`).
+                let messages = store.messages
+                if messages.count >= 2, last.role == .assistant,
+                   messages[messages.count - 2].role == .user {
+                    followTracker = FollowTracker()
+                    followedExchange = FollowedExchange(
+                        userId: messages[messages.count - 2].id, replyId: last.id
+                    )
+                }
+            }
+            // A turn that finishes, errors or is merged away ends
+            // following — as does anything landing after it. A run-loop
+            // turn later, so the layout that shows the final text still
+            // gets one follow decision: the finished reply can be longer
+            // than the typing had reached.
+            .onChange(of: followedReplyIsStreaming) { _, streaming in
+                guard !streaming else { return }
+                DispatchQueue.main.async { followedExchange = nil }
+            }
+            // Cold open lands at the top of a restored transcript, because
+            // the count never changed — nothing was appended, the messages
+            // were decoded from disk. Tapping a "Marlow has something for
+            // you" notification is exactly that path, so the one moment the
+            // newest message matters most is the one it wasn't shown
+            // (found on device, 2026-08-07). Unanimated: this is where the
+            // view should already have been, not a movement to watch.
+            .onAppear {
+                // Only where `InitialBottomScrollAnchor` is a no-op. Where
+                // it isn't, this call is not merely redundant, it is the
+                // bug: scrolling to a row is exactly what the anchor
+                // exists to avoid having to do.
+                guard #unavailable(iOS 18.0) else { return }
+                guard let last = store.messages.last else { return }
+                // Deferred a run-loop turn so the layout pass triggered
+                // by this same appearance finishes before the scroll is
+                // asked for. That deferral used to be load-bearing and
+                // unreliable, because the rows were lazy and might not
+                // exist yet; with eager rows there is a real position to
+                // scroll to by the time this runs.
+                DispatchQueue.main.async {
+                    proxy.scrollTo(last.id, anchor: .bottom)
+                }
             }
         }
-        // Above everything in ChatView, the floating `PresenceHeader`
-        // included, and an overlay rather than a row so the transcript's
-        // layout is untouched: no scroll jump when a request arrives or is
-        // answered. Not while dictating — see `permissionPillRequest`.
-        // Under the approval card, never over it: a request that arrives
-        // while Mike is talking has to show, with its tap, on this screen.
-        .overlay {
-            if showingVoiceMode {
-                VoiceModeView(store: store) { showingVoiceMode = false }
-                    .transition(.opacity)
+    }
+
+    @ViewBuilder private var pendingImageTray: some View {
+        if !pendingImages.isEmpty {
+            // One 64x64 thumbnail per staged image, three across, so six
+            // are two rows (CMP-5). A single row of six at 44pt left a
+            // remove control too small to hit with confidence on a phone
+            // (Mike, 2026-10-24); three across leaves room for both.
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(64), spacing: 18), count: 3),
+                alignment: .leading, spacing: 18
+            ) {
+                    ForEach(Array(pendingImages.enumerated()), id: \.offset) { index, data in
+                        // A staged image that will not decode still counts
+                        // toward the cap and is still sent, so it still
+                        // gets a tile and a remove control: a gray one.
+                        Group {
+                            if let preview = UIImage(data: data) {
+                                Image(uiImage: preview)
+                                    .resizable()
+                                    .scaledToFill()
+                            } else {
+                                Color.gray.opacity(0.25)
+                            }
+                        }
+                        .frame(width: 64, height: 64)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(alignment: .topTrailing) {
+                            Button {
+                                // By content, not the captured index: a
+                                // second tap before the re-render would
+                                // otherwise remove whichever image has
+                                // slid into this slot.
+                                if let at = pendingImages.firstIndex(of: data) {
+                                    pendingImages.remove(at: at)
+                                }
+                            } label: {
+                                // A 36pt target centred on the corner, as
+                                // on the web: a 44pt one over the tile
+                                // covered most of it, so touching a photo
+                                // removed it. The grid's 18pt spacing keeps
+                                // it off the next tile.
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 26))
+                                    .symbolRenderingMode(.palette)
+                                    .foregroundStyle(.white, .black.opacity(0.65))
+                                    .frame(width: 36, height: 36)
+                                    .contentShape(Rectangle())
+                            }
+                            .offset(x: 18, y: -18)
+                            .accessibilityLabel("Remove image \(index + 1) of \(pendingImages.count)")
+                        }
+                    }
             }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .animation(.easeInOut(duration: 0.2), value: showingVoiceMode)
-        .overlay {
-            PermissionOverlay(
-                request: permissionCardRequest,
-                onDecision: { decision in await store.answerPermission(decision: decision) },
-                onExpire: { store.expirePermissionSheet(requestId: $0.requestId) }
+    }
+
+    private var composer: some View {
+        // spacing 0, because each control below carries its own 34x44 tap
+        // target — the transparent margin inside those frames *is* the gap
+        // now. Leaving the old 8pt on top of it stacked two spacings and
+        // left the composer full of holes (Mike, on device, 2026-08-23).
+        // 34 wide rather than a square 44: the row's height is free, its
+        // width is not, and 34 keeps the four controls near the pitch they
+        // had before the tap targets went in.
+        //
+        // One rounded field holding every control, rather than a bordered
+        // text field with icons around it (2026-09-28 polish): the row
+        // reads as one thing to type into, and the divider that used to
+        // fence it off from the transcript is gone.
+        HStack(alignment: .bottom, spacing: 0) {
+            // One attachment button, not two
+            // (docs/tasks/ios-chat-ux-gaps.md item 11). Photo Library and
+            // Paste used to sit here as separate icons, which gave four
+            // controls equal visual weight around a text field and made
+            // the row read as a toolbar with a field wedged into it.
+            //
+            // 44 wide here where the others are 34: that comment below
+            // about width being the scarce dimension is still true, which
+            // is exactly why collapsing two 34s into one 44 is affordable
+            // — it hands the text field back 24pt *and* gives the one
+            // remaining attachment control the full square tap target item
+            // 11 asks for. Camera (ios-image-input.md step 2) is the
+            // third item; that is what the menu is for.
+            // Hidden while dictating: attaching mid-recording makes no
+            // sense, and the meter gets the room (Mike, 2026-10-17).
+            if !dictation.isRecording {
+                Menu {
+                    if CameraPicker.isAvailable {
+                        Button {
+                            if hasRoomForAnotherImage() { showingCamera = true }
+                        } label: {
+                            Label("Take Photo", systemImage: "camera")
+                        }
+                        .accessibilityLabel("Take a photo")
+                        .accessibilityHint("Attaches a photo from the camera")
+                    }
+                    Button {
+                        if hasRoomForAnotherImage() { showingPhotoPicker = true }
+                    } label: {
+                        Label("Photo Library", systemImage: "photo.on.rectangle")
+                    }
+                    .accessibilityLabel("Choose a photo")
+                    .accessibilityHint("Attaches an image from the photo library")
+                    // Still reads the pasteboard only when tapped, never
+                    // reactively — the original reasoning survives the move: a
+                    // `UIPasteboard.general.hasImages` check would have to be
+                    // polled to notice a pasteboard change, and it is not worth
+                    // it to grey out an item that is a harmless no-op when
+                    // empty.
+                    Button {
+                        if hasRoomForAnotherImage(),
+                           let image = UIPasteboard.general.image,
+                           let downscaled = ImageDownscaler.downscaledJPEG(from: image) {
+                            appendPendingImages([downscaled])
+                        }
+                    } label: {
+                        Label("Paste Image", systemImage: "doc.on.clipboard")
+                    }
+                    .accessibilityLabel("Paste image")
+                    .accessibilityHint("Attaches an image from the clipboard")
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Add attachment")
+                .accessibilityHint(CameraPicker.isAvailable
+                    ? "Attach an image from the camera, the photo library or the clipboard"
+                    : "Attach an image from the photo library or the clipboard")
+            }
+            // Swaps in for the text field while dictating — the Claude
+            // iOS app does the same thing: replace the thing you'd type
+            // into with a live "yes, I hear you" indicator, since a tap
+            // to start gives no other feedback that the mic caught
+            // anything until the transcript lands on send.
+            if dictation.isRecording {
+                LevelMeterView(levelMeter: dictation.levelMeter)
+                    .frame(height: 36)
+                    .padding(.vertical, 4)
+                    // Air before the stop button so it reads as its own
+                    // control, not the meter's last bar.
+                    .padding(.trailing, 10)
+                    // The + is hidden while recording; keep the bars off
+                    // the pill's rounded edge.
+                    .padding(.leading, 12)
+            } else if dictation.isTranscribing {
+                // Recognition now runs over the whole recording *after*
+                // Mike stops (DictationController, "record first,
+                // transcribe once"), so there is a real gap here where
+                // nothing has landed yet. Without this the field snaps
+                // back to empty and it reads as the mic having failed.
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Transcribing…").foregroundStyle(.secondary)
+                }
+                .frame(height: 36, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 4)
+            } else {
+                // Plain, inside the pill: the pill is the border now.
+                // Vertical padding centres one line against the 44pt
+                // controls and lets further lines grow the pill upward.
+                TextField("Message Marlow", text: $draft, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...5)
+                    .focused($draftFocused)
+                    .padding(.vertical, 11)
+            }
+            // Push-to-dictate (docs/tasks/voice-mode.md): tap to start,
+            // tap again to stop. Which button ends it decides where the
+            // transcript goes — stop means "let me look at it," send means
+            // "send it" (see DictationController.Endpoint). While recording
+            // the mic becomes a stop square: a filled mic read as "still
+            // listening, tap to talk" and Taylor didn't find the way to end
+            // it (2026-10-17). The thin ring says "button" next to the
+            // meter bars without competing with the filled send arrow.
+            Button {
+                dictation.toggle { text, endpoint in
+                    receiveDictation(text, endpoint: endpoint)
+                }
+            } label: {
+                Image(systemName: dictation.isRecording ? "stop.circle" : "mic")
+                    .font(.system(size: dictation.isRecording ? 28 : 20, weight: dictation.isRecording ? .light : .regular))
+                    .foregroundStyle(dictation.isRecording ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.secondary))
+                    .frame(width: dictation.isRecording ? 40 : 34, height: 44)
+            }
+            .accessibilityLabel(dictation.isRecording ? "Stop dictation" : "Start dictation")
+            .accessibilityHint(
+                dictation.isRecording
+                ? "Stops recording and places the transcript in the message field"
+                : "Starts recording a dictated message"
             )
+            .disabled(dictation.isTranscribing)
+            // Shown only when pressing it would do something, rather than
+            // sitting there greyed out: an idle composer is just the field
+            // and the mic, and the arrow arriving is itself the cue that
+            // the message is ready. The condition is exactly the old
+            // `.disabled` one inverted, so nothing that could be sent
+            // before is unsendable now.
+            if canSend {
+                Button {
+                    // While dictating there is nothing in `draft` to submit —
+                    // the field is swapped out for the level meter. Send means
+                    // "finish and send," which is Mike's ask (2026-08-16) and
+                    // the reason this button is no longer inert mid-dictation.
+                    if dictation.isRecording {
+                        dictation.stopAndSend()
+                    } else {
+                        submitDraft()
+                    }
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 40, height: 44)
+                }
+                .accessibilityLabel(dictation.isRecording ? "Stop dictation and send" : "Send message")
+                .transition(.scale(scale: 0.5).combined(with: .opacity))
+            } else if !dictation.isTranscribing {
+                // Voice mode lives in send's slot whenever there is nothing
+                // to send (Mike, 2026-10-20) — the same pattern as the
+                // send arrow appearing only when it has a job.
+                Button {
+                    draftFocused = false
+                    showingVoiceMode = true
+                } label: {
+                    Image(systemName: "waveform.circle.fill")
+                        .font(.system(size: 30))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 40, height: 44)
+                }
+                .accessibilityLabel("Voice mode")
+                .accessibilityHint("Talk to Marlow and hear the replies read aloud")
+                .transition(.scale(scale: 0.5).combined(with: .opacity))
+            }
+        }
+        .animation(.snappy(duration: 0.2), value: canSend)
+        .padding(.horizontal, 4)
+        .background(
+            Color(.secondarySystemBackground),
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+        )
+        .padding(.horizontal, 12)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+        // Presented from the composer row rather than from the menu item,
+        // for the reason on `showingPhotoPicker`. Still `PhotosPicker`
+        // rather than `PHPickerViewController`
+        // (docs/tasks/ios-image-input.md step 1) — no Info.plist
+        // usage-description string needed either way.
+        .photosPicker(
+            isPresented: $showingPhotoPicker, selection: $selectedPhotoItems,
+            maxSelectionCount: max(1, ChatMessage.maxImages - pendingImages.count), matching: .images
+        )
+        .onChange(of: selectedPhotoItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task {
+                // In pick order. A pick that fails to load or decode is
+                // dropped on its own and the rest still attach, but it is
+                // said out loud, as on the web: one missing thumbnail in
+                // six is easy to miss, and the caption may count them.
+                var loaded: [Data] = []
+                for item in items {
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let downscaled = ImageDownscaler.downscaledJPEG(from: data) {
+                        loaded.append(downscaled)
+                    }
+                }
+                appendPendingImages(loaded)
+                let failed = items.count - loaded.count
+                if failed > 0 {
+                    store.showPermissionNotice(
+                        failed == 1 ? "Couldn't read one of those photos." : "Couldn't read \(failed) of those photos."
+                    )
+                }
+                selectedPhotoItems = []
+            }
+        }
+        // Full screen, not a sheet: the capture UI is built to own the
+        // whole display, and a sheet leaves the shutter under the grabber.
+        .fullScreenCover(isPresented: $showingCamera) {
+            CameraPicker(
+                onCapture: { image in
+                    // Off the main thread: a camera image is always the
+                    // full sensor (12-48MP), unlike a pasted screenshot,
+                    // and redrawing it would hitch the cover's dismissal.
+                    Task.detached(priority: .userInitiated) {
+                        let downscaled = ImageDownscaler.downscaledJPEG(from: image)
+                        await MainActor.run {
+                            if let downscaled { appendPendingImages([downscaled]) }
+                        }
+                    }
+                },
+                onFinish: { showingCamera = false }
+            )
+            .ignoresSafeArea()
         }
     }
 

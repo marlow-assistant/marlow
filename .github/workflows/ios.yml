@@ -3,8 +3,8 @@ name: ios
 # Deliberately a separate workflow from ci.yml, not a second job in it:
 # GitHub's path filters are workflow-level, so this is the only way to keep the
 # ~25s Python gate untouched on server-only changes while still gating ios/.
-# A macOS runner is minutes-slow and ~10x the Actions minutes of the Linux one,
-# so it only ever fires when ios/ (or this file) actually changed.
+# A macOS run takes ~8 min against the gate's seconds, so it only ever fires
+# when ios/ (or this file) actually changed.
 #
 # push, not pull_request: pull_request's path filter matches against the
 # PR's *entire* diff (base...head) on every synchronize, so once ios/**
@@ -37,12 +37,19 @@ jobs:
     # glob rather than an exact path, so an image update that swaps 26.x
     # releases doesn't break the job.
     runs-on: macos-15
-    # 10, not the default-ish 30: observed runs are ~2.5 min wall (of which
-    # ~2 min is the cold Swift build; the tests themselves are ~0.2s), so this
-    # is ~4x headroom. macOS bills at 10x, so the cap is what bounds a runaway
-    # run to ~100 quota-minutes instead of ~300 — and the quota is shared with
-    # the cheap Python gate that actually protects main, so a single hung macOS
-    # run can take that down with it.
+    # Observed 2026-10-31 on Xcode 26.3: ~7m40 job, of which ~3 min is the
+    # cold build, ~2m40 a stall before the app first launches on the
+    # simulator, and ~54s the suite (6.5s locally). 15 leaves room for runner
+    # variance, which is large (the package fetch alone ran 40s to 90s).
+    # Minutes are free on a public repo, so the cap guards a hung run rather
+    # than a bill.
+    #
+    # Pre-booting the simulator during the build doesn't help (tried
+    # 2026-10-31): `bootstatus` then returns in seconds, but the stall isn't
+    # the boot. It is a one-off cost the first time xcodebuild uses the
+    # device by id, and it moved into the build or stayed before the launch.
+    # Building for the generic simulator instead also compiles x86_64,
+    # doubling the build. Both runs were slower than this one step.
     #
     # Treat hitting this as a *signal*, not just a cost control. The suite
     # cannot hang: awaitPendingWork(timeout:) and Gate.waitOpened(timeout:)
@@ -131,29 +138,13 @@ jobs:
           echo "Testing on: $NAME ($UDID)"
           echo "Testing on **$NAME** (\`$UDID\`)" >> "$GITHUB_STEP_SUMMARY"
 
-      # Start the boot now and collect it after the build. A cold iOS 26
-      # simulator took ~2m40 to boot inside `xcodebuild test` (2026-10-31:
-      # the last link at 16:18:25, the app's first log line at 16:21:04),
-      # longer than the build itself, so overlapping the two is the win.
-      # Backgrounded because CoreSimulatorService does the boot, not this
-      # client; `bootstatus -b` below boots it anyway if this never landed.
-      - name: Boot simulator
-        run: nohup xcrun simctl boot "${{ steps.sim.outputs.udid }}" >/dev/null 2>&1 &
-
-      # The generic destination is load-bearing: given the booting device's
-      # id, xcodebuild sat ~3.5 min before even resolving packages, waiting on
-      # CoreSimulator, and the build ran 7m19 (2026-10-31). The products are
-      # the same; only the test step needs the real device. ARCHS because a
-      # generic destination otherwise builds x86_64 too, doubling the compile
-      # (480 SwiftCompile per arch, 2026-10-31).
-      - name: Build
+      - name: Test
         working-directory: ios/Marlow
         run: |
-          xcodebuild build-for-testing \
+          xcodebuild test \
             -scheme Marlow \
             -sdk iphonesimulator \
-            -destination "generic/platform=iOS Simulator" \
-            ARCHS=arm64 \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -164,16 +155,3 @@ jobs:
         # repo carries no team ID (2026-10-26), so CI supplies an obvious
         # placeholder of the right shape; the test still checks that the Swift
         # string is built from the setting, which is what it guards.
-
-      # Its own step so the run's step timings show what the boot still costs
-      # after overlapping the build.
-      - name: Wait for simulator
-        run: xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b
-
-      - name: Test
-        working-directory: ios/Marlow
-        run: |
-          xcodebuild test-without-building \
-            -scheme Marlow \
-            -sdk iphonesimulator \
-            -destination "id=${{ steps.sim.outputs.udid }}"

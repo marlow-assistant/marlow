@@ -58,7 +58,9 @@ Questions to settle with Mike before building:
 - A row at the bottom of Settings, or in the About page above, opening a
   plain scrolling list: FluidAudio (Apache-2.0, full licence text), Phonon
   31m by Gradium (Apache-2.0, linked), plus anything else compiled in.
-  Audit `Package.resolved` when building it. sherpa-onnx was removed on
+  FluidAudio links more than its own code: NeMo text processing (NVIDIA,
+  Apache-2.0) and Rust crates under MIT or Apache-2.0, listed in
+  `dependency-licenses.md` § iOS. Audit `Package.resolved` when building it. sherpa-onnx was removed on
   2026-10-21, so it doesn't need an entry.
 - Keep the texts as bundled resources, not typed into Swift. A test that
   every resolved Swift package has an entry would catch the next

@@ -1,14 +1,41 @@
 # Dependency licenses
 
-One-off scan before the Apache-2.0 release, 2026-10-27.
+One-off scan before the Apache-2.0 release, 2026-10-27; FluidAudio's own
+files checked 2026-10-31.
 Question: does anything we ship or depend on conflict with Apache-2.0?
+
+## Look at soon: GPL-derived data in the iOS app
+
+**Priority: soon (Mike, 2026-10-31).** Not a problem for the source repo or
+for builds on Mike's own phones, but every iOS build carries it, and it has
+to be gone before the app goes out more widely (TestFlight, the App Store, a
+build handed to anyone).
+
+- FluidAudio's `TTS` switch brings in a resource bundle for its LuxTTS engine,
+  `FluidAudio_LuxTtsG2pResources.bundle` (about 1 MB: an English
+  pronunciation lexicon and its lookup tables). FluidAudio's own note,
+  `ThirdPartyLicenses/LuxTtsEnglishG2P-LICENSE.md`, says these two files are
+  not covered by its Apache-2.0 licence: they are derived from eSpeak NG
+  (GPL-3.0-or-later) and a word list under CC-BY-SA-4.0, and an app that
+  doesn't use LuxTTS can leave them out.
+- Seen in the built app (a simulator build of `Marlow.app`, 2026-10-31).
+- Marlow never uses LuxTTS: its voice is Phonon on FluidAudio's Pocket TTS
+  host. The bundle can't be switched off on its own, though: it hangs off
+  the same `TTS` trait that Phonon needs (`Package@swift-6.2.swift`).
+- GPL-3.0 inside an App Store binary is the well-known conflict, so leaving
+  it in is not an option for a wider release.
+- Likely fix: a build phase that deletes the bundle from the app, with a
+  test or build check that it stays gone, then a check that voice mode
+  still speaks. Better still if FluidAudio gives LuxTTS its own trait;
+  worth asking upstream.
 
 ## Verdict
 
 **No conflicts.** Every runtime dependency (Python, npm, Swift) is permissive:
 MIT, BSD, ISC, Apache-2.0, PSF, MIT-0, or a dual license that includes one of
 those. Nothing is GPL, AGPL, LGPL or SSPL, nothing is missing a license, and
-no package is custom.
+no package is custom. The one exception is data, not a package: GPL- and
+CC-BY-SA-derived files that FluidAudio bundles into the iOS app (above).
 
 Flagged, none blocking:
 
@@ -22,9 +49,12 @@ Flagged, none blocking:
 
 Things to do before a binary ships (none apply to a source repo):
 
-- An App Store build links FluidAudio (Apache-2.0). If FluidAudio has a
-  `NOTICE` file, the app needs the matching acknowledgements screen. Not
-  checked offline.
+- Strip the LuxTTS bundle from the iOS app (the section at the top).
+- An app build needs the acknowledgements screen (`settings-overhaul.md`):
+  Apache-2.0 §4 requires the licence text with a binary, and the MIT parts
+  require their copyright lines. FluidAudio has no `NOTICE` file, so there is
+  no NOTICE text to carry, and the repo's own `NOTICE` needs no FluidAudio
+  line. What the list must cover is in the iOS section below.
 - A hosted Funnel build or Docker image that bundles PyAV would need the FFmpeg
   point above settled.
 
@@ -95,7 +125,22 @@ only that one, so there are no transitive Swift packages.
 
 | Package | License | Linked | Source of the license claim |
 |---|---|---|---|
-| FluidAudio (pinned revision) | Apache-2.0 | into the app | `voice-mode-tts-engines.md` § Licences; confirmed by Mike, 2026-10-27 |
+| FluidAudio (pinned revision) | Apache-2.0 | into the app | its `LICENSE` at the pinned revision, 2026-10-31 (plain Apache-2.0 text, no copyright line; no `NOTICE` file) |
+
+FluidAudio keeps notes for what it pulls in under `ThirdPartyLicenses/`.
+At the pinned revision, these reach Marlow's app:
+
+| Part | License | In the app |
+|---|---|---|
+| LuxTTS English pronunciation data | GPL-3.0-or-later and CC-BY-SA-4.0 derived | yes, a resource bundle; to be removed (top of this doc) |
+| `NemoTextProcessing` xcframework (text-processing-rs) | Apache-2.0 | yes, linked on iOS by default |
+| NVIDIA NeMo Text Processing grammars, inside it | Apache-2.0, Copyright NVIDIA | yes |
+| rustfst, flate2 and other Rust crates, inside it | MIT or Apache-2.0 | yes; list them and their copyright lines on the acknowledgements screen |
+| Kokoro Core ML conversion (`KokoroANE-v3/NOTICE`) | Apache-2.0 | no: its notice binds redistributing converted Kokoro models, which Marlow doesn't ship |
+
+The other files there (fastcluster, vbx, the Japanese, Spanish and French
+pronunciation data) were not read; check each before the acknowledgements
+screen is built.
 
 Weights (not bundled; the app downloads them when the user turns voice mode on,
 `VoiceModels.json`): Phonon 31m, Apache-2.0. Its own `LICENSE` is in the
@@ -132,8 +177,9 @@ fetched onto the box by `install-voice.sh`.
 
 - PyAV's bundled FFmpeg license, numpy and sherpa-onnx: not installed or
   fetched here.
-- Whether FluidAudio ships a `NOTICE` file. Its license (Apache-2.0) and the
-  Parakeet model's (Apache-2.0) are confirmed by Mike, 2026-10-27.
+- The FluidAudio `ThirdPartyLicenses/` files not read (listed in the iOS
+  section). The Parakeet model's license (Apache-2.0) is confirmed by Mike,
+  2026-10-27.
 - That the image generator's terms permit the artwork's use under Apache-2.0.
 - Licenses of the 43 platform-specific npm binaries, which are not installed
   on this Mac.

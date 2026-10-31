@@ -35,6 +35,11 @@ Mike's wishlist lives on the box:
 `ssh marlow@marlow 'cat ~/marlow-identity/memory/marlow-features.md'`. When
 you finish something, mark it done there as well as here.
 
+- **`dependency-licenses.md`: look at soon** (Mike, 2026-10-31). Every
+  iOS build carries about 1 MB of GPL-derived pronunciation data that
+  FluidAudio bundles for an engine Marlow never uses. Strip it before the app
+  goes any wider than Mike's own phones. The doc's top section has the
+  detail and a likely fix.
 - **`friends-alpha.md`**: Marlow for 3–5 friends, each on their own
   subscription. The installer merged after a fresh Ubuntu dry run;
   first-run onboarding (its item 9) merged after three VM runs.

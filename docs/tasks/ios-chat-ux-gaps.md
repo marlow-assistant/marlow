@@ -14,7 +14,7 @@ and the August 2026 review of the unsolicited-turns change; 8–10 from continue
 UI-polish review on 2026-08-22; 15 from Mike thumbing a notification on a bad
 connection on 2026-09-07; 16 from Mike on 2026-09-11; 17–18 from the
 follow-scroll device pass on 2026-09-29; 19 from Mike on 2026-10-05; 20 from Mike on
-2026-10-24.
+2026-10-24; 21–22 from Mike's device pass on 2026-10-31.
 
 **The house lesson from 1–10, worth reading before building any of what is
 left:** every one of items 8–10 needed a fix *after* the suite was green, found
@@ -155,6 +155,33 @@ JPEGs as files the way a send already saves them, on change or on going to
 the background, and restore them at launch. Watch CMP-1: send must still
 clear the saved draft in the same step as the on-screen one, or a stale draft
 comes back after a successful send.
+
+## 21. The What's New sheet's list ends in a hard edge — PARKED
+
+In `WhatsNewSheet`, the scrolling list of changes is cut off sharply just
+above the OK button, so a line can sit half-clipped against it (Mike,
+2026-10-31). A short fade at the bottom edge, or a similar effect, would read
+better and also hint that there is more to scroll. Only show it while the list
+actually overflows, or a short list gets a fade over nothing.
+
+**Both clients.** Check whether the web `WhatsNew.tsx` has the same edge
+before calling this done.
+
+## 22. The jump button lands at the end of a long reply — PARKED
+
+The jump-to-latest button scrolls to the newest message with
+`anchor: .bottom` (`ChatView`; the web `jump()` in `Chat.tsx` does the same
+with `scrollToBottom`), so you land at the *end* of the latest message. For a
+long one, such as a morning briefing, the reader then has to scroll back up
+to its start (Mike, 2026-10-31). This isn't a regression: the code was
+unchanged by the 2026-10-31 `body` split.
+
+**Idea:** when the newest reply is taller than the readable area, land on its
+top instead. The scroll-follow code already makes that choice for a reply
+arriving live (`.pinReply`, anchor `.top`, near `followReply`), so the
+button could reuse it. Keep the 2026-08-23 mid-glide fix (an immediate
+scroll plus a deferred repeat), and keep item 18's threshold in mind.
+Not started.
 
 ## Closed
 

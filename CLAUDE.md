@@ -42,8 +42,9 @@ from `docs/marlow-v2-implementation-plan.md`.
 - **Test first** (Mike, 2026-10-25): write the test, watch it fail for the
   right reason, then implement. That is the proof the test checks the fix.
   Don't build the fix first and revert it to show the test can fail.
-- **You are the only writer.** Task docs are reasoning-first, not handoff
-  specs.
+- **Parallel features each get a branch and a PR** (Mike, 2026-10-31). The
+  repo is public, and other sessions or contributors may be writing at the
+  same time. Task docs are reasoning-first, not handoff specs.
 - **A user-facing feature is done only when both clients have it** (Mike,
   2026-10-05): iOS *and* `web/`, which is the Android client. The Usage panel
   and the approval card shipped iOS-only and an Android user couldn't find them. Scope

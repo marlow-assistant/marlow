@@ -28,10 +28,12 @@ ever writes to this repo, revisit — some of these tradeoffs change.
   asynchronously. Every PR still read MERGED. It surfaced only by reading the
   live box and finding a tool flag that should have been there and wasn't.
 
-## Who writes what — one writer
+## Who writes what
 
-All work is done in this harness, with no handoff to a second implementor.
-One consequence changes what you do:
+Since the repo went public, more than one writer may be at work: several
+sessions, or other contributors (Mike, 2026-10-31). Each feature goes on its
+own branch and lands through its own PR, so CI and review gate it, and no
+writer's commits ride into `main` on another's merge.
 
 - **Task docs are not handoff specs.** The spec-heavy style — module names,
   function signatures, call sites, test expectations written out before any code

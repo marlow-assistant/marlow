@@ -135,8 +135,8 @@ clone with neither is still blocked rather than waved through.
 1. Branch off `main`. Write the change **test-first** — the existing suite is the
    model (real code exercised against a fake `claude` binary, not mocks).
 2. Push the branch. The pre-push hook runs the suite and blocks a red push —
-   that is the whole automated signal now (see "CI — OFF" above). Opening the
-   PR adds no check.
+   the first gate. CI reports only once the PR is open (see "CI — back on"
+   above): `test`, plus `ios-test` when `ios/` changed.
 3. **Automated review on the branch** — this replaces the tech-lead review Mike no
    longer performs:
    - `/code-review high` on every non-trivial change.

@@ -172,7 +172,8 @@ you finish something, mark it done there as well as here.
   - `deferred-cron-review-findings.md` (don't self-assign);
   - `web-client-review-leftovers.md` (each item has its trigger);
   - `install-review-leftovers.md` (each item has its trigger);
-  - `pytest-xdist` (`test-suite-speed.md` has the trigger).
+  - `run-claude-cancellation.md` (a cancelled turn's CLI outlives it;
+    systemd covers the box; the doc has the trigger).
 
 Recently done, in case a summary elsewhere says otherwise:
 - iOS hands-free voice mode with the Phonon voice;

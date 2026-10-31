@@ -82,6 +82,26 @@ jobs:
       # project.yml. Deliberately not diffed against the committed project — the
       # runner's xcodegen version won't always byte-match a local one, and a
       # spurious red gate is worse than no gate.
+      # The FluidAudio fetch, 30s to 90s cold (2026-10-31). Keyed on the pin
+      # (project.yml) and the lockfile, both hashed before xcodegen rewrites
+      # the project, so a version bump always fetches fresh.
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/Marlow/project.yml', 'ios/Marlow/Marlow.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+
+      # Xcode 26's compilation cache keys each compile on its inputs' content,
+      # not mtimes, so it survives checkout's fresh timestamps (which defeat a
+      # plain DerivedData cache) and can't serve a stale object. The
+      # rolling key saves a new entry per commit and restores the latest.
+      - name: Cache compilation
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/CompilationCache
+          key: xcode-cas-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: xcode-cas-v1-${{ runner.os }}-
+
       - name: Generate project
         working-directory: ios/Marlow
         run: xcodegen generate
@@ -145,6 +165,10 @@ jobs:
             -scheme Marlow \
             -sdk iphonesimulator \
             -destination "id=${{ steps.sim.outputs.udid }}" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SourcePackages" \
+            COMPILATION_CACHE_ENABLE_CACHING=YES \
+            COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES \
+            COMPILATION_CACHE_CAS_PATH="$RUNNER_TEMP/CompilationCache" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -155,3 +179,9 @@ jobs:
         # repo carries no team ID (2026-10-26), so CI supplies an obvious
         # placeholder of the right shape; the test still checks that the Swift
         # string is built from the setting, which is what it guards.
+
+      # Evidence for whether the compilation cache earns its keep: its size
+      # here, and the build log's cache hit/miss remarks.
+      - name: Cache sizes
+        if: always()
+        run: du -sh "$RUNNER_TEMP/SourcePackages" "$RUNNER_TEMP/CompilationCache" || true

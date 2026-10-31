@@ -1,6 +1,32 @@
 # Task — make the test suite faster
 
-**Status: DONE 2026-08-22. 71.9s → 19.5s (3.7x), 720 tests, one path constant.**
+**Status: second round DONE 2026-10-31: pytest-xdist in the hook (`-n 4`) and
+CI (`-n auto`).** At ~2,680 tests the serial suite reached 125–140s on the dev
+Mac, and Mike felt the wait on every push, so the trigger below was met.
+
+| | serial | parallel |
+|---|---|---|
+| dev Mac, 14 cores, Python 3.14 | 140.5s | ~49s at `-n 4` |
+| CI, 4-core runner, Python 3.12 | 73.2s | 30.3s at `-n auto` |
+
+Locally, 2 workers took 71s, and 4, 8 and 14 all took ~49s. At 4 workers about
+1.2 cores are busy: the suite waits on subprocess spawns, not CPU. That is why
+the hook uses 4 rather than `auto`.
+
+**The flaky-sleep warning below still stands.** There are 79 fixed sleeps in
+tests/, and they were not audited. Every run passed: 6 at 14 workers and 4 at
+2–8 locally, plus 4 in CI. Rule: **a test that fails only under xdist gets
+fixed (sleep → condition-wait), never covered by dropping `-n`.** A
+flaky gate teaches `--no-verify`.
+
+Only one thing broke under xdist. `test_activity_log.py` took parametrize IDs
+from the per-process sandbox path, so workers collected different test names
+and the run refused to start. Seen only under load: "Loop … that handles pid N
+is closed" warnings, from `run-claude-cancellation.md`.
+
+The first round's write-up follows unchanged.
+
+**DONE 2026-08-22. 71.9s → 19.5s (3.7x), 720 tests, one path constant.**
 The measurement step contradicted the entire theory of the previous version of
 this doc, which is why that version told you to believe the measurement. Kept
 as a worked example of exactly that.

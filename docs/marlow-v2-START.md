@@ -172,7 +172,8 @@ you finish something, mark it done there as well as here.
   - `deferred-cron-review-findings.md` (don't self-assign);
   - `web-client-review-leftovers.md` (each item has its trigger);
   - `install-review-leftovers.md` (each item has its trigger);
-  - `pytest-xdist` (`test-suite-speed.md` has the trigger).
+  - `run-claude-cancellation.md` (a cancelled turn's CLI outlives it;
+    systemd covers the box; the doc has the trigger).
 
 Recently done, in case a summary elsewhere says otherwise:
 - iOS hands-free voice mode with the Phonon voice;
@@ -199,8 +200,8 @@ Their task docs hold the detail.
 
 ## The two boxes
 
-- **Dev:** this Mac, repo at `/Users/mike/nemoclaw/marlow-server`. Test with
-  `.venv/bin/pytest -q` (Python 3.14) and push from here.
+- **Dev:** this Mac, repo at `/Users/mike/code/marlow`. Test with
+  `.venv/bin/pytest -q -n 4` (Python 3.14) and push from here.
 - **Deploy:** `marlow.<tailnet>.ts.net`. Always use that tailnet name,
   because the TLS cert is bound to it. Marlow runs under user `marlow`.
   - `ssh marlow@marlow` gets you in. **Check, don't trust a status line:**

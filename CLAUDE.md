@@ -37,7 +37,7 @@ from `docs/marlow-v2-implementation-plan.md`.
 
 ## Working rules
 - **Tests are load-bearing here** — this is shrink-wrap software Mike wants to
-  trust. Keep the suite green; add tests with behavior. Run `.venv/bin/pytest -q`
+  trust. Keep the suite green; add tests with behavior. Run `.venv/bin/pytest -q -n 4`
   before committing.
 - **Test first** (Mike, 2026-10-25): write the test, watch it fail for the
   right reason, then implement. That is the proof the test checks the fix.

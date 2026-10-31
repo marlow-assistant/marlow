@@ -17,7 +17,7 @@ dynamic = ["dependencies"]
 # Kept in step with server/requirements-dev.txt (which the deploy path doesn't
 # use). Runtime deps stay dynamic-from-file so requirements.txt is the single
 # source of truth for `pip install -r`.
-dev = ["pytest", "httpx"]
+dev = ["pytest", "pytest-xdist", "httpx"]
 
 [tool.setuptools]
 packages = ["server"]

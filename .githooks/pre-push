@@ -61,7 +61,7 @@ push_base() {
 
 # --- is this push documentation-only? ----------------------------------------
 #
-# A prose-only push cannot turn the suite red, and this suite takes ~20s, so
+# A prose-only push cannot turn the suite red, and this suite takes ~50s, so
 # paying it to learn nothing is the common case worth skipping.
 #
 # The allowlist is deliberately NARROW, and "any *.md" would have been wrong:
@@ -109,7 +109,7 @@ docs_only_push() {
 # --- does this push touch the web client? -------------------------------------
 #
 # The web client's unit tests (Vitest, in web/) run only when the push changes
-# something under web/: the server suite stays the ~20s it was for a server
+# something under web/: the server suite stays the ~50s it is for a server
 # change. Playwright does not run here (it needs a browser and the dev server);
 # it is run by hand before review.
 #
@@ -210,8 +210,26 @@ else
     exit 1
 fi
 
-echo "pre-push: running $PYTEST -q ..."
-if ! "$PYTEST" -q; then
+# In parallel when the runner has pytest-xdist: serially the suite took 125-140s
+# on a 14-core Mac and was the wait on every code push (2026-10-31). Four
+# workers, not `auto`: 2 took 71s, and 4, 8 and 14 all took ~49s, with only
+# ~1.2 cores busy at 4 -- the suite waits on subprocess spawns, not CPU -- so
+# more workers only load a machine other sessions are sharing. A venv
+# made before xdist was a dev dependency lacks it, and `-n` is then a usage
+# error that blocks every push and points at --no-verify, so ask first and fall
+# back to serial: slower, still the whole gate. The help text goes through a
+# variable, not `| grep -q`: under pipefail, grep closing the pipe early can
+# kill pytest with SIGPIPE and read as "no xdist".
+PYTEST_ARGS=(-q)
+PYTEST_HELP="$("$PYTEST" --help 2>/dev/null || true)"
+case "$PYTEST_HELP" in
+    *--numprocesses*) PYTEST_ARGS+=(-n 4) ;;
+    *) echo "pre-push: no pytest-xdist in this runner — running serially." \
+            "Install server/requirements-dev.txt to parallelise." ;;
+esac
+
+echo "pre-push: running $PYTEST ${PYTEST_ARGS[*]} ..."
+if ! "$PYTEST" "${PYTEST_ARGS[@]}"; then
     echo "" >&2
     echo "pre-push: tests FAILED — push blocked. Fix them, or 'git push --no-verify' to override." >&2
     exit 1

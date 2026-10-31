@@ -131,10 +131,19 @@ jobs:
           echo "Testing on: $NAME ($UDID)"
           echo "Testing on **$NAME** (\`$UDID\`)" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Test
+      # Start the boot now and collect it after the build. A cold iOS 26
+      # simulator took ~2m40 to boot inside `xcodebuild test` (2026-10-31:
+      # the last link at 16:18:25, the app's first log line at 16:21:04),
+      # longer than the build itself, so overlapping the two is the win.
+      # Backgrounded because CoreSimulatorService does the boot, not this
+      # client; `bootstatus -b` below boots it anyway if this never landed.
+      - name: Boot simulator
+        run: nohup xcrun simctl boot "${{ steps.sim.outputs.udid }}" >/dev/null 2>&1 &
+
+      - name: Build
         working-directory: ios/Marlow
         run: |
-          xcodebuild test \
+          xcodebuild build-for-testing \
             -scheme Marlow \
             -sdk iphonesimulator \
             -destination "id=${{ steps.sim.outputs.udid }}" \
@@ -148,3 +157,16 @@ jobs:
         # repo carries no team ID (2026-10-26), so CI supplies an obvious
         # placeholder of the right shape; the test still checks that the Swift
         # string is built from the setting, which is what it guards.
+
+      # Its own step so the run's step timings show what the boot still costs
+      # after overlapping the build.
+      - name: Wait for simulator
+        run: xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b
+
+      - name: Test
+        working-directory: ios/Marlow
+        run: |
+          xcodebuild test-without-building \
+            -scheme Marlow \
+            -sdk iphonesimulator \
+            -destination "id=${{ steps.sim.outputs.udid }}"

@@ -51,6 +51,11 @@ jobs:
     # Building for the generic simulator instead also compiles x86_64,
     # doubling the build. Both runs were slower than this one step.
     #
+    # Xcode 26's compilation cache (COMPILATION_CACHE_ENABLE_CACHING, kept in
+    # actions/cache) was also tried: 398 hits on a warm run, but the build
+    # only went 1m40 to 1m17, inside the stall's own 73s-144s swing. Not
+    # worth the 120 MB cache entry per commit.
+    #
     # Treat hitting this as a *signal*, not just a cost control. The suite
     # cannot hang: awaitPendingWork(timeout:) and Gate.waitOpened(timeout:)
     # both bail at 10s and fail loudly. So a timeout here means the build,
@@ -76,12 +81,6 @@ jobs:
       - name: Install xcodegen
         run: brew install xcodegen
 
-      # Regenerate rather than trusting the committed .xcodeproj: project.yml is
-      # the source of truth (see docs/tasks/ios-minimal-client.md), and building
-      # the checked-in project would let a stale pbxproj mask a broken
-      # project.yml. Deliberately not diffed against the committed project — the
-      # runner's xcodegen version won't always byte-match a local one, and a
-      # spurious red gate is worse than no gate.
       # The FluidAudio fetch, 30s to 90s cold (2026-10-31). Keyed on the pin
       # (project.yml) and the lockfile, both hashed before xcodegen rewrites
       # the project, so a version bump always fetches fresh.
@@ -91,17 +90,12 @@ jobs:
           path: ${{ runner.temp }}/SourcePackages
           key: spm-${{ runner.os }}-${{ hashFiles('ios/Marlow/project.yml', 'ios/Marlow/Marlow.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
 
-      # Xcode 26's compilation cache keys each compile on its inputs' content,
-      # not mtimes, so it survives checkout's fresh timestamps (which defeat a
-      # plain DerivedData cache) and can't serve a stale object. The
-      # rolling key saves a new entry per commit and restores the latest.
-      - name: Cache compilation
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/CompilationCache
-          key: xcode-cas-v1-${{ runner.os }}-${{ github.sha }}
-          restore-keys: xcode-cas-v1-${{ runner.os }}-
-
+      # Regenerate rather than trusting the committed .xcodeproj: project.yml is
+      # the source of truth (see docs/tasks/ios-minimal-client.md), and building
+      # the checked-in project would let a stale pbxproj mask a broken
+      # project.yml. Deliberately not diffed against the committed project — the
+      # runner's xcodegen version won't always byte-match a local one, and a
+      # spurious red gate is worse than no gate.
       - name: Generate project
         working-directory: ios/Marlow
         run: xcodegen generate
@@ -166,9 +160,6 @@ jobs:
             -sdk iphonesimulator \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/SourcePackages" \
-            COMPILATION_CACHE_ENABLE_CACHING=YES \
-            COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES \
-            COMPILATION_CACHE_CAS_PATH="$RUNNER_TEMP/CompilationCache" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -179,9 +170,3 @@ jobs:
         # repo carries no team ID (2026-10-26), so CI supplies an obvious
         # placeholder of the right shape; the test still checks that the Swift
         # string is built from the setting, which is what it guards.
-
-      # Evidence for whether the compilation cache earns its keep: its size
-      # here, and the build log's cache hit/miss remarks.
-      - name: Cache sizes
-        if: always()
-        run: du -sh "$RUNNER_TEMP/SourcePackages" "$RUNNER_TEMP/CompilationCache" || true

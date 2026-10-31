@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import write_executable
+
 DEPLOY = Path(__file__).resolve().parent.parent / "deploy"
 SCRIPT = DEPLOY / "install-voice.sh"
 MODEL = "test-model"
@@ -48,13 +50,12 @@ def box(tmp_path):
     log = tmp_path / "calls.log"
     for tool in ("pip", "python"):
         stub = venv / "bin" / tool
-        stub.write_text(
-            "#!/usr/bin/env bash\n"
-            f'echo "{tool} $* log_dir=${{MARLOW_LOG_DIR:-}}" >> "{log}"\n'
+        # The log comes in as FAKE_CALLS_LOG, not baked into the text, so every
+        # test shares one cached stub (conftest.write_executable).
+        write_executable(stub, "#!/usr/bin/env bash\n"
+            f'echo "{tool} $* log_dir=${{MARLOW_LOG_DIR:-}}" >> "$FAKE_CALLS_LOG"\n'
             f'if [[ {tool} == pip ]]; then exit "${{FAKE_PIP_EXIT:-0}}"; fi\n'
-            'echo "${FAKE_BENCH-0.80}"\n'
-        )
-        stub.chmod(0o755)
+            'echo "${FAKE_BENCH-0.80}"\n')
     archive, sha = _archive(tmp_path)
     data = tmp_path / "data"
 
@@ -64,6 +65,7 @@ def box(tmp_path):
             "MARLOW_STT_MODEL": MODEL,
             "MARLOW_STT_MODEL_URL": archive.as_uri(),
             "MARLOW_STT_MODEL_SHA256": sha,
+            "FAKE_CALLS_LOG": str(log),
             **env,
         }
         return subprocess.run(

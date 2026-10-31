@@ -14,6 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import write_executable
+
 DEPLOY = Path(__file__).resolve().parent.parent / "deploy"
 SEED = DEPLOY / "seed-identity.sh"
 
@@ -1009,8 +1011,7 @@ BUILD_WEB = DEPLOY / "build-web.sh"
 
 
 def _fake_tool(path: Path, body: str) -> None:
-    path.write_text("#!/usr/bin/env bash\n" + body)
-    path.chmod(0o755)
+    write_executable(path, "#!/usr/bin/env bash\n" + body)
 
 
 @pytest.fixture
@@ -1258,8 +1259,7 @@ def _install_with_box_zone(zone: str, tmp_path, *args: str):
     """install.sh with no --timezone, on a box whose timedatectl says `zone`."""
     fake = tmp_path / "bin"
     fake.mkdir()
-    (fake / "timedatectl").write_text(f"#!/bin/sh\necho {zone}\n")
-    (fake / "timedatectl").chmod(0o755)
+    write_executable(fake / "timedatectl", f"#!/bin/sh\necho {zone}\n")
     env = {**os.environ, "PATH": f"{fake}:{os.environ['PATH']}"}
     return subprocess.run(["bash", str(INSTALL), "--user-name", "Priya", "--email", OK_EMAIL, *args],
                           capture_output=True, text=True, env=env)

@@ -8,6 +8,7 @@ import textwrap
 
 from fastapi.testclient import TestClient
 
+from conftest import write_executable
 import server.app as app_module
 from server.app import internal_app, public_app
 from server.invoke import run_claude
@@ -116,8 +117,7 @@ def test_consecutive_spoken_messages_still_coalesce(monkeypatch):
 
 def _echo_bin(tmp_path, monkeypatch):
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -129,9 +129,7 @@ def _echo_bin(tmp_path, monkeypatch):
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     _with_claude_bin(monkeypatch, str(fake_bin))
 
 

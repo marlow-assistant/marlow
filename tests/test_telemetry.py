@@ -16,6 +16,7 @@ import textwrap
 
 import pytest
 
+from conftest import write_executable
 import server.config
 import server.telemetry as telemetry_module
 from server.config import settings as real_settings
@@ -90,8 +91,7 @@ def test_telemetry_line_contains_no_prompt_or_result_text(tmp_path, monkeypatch,
     memory_dir.mkdir()
 
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             f"""\
             #!/usr/bin/env python3
             import json
@@ -106,9 +106,7 @@ def test_telemetry_line_contains_no_prompt_or_result_text(tmp_path, monkeypatch,
                            "cache_creation_input_tokens": 0}},
             }}))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
 
     patched = dataclasses.replace(
         real_settings,
@@ -153,8 +151,7 @@ def test_identity_fingerprint_is_a_length_and_a_short_digest():
 
 def _fake_claude_returning(tmp_path, monkeypatch, envelope_extra: str):
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             f"""\
             #!/usr/bin/env python3
             import json
@@ -167,9 +164,7 @@ def _fake_claude_returning(tmp_path, monkeypatch, envelope_extra: str):
                 {envelope_extra}
             }}))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     monkeypatch.setattr(
         "server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(fake_bin))
     )
@@ -263,8 +258,7 @@ def test_malformed_usage_is_tolerated(tmp_path, monkeypatch, telemetry_file):
 
 def test_nonzero_exit_still_records_a_line(tmp_path, monkeypatch, telemetry_file):
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text("#!/usr/bin/env python3\nimport sys\nsys.exit(3)\n")
-    fake_bin.chmod(0o755)
+    write_executable(fake_bin, "#!/usr/bin/env python3\nimport sys\nsys.exit(3)\n")
     monkeypatch.setattr(
         "server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(fake_bin))
     )
@@ -417,8 +411,7 @@ def test_timeout_still_advances_the_gap_clock(tmp_path, monkeypatch, telemetry_f
     a 20-minute timeout turned a prompt follow-up into an apparent 20-minute
     idle period, corrupting the one measurement this file exists to take."""
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text("#!/usr/bin/env python3\nimport time\ntime.sleep(30)\n")
-    fake_bin.chmod(0o755)
+    write_executable(fake_bin, "#!/usr/bin/env python3\nimport time\ntime.sleep(30)\n")
     monkeypatch.setattr(
         "server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(fake_bin))
     )
@@ -442,8 +435,7 @@ def test_timeout_still_advances_the_gap_clock(tmp_path, monkeypatch, telemetry_f
 
 def test_unparseable_stdout_still_records(tmp_path, monkeypatch, telemetry_file):
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text("#!/usr/bin/env python3\nprint('not json at all')\n")
-    fake_bin.chmod(0o755)
+    write_executable(fake_bin, "#!/usr/bin/env python3\nprint('not json at all')\n")
     monkeypatch.setattr(
         "server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(fake_bin))
     )
@@ -500,8 +492,7 @@ def test_run_claude_records_the_streams_context_tokens(tmp_path, monkeypatch, te
     import logging
 
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json
@@ -512,9 +503,7 @@ def test_run_claude_records_the_streams_context_tokens(tmp_path, monkeypatch, te
                 "result": "ok", "session_id": "s1", "permission_denials": [],
                 "usage": {"input_tokens": 5, "cache_read_input_tokens": 3000}}))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     monkeypatch.setattr(
         "server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(fake_bin))
     )

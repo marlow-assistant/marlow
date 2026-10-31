@@ -25,6 +25,7 @@ import time
 
 import pytest
 
+from conftest import write_executable
 from server.config import settings as real_settings
 from server.invoke import ActivityEvent, InvokeError, _final_envelope, run_claude
 
@@ -37,8 +38,7 @@ def _with_claude_bin(monkeypatch, path: str) -> None:
 
 def _fake_cli(tmp_path, body: str, name: str = "claude"):
     path = tmp_path / name
-    path.write_text("#!/usr/bin/env python3\n" + textwrap.dedent(body))
-    path.chmod(0o755)
+    write_executable(path, "#!/usr/bin/env python3\n" + textwrap.dedent(body))
     return path
 
 

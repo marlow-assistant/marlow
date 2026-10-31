@@ -9,14 +9,15 @@ from pathlib import Path
 
 import pytest
 
+from conftest import write_executable
+
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "backup-identity-bundle-scheduled.sh"
 
 pytestmark = pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
 
 
 def _stub(path: Path, body: str) -> Path:
-    path.write_text("#!/usr/bin/env bash\n" + body)
-    path.chmod(0o755)
+    write_executable(path, "#!/usr/bin/env bash\n" + body)
     return path
 
 

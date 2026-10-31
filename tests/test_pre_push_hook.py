@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import UnsafeRepoTarget, safe_git_init
+from conftest import UnsafeRepoTarget, safe_git_init, write_executable
 
 HOOK = Path(__file__).resolve().parent.parent / ".githooks" / "pre-push"
 ZERO = "0" * 40
@@ -215,8 +215,7 @@ def test_venv_pytest_is_preferred(resolve_fn, tmp_path):
     """A local .venv wins over whatever happens to be on PATH."""
     venv_bin = tmp_path / ".venv" / "bin"
     venv_bin.mkdir(parents=True)
-    (venv_bin / "pytest").write_text("#!/bin/sh\n")
-    (venv_bin / "pytest").chmod(0o755)
+    write_executable(venv_bin / "pytest", "#!/bin/sh\n")
     r = _resolve(resolve_fn, tmp_path, "/usr/bin:/bin")
     assert r.returncode == 0
     assert "resolved:.venv/bin/pytest" in r.stdout
@@ -226,8 +225,7 @@ def test_path_pytest_is_the_fallback(resolve_fn, tmp_path):
     """No .venv but pytest on PATH is still a real runner — allow it."""
     fake_bin = tmp_path / "fakebin"
     fake_bin.mkdir()
-    (fake_bin / "pytest").write_text("#!/bin/sh\n")
-    (fake_bin / "pytest").chmod(0o755)
+    write_executable(fake_bin / "pytest", "#!/bin/sh\n")
     r = _resolve(resolve_fn, tmp_path, f"{fake_bin}:/usr/bin:/bin")
     assert r.returncode == 0
     assert "resolved:pytest" in r.stdout
@@ -263,8 +261,7 @@ def test_the_hook_scrubs_gits_exported_environment(tmp_path_factory, tmp_path):
 
     fake_bin = tmp_path / "fakebin"
     fake_bin.mkdir()
-    (fake_bin / "pytest").write_text("#!/bin/sh\n")
-    (fake_bin / "pytest").chmod(0o755)
+    write_executable(fake_bin / "pytest", "#!/bin/sh\n")
 
     r = subprocess.run(
         [shutil.which("bash"), str(script)],
@@ -400,8 +397,7 @@ def _run_hook(repo, tmp_path, stdin: str, fake_pytest: str | None = None):
     fake_bin = tmp_path / "fakebin"
     fake_bin.mkdir()
     marker = tmp_path / "pytest-ran"
-    (fake_bin / "pytest").write_text("#!/bin/sh\n" + (fake_pytest or f"touch {marker}\n"))
-    (fake_bin / "pytest").chmod(0o755)
+    write_executable(fake_bin / "pytest", "#!/bin/sh\n" + (fake_pytest or f"touch {marker}\n"))
     git_dir = str(Path(shutil.which("git")).parent)
     r = subprocess.run(
         [shutil.which("bash"), str(HOOK), "origin", "unused-url"],

@@ -17,6 +17,7 @@ import textwrap
 
 import pytest
 
+from conftest import write_executable
 from server import idle_compaction as ic
 from server import transcript
 from server.config import settings as real_settings
@@ -471,8 +472,7 @@ def test_cron_turns_do_not_reset_the_idle_clock(monkeypatch):
 
 def test_raw_prompt_bypasses_turn_context_and_attachment_prepending(tmp_path, monkeypatch):
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import json, sys
@@ -484,9 +484,7 @@ def test_raw_prompt_bypasses_turn_context_and_attachment_prepending(tmp_path, mo
                 "permission_denials": [],
             }))
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     monkeypatch.setattr("server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(fake_bin)))
 
     result = asyncio.run(
@@ -640,17 +638,14 @@ def test_drain_reports_a_failed_compaction_to_the_watcher(tmp_path, monkeypatch)
     monkeypatch.setattr("server.queue.idle_compaction_watcher", fresh)
 
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import sys
             sys.stderr.write("boom\\n")
             sys.exit(1)
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     monkeypatch.setattr("server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(fake_bin)))
 
     async def _body():
@@ -679,17 +674,14 @@ def test_drain_reports_an_errored_attended_turn_to_the_watcher(tmp_path, monkeyp
     monkeypatch.setattr("server.queue.idle_compaction_watcher", fresh)
 
     fake_bin = tmp_path / "claude"
-    fake_bin.write_text(
-        textwrap.dedent(
+    write_executable(fake_bin, textwrap.dedent(
             """\
             #!/usr/bin/env python3
             import sys
             sys.stderr.write("boom\\n")
             sys.exit(1)
             """
-        )
-    )
-    fake_bin.chmod(0o755)
+        ))
     monkeypatch.setattr("server.invoke.settings", dataclasses.replace(real_settings, claude_bin=str(fake_bin)))
 
     async def _body():

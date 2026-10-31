@@ -28,14 +28,14 @@ concurrency:
 
 jobs:
   ios-test:
-    # NOTE (confirmed on the first real run, 2026-07-31): this image's default
-    # toolchain is **Xcode 16.4 / iOS 18.5 SDK**, while the dev Mac is on Xcode
-    # 26.6. Deliberately left unpinned — the drift means CI enforces a *floor*
-    # (the suite must keep building on the older toolchain), which is useful,
-    # and pinning an exact Xcode breaks the day the runner image drops it. The
-    # cost is that a 26-only language or SDK feature would pass locally and
-    # fail here; if that ever bites, `sudo xcode-select -s` to a specific
-    # /Applications/Xcode_*.app is the fix, not a version bump of the runner.
+    # This image's *default* toolchain is Xcode 16.4 / iOS 18.5 SDK (confirmed
+    # 2026-07-31), while the dev Mac is on Xcode 26. The drift was left alone
+    # as a useful floor until it bit: the app uses SpeechTranscriber, which
+    # exists only in the iOS 26 SDK, so every run from 2026-10-28 on failed to
+    # compile. `@available(iOS 26, *)` guards the runtime, not the SDK. The
+    # "Select Xcode 26" step below picks the newest Xcode 26 the image has, by
+    # glob rather than an exact path, so an image update that swaps 26.x
+    # releases doesn't break the job.
     runs-on: macos-15
     # 10, not the default-ish 30: observed runs are ~2.5 min wall (of which
     # ~2 min is the cold Swift build; the tests themselves are ~0.2s), so this
@@ -51,6 +51,20 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+
+      # Before the simulator pick: simctl answers for the selected Xcode, so
+      # the picker sees the iOS 26 runtimes only once this has run.
+      - name: Select Xcode 26
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -n 1)
+          if [ -z "$XCODE" ]; then
+            echo "no Xcode 26 on this runner image; installed:" >&2
+            ls -d /Applications/Xcode*.app >&2
+            exit 1
+          fi
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          echo "Xcode: \`$XCODE\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install xcodegen
         run: brew install xcodegen
@@ -127,4 +141,10 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM=""
+            DEVELOPMENT_TEAM="" \
+            AppIdentifierPrefix="CITEAM0000."
+        # AppIdentifierPrefix: an unsigned build has no team, so the setting
+        # is empty and NotificationSharedTests' keychain-group test fails. The
+        # repo carries no team ID (2026-10-26), so CI supplies an obvious
+        # placeholder of the right shape; the test still checks that the Swift
+        # string is built from the setting, which is what it guards.

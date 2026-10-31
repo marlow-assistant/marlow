@@ -78,25 +78,27 @@ before that, say the local suite passed and give the count.
   bypassed and resented. If the suite ever creeps toward minutes, split it: fast
   tests gate, slow ones run async.
 
-## Why there's no server-side branch protection
+## Server-side protection: two rulesets on `main` (2026-10-31)
 
-GitHub branch protection *and* rulesets both require **GitHub Pro** for a
-**private** repo — both APIs return 403 on the free plan (confirmed 2026-07-19).
-So there is no server-enforced merge gate. Two ways to get one if ever wanted:
-- **GitHub Pro** (~$4/mo) — enables protection/rulesets on private repos.
-- **Make the repo public** — protection is free for public repos.
+Skipped while the repo was private, where rulesets need GitHub Pro. Public made
+them free, and other writers became possible, so `main` now has two (repo →
+Settings → Rules → Rulesets):
+- **"main: no force push or deletion"** — no bypass for anyone, admins
+  included. History on `main` is append-only.
+- **"main: PR and passing test"** — a change reaches `main` through a PR whose
+  `test` check passed (GitHub Actions' check, not the `ci` workflow name).
+  `ios-test` is deliberately not required: it is path-filtered, so a
+  server-only PR would wait forever on it. Repo admins bypass this one, which
+  is how a docs-only change Mike OKs still goes straight to `main`.
 
-**Decision: skip Pro for now.** At n=1 the mechanical wall isn't worth it — the
-local hook below covers ~90% of the same risk for free. Revisit Pro only when a
-second, less-disciplined writer joins (that's when a gate that binds *them*, not
-just habit, earns its keep).
+The bypass belongs to the account, not the person: a session pushing with
+Mike's credentials can bypass it too. What holds a session to the PR flow is
+CLAUDE.md's ask-before-`main` rule, not GitHub.
 
 ## The local gate: `.githooks/pre-push`
 
-Free stand-in for branch protection. Runs `pytest` before any push and **blocks a
-red push from leaving the machine** — which, for a single-writer repo, is almost
-the whole failure mode protection would catch. It binds whoever pushes, Claude
-included.
+Runs `pytest` before any push and **blocks a red push from leaving the
+machine**, ahead of any CI run. It binds whoever pushes, Claude included.
 
 - Enable once per clone: `git config core.hooksPath .githooks`
 - Bypass a single push (mean it): `git push --no-verify`

@@ -3,8 +3,8 @@ name: ios
 # Deliberately a separate workflow from ci.yml, not a second job in it:
 # GitHub's path filters are workflow-level, so this is the only way to keep the
 # ~25s Python gate untouched on server-only changes while still gating ios/.
-# A macOS runner is minutes-slow and ~10x the Actions minutes of the Linux one,
-# so it only ever fires when ios/ (or this file) actually changed.
+# A macOS run takes ~8 min against the gate's seconds, so it only ever fires
+# when ios/ (or this file) actually changed.
 #
 # push, not pull_request: pull_request's path filter matches against the
 # PR's *entire* diff (base...head) on every synchronize, so once ios/**
@@ -37,18 +37,30 @@ jobs:
     # glob rather than an exact path, so an image update that swaps 26.x
     # releases doesn't break the job.
     runs-on: macos-15
-    # 10, not the default-ish 30: observed runs are ~2.5 min wall (of which
-    # ~2 min is the cold Swift build; the tests themselves are ~0.2s), so this
-    # is ~4x headroom. macOS bills at 10x, so the cap is what bounds a runaway
-    # run to ~100 quota-minutes instead of ~300 — and the quota is shared with
-    # the cheap Python gate that actually protects main, so a single hung macOS
-    # run can take that down with it.
+    # Observed 2026-10-31 on Xcode 26.3: ~7m40 job, of which ~3 min is the
+    # cold build, ~2m40 a stall before the app first launches on the
+    # simulator, and ~54s the suite (6.5s locally). 15 leaves room for runner
+    # variance, which is large (the package fetch alone ran 40s to 90s).
+    # Minutes are free on a public repo, so the cap guards a hung run rather
+    # than a bill.
+    #
+    # Pre-booting the simulator during the build doesn't help (tried
+    # 2026-10-31): `bootstatus` then returns in seconds, but the stall isn't
+    # the boot. It is a one-off cost the first time xcodebuild uses the
+    # device by id, and it moved into the build or stayed before the launch.
+    # Building for the generic simulator instead also compiles x86_64,
+    # doubling the build. Both runs were slower than this one step.
+    #
+    # Xcode 26's compilation cache (COMPILATION_CACHE_ENABLE_CACHING, kept in
+    # actions/cache) was also tried: 398 hits on a warm run, but the build
+    # only went 1m40 to 1m17, inside the stall's own 73s-144s swing. Not
+    # worth the 120 MB cache entry per commit.
     #
     # Treat hitting this as a *signal*, not just a cost control. The suite
     # cannot hang: awaitPendingWork(timeout:) and Gate.waitOpened(timeout:)
     # both bail at 10s and fail loudly. So a timeout here means the build,
     # simulator boot, or the runner itself — not a test.
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -68,6 +80,15 @@ jobs:
 
       - name: Install xcodegen
         run: brew install xcodegen
+
+      # The FluidAudio fetch, 30s to 90s cold (2026-10-31). Keyed on the pin
+      # (project.yml) and the lockfile, both hashed before xcodegen rewrites
+      # the project, so a version bump always fetches fresh.
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/Marlow/project.yml', 'ios/Marlow/Marlow.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
 
       # Regenerate rather than trusting the committed .xcodeproj: project.yml is
       # the source of truth (see docs/tasks/ios-minimal-client.md), and building
@@ -138,6 +159,7 @@ jobs:
             -scheme Marlow \
             -sdk iphonesimulator \
             -destination "id=${{ steps.sim.outputs.udid }}" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/SourcePackages" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \

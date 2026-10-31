@@ -4,11 +4,10 @@
 
 In order. Each line is one task doc, and its Status line is the truth.
 
-1. **Item 5:** Mike runs the installer hands-off on a fresh Multipass VM,
-   from `main` over HTTPS, which is how a friend will install. The repo is
-   public (2026-10-28), so no token or deploy key is involved.
+1. ✅ **Item 5:** Mike's fresh install from the public repo on a Multipass
+   VM worked (2026-10-31).
 2. Invite the first one or two friends. iPhone friends use the home-screen
-   web app, so they need nothing beyond 1 either.
+   web app, so they need nothing more.
 
 **Status:** installer merged (2026-10-02), first-run onboarding merged (2026-10-02).
 The Android user's install (2026-10-05) went OK by Mike's account, so it
@@ -84,8 +83,8 @@ Still to do:
    with a device name the browser seemed to have to match. The Android user
    installed (2026-10-05) and it went OK, though how hands-off it was went
    unrecorded.
-   Not yet: Mike's hands-off run from `--ref main` on a fresh VM, which is
-   the gate before adding more friends.
+   Done 2026-10-31: Mike's fresh install from the public repo on the VM
+   worked, the gate before adding more friends.
 6. **Repo access.** Done: the repo went public (2026-10-28), so a box clones
    it over HTTPS with no token or deploy key.
 7. **TestFlight.** Parked (2026-10-25). iPhone friends use the web app

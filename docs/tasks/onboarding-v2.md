@@ -1,8 +1,11 @@
 # Onboarding v2: a shorter, structured first run
 
 **Status:** wording pass merged 2026-10-18; harness phase 1 (chunks 1–5
-below, server, identity and the activity label on both clients) built
-2026-10-30 on a branch, not merged, and not yet seen in a real first run. The pass, ahead of the next user onboarding: new greeting; one
+below, server, identity and the activity label on both clients) merged
+2026-10-31, after four first runs on the trial VM. The last was good; the
+earlier ones led to asking before looking at mail and calendar, one question
+per message, one step per reply, and a tour with one thing to try. Not yet
+seen with a real new user. The pass, ahead of the next user onboarding: new greeting; one
 reminder, then the Schedule, then stop; reminder vs note explained; "things to
 try" as its own early message; the briefing and week-ahead asked about, the
 inbox check told not asked and shown as "Check-in" on both clients; USER.md and

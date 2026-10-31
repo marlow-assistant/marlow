@@ -43,8 +43,9 @@ you finish something, mark it done there as well as here.
 - **`friends-alpha.md`**: Marlow for 3–5 friends, each on their own
   subscription. The installer merged after a fresh Ubuntu dry run;
   first-run onboarding (its item 9) merged after three VM runs.
-  The Android user's install went OK. Next, before inviting anyone else: Mike
-  runs it hands-off on a fresh Multipass VM from `--ref main`.
+  The Android user's install went OK, and Mike's fresh install from the
+  public repo on the trial VM worked (done 2026-10-31). Next: invite the
+  first friends.
   **Decided 2026-10-25: iPhone friends use the home-screen web app**
   (Safari push and the unread mark work). TestFlight and a push
   relay are parked. The ordered list of what comes before the next invite
@@ -106,14 +107,15 @@ you finish something, mark it done there as well as here.
   clients (2026-10-23), after the morning-after checks all passed; on
   both of Mike's box's instances. Step 4, the seeded `morning.md`, not started.
 - **`onboarding-v2.md`** (2026-10-17): wording pass merged; harness
-  phase 1 built 2026-10-30 on a branch, unmerged, no real run yet. The second user's first run: the script lost its place after a
+  phase 1 merged 2026-10-31 after four runs on the trial VM, the last one
+  good. The second user's first run: the script lost its place after a
   time-zone detour, and it set things up before explaining them. The harness:
   the server holds the step and adds it to every turn, the model calls an
   onboarding MCP tool when a step ends (its result is the next step), the
   server checks disk where a step leaves a result, and a turn cap moves on.
   The What's new card now waits on the server's onboarding record, not
-  a search of USER.md. **Next:** a fresh install on the trial VM, to see the
-  model follow the step line and call the tool. Drive is parked
+  a search of USER.md. One step per reply: the tool refuses a second
+  `step_done` in the same turn. **Next:** watch the next real first run. Drive is parked
   upstream: probed on both accounts, the connector is Connected but gives
   `claude -p` no tools (Docs, Sheets and Slides do). Re-check after a CLI
   update with `scripts/probe-drive-connector.sh`.
@@ -297,6 +299,9 @@ The numbers are cited elsewhere, so don't renumber them.
    first, because the ordering is load-bearing. Hooks in inline `--settings`
    run even when the invocation then fails.
 7. ✅ Closed: the PreToolUse hook is live (`deploy/marlow-settings.json`).
+8. **Re-pairing the iPhone app to a different box keeps the old box's
+   conversation** and skips onboarding (`repair-against-a-new-box.md`,
+   2026-10-30). Not started.
 
 ## Decided — do not re-open
 

@@ -61,7 +61,7 @@ push_base() {
 
 # --- is this push documentation-only? ----------------------------------------
 #
-# A prose-only push cannot turn the suite red, and this suite takes ~20s, so
+# A prose-only push cannot turn the suite red, and this suite takes ~50s, so
 # paying it to learn nothing is the common case worth skipping.
 #
 # The allowlist is deliberately NARROW, and "any *.md" would have been wrong:
@@ -109,7 +109,7 @@ docs_only_push() {
 # --- does this push touch the web client? -------------------------------------
 #
 # The web client's unit tests (Vitest, in web/) run only when the push changes
-# something under web/: the server suite stays the ~20s it was for a server
+# something under web/: the server suite stays the ~50s it is for a server
 # change. Playwright does not run here (it needs a browser and the dev server);
 # it is run by hand before review.
 #

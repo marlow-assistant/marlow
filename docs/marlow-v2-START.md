@@ -199,7 +199,7 @@ Their task docs hold the detail.
 
 ## The two boxes
 
-- **Dev:** this Mac, repo at `/Users/mike/nemoclaw/marlow-server`. Test with
+- **Dev:** this Mac, repo at `/Users/mike/code/marlow`. Test with
   `.venv/bin/pytest -q -n 4` (Python 3.14) and push from here.
 - **Deploy:** `marlow.<tailnet>.ts.net`. Always use that tailnet name,
   because the TLS cert is bound to it. Marlow runs under user `marlow`.

@@ -394,11 +394,13 @@ def test_empty_stdin_is_not_a_deletion_push(deletions_fn, repo):
 # and no npm at all. This is the check that the early exits sit where they
 # should: before the suite, and before the web half's runner checks.
 
-def _run_hook(repo, tmp_path, stdin: str):
+def _run_hook(repo, tmp_path, stdin: str, fake_pytest: str | None = None):
+    """`fake_pytest` is the fake runner's shell body; by default it only
+    leaves the marker."""
     fake_bin = tmp_path / "fakebin"
     fake_bin.mkdir()
     marker = tmp_path / "pytest-ran"
-    (fake_bin / "pytest").write_text(f"#!/bin/sh\ntouch {marker}\n")
+    (fake_bin / "pytest").write_text("#!/bin/sh\n" + (fake_pytest or f"touch {marker}\n"))
     (fake_bin / "pytest").chmod(0o755)
     git_dir = str(Path(shutil.which("git")).parent)
     r = subprocess.run(
@@ -435,22 +437,14 @@ def test_hook_new_server_branch_needs_no_web_runner(repo, tmp_path):
 # slower, but still the whole gate.
 
 def _run_hook_with_runner(repo, tmp_path, *, has_xdist: bool):
-    fake_bin = tmp_path / "fakebin"
-    fake_bin.mkdir()
     calls = tmp_path / "pytest-calls"
     help_text = "  -n numprocesses, --numprocesses=numprocesses" if has_xdist else "  -q, --quiet"
-    (fake_bin / "pytest").write_text(
-        "#!/bin/sh\n"
-        f'echo "$*" >> {calls}\n'
-        'case " $* " in *" --help "*) echo "' + help_text + '" ;; esac\n'
-    )
-    (fake_bin / "pytest").chmod(0o755)
-    git_dir = str(Path(shutil.which("git")).parent)
-    r = subprocess.run(
-        [shutil.which("bash"), str(HOOK), "origin", "unused-url"],
-        cwd=repo["dir"], input=f"refs/heads/topic {repo['code']} refs/heads/topic {ZERO}\n",
-        capture_output=True, text=True,
-        env={"PATH": f"{fake_bin}:{git_dir}:/usr/bin:/bin", "HOME": str(tmp_path)},
+    r, _ = _run_hook(
+        repo, tmp_path, f"refs/heads/topic {repo['code']} refs/heads/topic {ZERO}\n",
+        fake_pytest=(
+            f'echo "$*" >> {calls}\n'
+            'case " $* " in *" --help "*) echo "' + help_text + '" ;; esac\n'
+        ),
     )
     suite_runs = [c for c in calls.read_text().splitlines() if "--help" not in c.split()]
     return r, suite_runs

@@ -423,3 +423,50 @@ def test_hook_new_server_branch_needs_no_web_runner(repo, tmp_path):
     r, ran = _run_hook(repo, tmp_path, f"refs/heads/topic {repo['code']} refs/heads/topic {ZERO}\n")
     assert r.returncode == 0, r.stdout + r.stderr
     assert ran
+
+
+# --- parallel when it can be ---------------------------------------------------
+#
+# The suite takes ~2 minutes serially on a dev Mac and the hook runs it on every
+# code push, so the hook hands it to pytest-xdist. A venv made before xdist was
+# a dev dependency doesn't have it, and `-n` is then a usage error -- which
+# would block every push from that clone and point straight at --no-verify. So
+# the hook asks the runner first, and without xdist runs the suite serially:
+# slower, but still the whole gate.
+
+def _run_hook_with_runner(repo, tmp_path, *, has_xdist: bool):
+    fake_bin = tmp_path / "fakebin"
+    fake_bin.mkdir()
+    calls = tmp_path / "pytest-calls"
+    help_text = "  -n numprocesses, --numprocesses=numprocesses" if has_xdist else "  -q, --quiet"
+    (fake_bin / "pytest").write_text(
+        "#!/bin/sh\n"
+        f'echo "$*" >> {calls}\n'
+        'case " $* " in *" --help "*) echo "' + help_text + '" ;; esac\n'
+    )
+    (fake_bin / "pytest").chmod(0o755)
+    git_dir = str(Path(shutil.which("git")).parent)
+    r = subprocess.run(
+        [shutil.which("bash"), str(HOOK), "origin", "unused-url"],
+        cwd=repo["dir"], input=f"refs/heads/topic {repo['code']} refs/heads/topic {ZERO}\n",
+        capture_output=True, text=True,
+        env={"PATH": f"{fake_bin}:{git_dir}:/usr/bin:/bin", "HOME": str(tmp_path)},
+    )
+    suite_runs = [c for c in calls.read_text().splitlines() if "--help" not in c.split()]
+    return r, suite_runs
+
+
+def test_hook_runs_the_suite_in_parallel_when_xdist_is_there(repo, tmp_path):
+    r, runs = _run_hook_with_runner(repo, tmp_path, has_xdist=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert len(runs) == 1, runs
+    assert "-n" in runs[0].split(), runs
+
+
+def test_hook_falls_back_to_serial_without_xdist(repo, tmp_path):
+    """No xdist: the suite still runs, serially, and the hook says how to fix it."""
+    r, runs = _run_hook_with_runner(repo, tmp_path, has_xdist=False)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert len(runs) == 1, runs
+    assert "-n" not in runs[0].split(), runs
+    assert "pytest-xdist" in r.stdout + r.stderr

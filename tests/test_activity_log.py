@@ -53,6 +53,10 @@ def test_a_file_outside_the_tree_is_recorded_absolute():
         f"{WD}/.git/config",
         ".env",  # relative, resolved against the working dir
     ],
+    # IDs without the sandbox path: conftest's mkdtemp names it per process,
+    # so under xdist every worker collected differently named tests and the
+    # run refused to start (2026-10-31).
+    ids=lambda p: p.replace(WD, "<wd>"),
 )
 def test_secret_and_agent_config_paths_record_no_target(path):
     """The name still shows ("Read"); where it read does not."""

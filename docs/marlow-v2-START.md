@@ -70,6 +70,9 @@ you finish something, mark it done there as well as here.
   spotlight card, quoted Do it bubble; the lightbulb replaced the model chip).
   The nightly job ships in the template. Next: watch the Android user's first run, and
   the first spotlight on any box.
+- **`todos-and-reminders.md`** (2026-11-02): Part 1, fired `notify` text
+  reaching the model, verified on Mike's box 2026-11-02. Part 2, a to-do store
+  reminders hang off, waits on Taylor's and the Android user's input.
 - **`whats-new.md`** (2026-10-23): the "Marlow was updated" card and
   Settings' What's new, from a repo-root `changes.json`; built on both
   clients, merged 2026-10-23; seen on Mike's iPhone, Android not yet. Next

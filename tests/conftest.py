@@ -317,7 +317,7 @@ def _isolated_transcript():
     caused it."""
     import shutil
 
-    from server import transcript
+    from server import transcript, turn_context
 
     def _wipe() -> None:
         # The module remembers which db paths it has set up; deleting the file
@@ -326,6 +326,9 @@ def _isolated_transcript():
         for suffix in ("", "-wal", "-shm"):
             Path(f"{transcript.db_path()}{suffix}").unlink(missing_ok=True)
         shutil.rmtree(transcript.attachments_dir(), ignore_errors=True)
+        # A fresh db restarts seq at 1, so a cursor left by the last test
+        # would hide this test's first notices from the turn context.
+        turn_context._reset_notices_for_tests()
 
     _wipe()
     yield

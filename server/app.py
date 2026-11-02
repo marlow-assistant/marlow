@@ -365,8 +365,9 @@ def _decode_images(body: MessageRequest) -> list[bytes]:
 
 # The first thing a new box ever says. The user would otherwise open the app to
 # an empty chat with nothing to answer (friends-alpha dry run, 2026-10-02). It
-# is a canned system turn, not a model call, so the model never saw it, and the
-# starter identity's FIRST-RUN.md tells it the greeting went out. Keep the two
+# is a canned system turn, not a model call, so the model never ran for it (the
+# first turn's context quotes it, as it does every notice: server/turn_context.py),
+# and the starter identity's FIRST-RUN.md tells it the greeting went out. Keep the two
 # in step: FIRST-RUN.md describes what this asks, without quoting it. No name:
 # the one typed at install may be the wrong one, which is half of why we ask.
 # One question only: the first version also asked what they wanted help with,

@@ -36,8 +36,17 @@ def _entry(**overrides) -> dict:
     return value
 
 
+# The system zone for tests that assert a fixed hour. render converts with
+# TODAY's offsets (its reference date is today), so a pair of zones on
+# different DST rules gives a different crontab in summer and winter. Alberta
+# stopped changing its clocks after 2026-11-01 (tzdata 2026e) and these tests,
+# written against Edmonton, all failed the next day. Denver keeps the same
+# rules as Halifax and St John's, so their gaps are the same all year.
+_BOX_LIKE = "America/Denver"
+
+
 def test_load_and_render_byte_exact_crontab(tmp_path, monkeypatch, system_zone):
-    system_zone("America/Edmonton")
+    system_zone(_BOX_LIKE)
     monkeypatch.setattr(
         schedules_module,
         "settings",
@@ -80,8 +89,8 @@ def test_load_and_render_byte_exact_crontab(tmp_path, monkeypatch, system_zone):
         "MARLOW_INTERNAL_SOCKET=/home/marlow/.marlow/run/internal.sock\n"
         "MARLOW_CRON_ENTRYPOINT=/opt/marlow/cron/entrypoint.py\n"
         "\n"
-        # Halifax is three hours ahead of Edmonton, and cron is told the
-        # Edmonton time. No CRON_TZ line: this cron ignores it.
+        # Halifax is three hours ahead of the box, and cron is told the
+        # box's time. No CRON_TZ line: this cron ignores it.
         "45 4 * * *  /usr/bin/python3 /opt/marlow/cron/entrypoint.py morning-scan\n"
         "0 11 28 8 *  /usr/bin/python3 /opt/marlow/cron/entrypoint.py --entry costco\n"
         "0 18 * * 0  /usr/bin/python3 /opt/marlow/cron/entrypoint.py --entry rebates\n"
@@ -439,7 +448,7 @@ def test_a_missing_store_is_quiet_not_a_rejection(tmp_path, caplog) -> None:
 
 def test_a_fractional_offset_moves_the_minute_field_too(tmp_path, system_zone):
     """Newfoundland is the reason this cannot be an hour shift."""
-    system_zone("America/Edmonton")
+    system_zone(_BOX_LIKE)
     parsed = load(
         _write_store(
             tmp_path,
@@ -453,7 +462,7 @@ def test_a_fractional_offset_moves_the_minute_field_too(tmp_path, system_zone):
 
 def test_one_expression_can_need_several_local_lines(tmp_path, system_zone):
     """A half-hour offset splits one store hour across two local ones."""
-    system_zone("America/Edmonton")
+    system_zone(_BOX_LIKE)
     parsed = load(
         _write_store(
             tmp_path,
@@ -510,7 +519,7 @@ def test_a_day_of_month_entry_that_crosses_midnight_is_rejected_by_load(tmp_path
 
 def test_a_near_midnight_monthly_entry_is_fine_when_it_does_not_cross(tmp_path, system_zone):
     """The refusal is about crossing a day boundary, not about day-of-month."""
-    system_zone("America/Edmonton")
+    system_zone(_BOX_LIKE)
     parsed = load(
         _write_store(
             tmp_path,
@@ -715,10 +724,10 @@ def test_plumbing_runs_after_the_day_ends_ideas_first(day_end, expected):
 
 
 def test_plumbing_renders_in_the_stores_zone_beside_the_entries(tmp_path, system_zone):
-    system_zone("America/Edmonton")
+    system_zone(_BOX_LIKE)
     path = _write_store(tmp_path, [{"id": "morning", "cron": "0 8 * * *", "prompt": "brief"}])
     rendered = render(load(path), schedules_module.plumbing_crons("23:00"))
-    # Halifax is three hours ahead of Edmonton.
+    # Halifax is three hours ahead of the box.
     assert _job_lines(rendered)[:2] == [
         f"30 21 * * *  {schedules_module._command()} ideas",
         f"0 22 * * *  {schedules_module._command()} consolidate",

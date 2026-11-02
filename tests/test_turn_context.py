@@ -306,6 +306,13 @@ def store_zone(monkeypatch, tmp_path):
     return _set
 
 
+# The offset tests pin a summer moment. Offsets move with the date and with
+# tzdata: Alberta stopped changing its clocks after 2026-11-01 (tzdata 2026e),
+# so from that day these three tests, run against "now", read Edmonton as
+# UTC-6 in winter and all failed. July is the same in every tzdata version.
+_SUMMER = datetime(2026, 7, 15, 18, 0, tzinfo=dt_timezone.utc)
+
+
 def test_a_stale_store_is_named_with_the_size_and_direction_of_the_drift(
     phone_in, store_zone
 ):
@@ -313,7 +320,7 @@ def test_a_stale_store_is_named_with_the_size_and_direction_of_the_drift(
     says Alberta, and a job written as 07:45 fires at 11:15 his time."""
     phone_in("America/St_Johns")
     store_zone("America/Edmonton")
-    out = build_turn_context(resume=False, source="chat")
+    out = build_turn_context(resume=False, source="chat", now=_SUMMER)
     assert "still says America/Edmonton" in out
     assert "while the user is in America/St_Johns" in out
     assert "firing 3 hours 30 minutes later than the time written against it" in out
@@ -337,7 +344,7 @@ def test_the_drift_notice_names_no_individual_jobs(phone_in, store_zone):
 def test_drift_the_other_way_says_earlier(phone_in, store_zone):
     phone_in("America/Edmonton")
     store_zone("America/St_Johns")
-    assert "firing 3 hours 30 minutes earlier" in build_turn_context(resume=False)
+    assert "firing 3 hours 30 minutes earlier" in build_turn_context(resume=False, now=_SUMMER)
 
 
 def test_the_drift_notice_carries_a_cost_a_repair_and_the_wrong_repair(
@@ -404,10 +411,10 @@ def test_an_unknown_source_is_treated_as_unattended(phone_in, store_zone):
 
 def test_equal_offsets_say_nothing_even_when_the_names_differ(phone_in, store_zone):
     """A nag with no correction to make is worse than silence. Denver and
-    Edmonton are different strings and identical schedules."""
+    Edmonton are different strings and, in summer, identical offsets."""
     phone_in("America/Denver")
     store_zone("America/Edmonton")
-    assert "schedule store" not in build_turn_context(resume=False)
+    assert "schedule store" not in build_turn_context(resume=False, now=_SUMMER)
 
 
 def test_the_same_zone_says_nothing(phone_in, store_zone):

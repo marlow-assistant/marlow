@@ -10,6 +10,9 @@ The fail-on-main control was not run. Other boxes get it on their next
 first-class to-do store that reminders hang off) waits on input from Taylor
 and the Android user, because three boxes already have reminders live and
 none of us can see what the other two Marlows have built on top of them.
+Part 3 (Trello as an optional backing store, for shared lists and maybe
+projects) is direction only, Mike 2026-11-02; part 2 is built so it can be
+swapped in.
 
 Raised by Marlow on Mike's box (its `memory/marlow-features.md`,
 2026-11-02), after Mike called both failures below a bug.
@@ -111,7 +114,13 @@ by shape and role.
 5. Should Marlow add to-dos it notices (from email, from what you mention)
    or only the ones you ask for?
 6. Taylor and Mike share a box with two instances: is a shared household
-   list wanted, or is that a different thing?
+   list wanted, or is that a different thing? **Answered (Taylor,
+   2026-11-02): wanted, with one condition.** She does not want Mike's
+   Marlow handing her Marlow things for her to do. Part 3 has the rule
+   that follows from it.
+7. Do you keep projects in Marlow (longer-running things with several
+   steps), and how? Added 2026-11-02: projects may also suit a Trello
+   backing store (part 3).
 
 ## The sketch being asked about (not agreed)
 
@@ -134,6 +143,55 @@ against; nothing here is decided.
 - `todo.md` and one-off `notify` entries fold in; recurring fixed-text
   `notify` ("bins out tonight") probably stays as it is.
 
+**Built so the backing store can be swapped (Mike, 2026-11-02).** Part 3
+may put the list in Trello instead of, or as well as, the local JSON.
+That costs part 2 nothing now if three things hold:
+
+- **The item model is what a Trello card carries:** title, notes, due date,
+  done, and an opaque id from the store. No field the local file can hold
+  and a card can't, and ids are never slugs Marlow invents.
+- **Reminder state is the instance's own, kept apart from the item:**
+  snoozed-until, last nudged, and fired-but-not-acknowledged live in a
+  server-owned file keyed by item id, never in the item. With a shared
+  backing store this is also the rule Taylor's condition needs: nudging is
+  per person, even on a shared item.
+- **Reads and writes go through one module.** No code outside it touches the
+  store's file, so a second store is a new implementation of that module,
+  not a search through the server.
+
 Deliberately out until the answers ask for it: a per-item nag policy (one
-fixed rule first), shared lists across instances, notification actions on
-the lock screen.
+fixed rule first), notification actions on the lock screen. Shared lists
+are part 3.
+
+## Part 3: Trello as an optional backing store (direction only)
+
+Mike, 2026-11-02: Marlow needs good to-dos without Trello, so part 2 comes
+first and stays the default. Trello is an option on top: a list kept in
+Trello instead of the local file gets collaboration "for free", because
+both people (and both Marlows) can open the same board, with or without
+Marlow. Projects may suit it too.
+
+**Chosen over a Marlow-to-Marlow protocol.** The two instances on one box
+are deliberately separate users. A protocol where one writes into the
+other's context is a new channel for one person's assistant to put text in
+front of another's, and its first use would be the thing Taylor ruled out.
+A neutral board both read is not.
+
+**The shared-list rule, from Taylor's condition:** the list is shared;
+assignment and reminders are not.
+
+- Either person, or their Marlow when asked, adds to a shared list. Items
+  start out belonging to no one.
+- An item is someone's only when they take it. Neither Marlow assigns work
+  to the other person.
+- Only your own Marlow reminds you, on your own settings (part 2's
+  per-instance reminder state). Mike's Marlow can tell Mike "Taylor's taken
+  that one" and never pushes anything into Taylor's chat.
+
+**The open design question:** who reads Trello. Where a box has Trello at
+all, it is a connector inside the CLI, so only a model turn can see the board.
+But part 2 has the *server* derive reminders from items, and the server
+can't call a connector. Either the server talks to Trello's API itself (a
+token on the box, and an egress allowlist entry), or a turn syncs the board
+into the local store and the server reads that. Decide this before
+building.

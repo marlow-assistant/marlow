@@ -1,7 +1,12 @@
 # To-dos and reminders that follow up
 
-**Status: Part 1 built 2026-11-02 (fired reminders reach the model), not
-yet deployed.** Part 2 (a
+**Status: Part 1 built 2026-11-02 (fired reminders reach the model) and
+verified on Mike's box the same day:** a one-off `notify` with a phrase the
+session had never seen, added by hand to `cron/schedules.json`, fired, and
+asked "what did the reminder that just fired say, word for word?" Marlow
+quoted it. The entry prunes on firing, so there was nothing left to look up.
+The fail-on-main control was not run. Other boxes get it on their next
+`update.sh`. Part 2 (a
 first-class to-do store that reminders hang off) waits on input from Taylor
 and the Android user, because three boxes already have reminders live and
 none of us can see what the other two Marlows have built on top of them.

@@ -41,7 +41,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from server import active_turn, ideas
+from server import active_turn, ideas, transcript
 from server.config import settings
 from server.location import MAX_AGE_SECONDS, location_store
 from server.log import get_logger
@@ -75,6 +75,31 @@ _SESSION_TTL_SECONDS = 7 * 24 * 3600
 
 def _reset_gap_for_tests() -> None:
     _last_turn_at.clear()
+
+
+# Server notices shown in the chat that no turn has been told about: a fired
+# `notify` above all, which is posted without running the model, so a reply to
+# one used to land in a session that had never seen it (2026-11-02, a "remind me
+# in 3 days" set against the wrong thread; docs/tasks/todos-and-reminders.md).
+#
+# The transcript seq this process has shown up to. Module state, like the gap:
+# on restart it is None and `transcript.notices_after` falls back to the newest
+# reply. That fallback alone is not enough while running, because a notice that
+# fires DURING a turn is written before that turn's reply and would be buried
+# by it, on exactly the turns when the user is there to answer it.
+_notices_shown_through: int | None = None
+
+# How many notices one turn shows. A backlog is days of an unopened app; the
+# newest are what a reply is about, and the rest are counted, not dropped.
+MAX_NOTICES = 5
+
+# Per notice. A `notify` is a lock-screen line; a longer one is cut, not lost.
+_NOTICE_CHARS = 300
+
+
+def _reset_notices_for_tests() -> None:
+    global _notices_shown_through
+    _notices_shown_through = None
 
 
 def _round_half_up(value: float) -> int:
@@ -279,6 +304,37 @@ def _ideas_rejection_sentence() -> str:
     return (
         f" WARNING: ideas/ideas.json is currently INVALID and the server is"
         f" refusing it -- {reason}. The phone shows no ideas until it is fixed."
+    )
+
+
+def _clip(text: str) -> str:
+    return text if len(text) <= _NOTICE_CHARS else text[:_NOTICE_CHARS] + "…"
+
+
+def _notices_sentence(zone: ZoneInfo | None) -> str:
+    """What the chat showed since the model last ran that the model did not
+    write, or "". Never raises, and only a successful read moves the cursor:
+    a locked db costs this turn the sentence, and the next turn shows it."""
+    global _notices_shown_through
+    try:
+        notices, total, upto = transcript.notices_after(_notices_shown_through, MAX_NOTICES)
+    except Exception:
+        logger.exception("could not read the transcript for notices; skipping them this turn")
+        return ""
+    _notices_shown_through = upto
+    if not notices:
+        return ""
+    shown = "; ".join(
+        f"{datetime.fromtimestamp(n['created_at'], zone).strftime('%a %H:%M')} "
+        + json.dumps(_clip(n["text"]), ensure_ascii=False)
+        for n in notices
+    )
+    earlier = f" ({total - len(notices)} earlier not shown)" if total > len(notices) else ""
+    return (
+        f" Since you last ran, the chat showed the user these messages under your"
+        f" name that you did not write this session (fired reminders and server"
+        f" notices): {shown}{earlier}. If their message reads like a reply, it may"
+        f" be to one of these."
     )
 
 
@@ -517,6 +573,11 @@ def build_turn_context(
         # it reads a file and a read that raises must not swallow the gap.
         rejected = _rejection_sentence() + _ideas_rejection_sentence()
         where = _location_sentence(time.time() if now is None else now.timestamp()) + _day_sentence()
+        # Last of the reads and just before the gap, for the gap's reason: it
+        # moves a cursor, so nothing that can still fail and drop the block
+        # may come after it. Never raises. Local zone when the phone gave one,
+        # else the server's (None: fromtimestamp's local).
+        notices = _notices_sentence(ZoneInfo(zone) if local is not None and zone else None)
 
         gap = _gap_sentence(session_id, resume, time.monotonic())
 
@@ -524,12 +585,12 @@ def build_turn_context(
             return (
                 f"[Context: the user's timezone is {zone} — their local time is "
                 f"{local.strftime(_FORMAT)}. Any date given elsewhere in this "
-                f"prompt is the server's; this one is theirs.{where}{drift}{rejected}{gap}]"
+                f"prompt is the server's; this one is theirs.{where}{drift}{rejected}{notices}{gap}]"
             )
 
         return (
             f"[Context: server local time is {moment.strftime(_FORMAT)}. The user's "
-            f"phone has not reported a timezone, so assume they are in this one.{where}{rejected}{gap}]"
+            f"phone has not reported a timezone, so assume they are in this one.{where}{rejected}{notices}{gap}]"
         )
     except Exception:
         logger.exception("could not build turn context; continuing without it")

@@ -13,7 +13,7 @@ from datetime import datetime, timezone as dt_timezone
 
 import pytest
 
-from server import turn_context
+from server import transcript, turn_context
 from server.config import settings
 from server.turn_context import (
     _GAP_THRESHOLD_SECONDS,
@@ -26,8 +26,10 @@ from server.turn_context import (
 @pytest.fixture(autouse=True)
 def _clean_gap_state():
     turn_context._reset_gap_for_tests()
+    turn_context._reset_notices_for_tests()
     yield
     turn_context._reset_gap_for_tests()
+    turn_context._reset_notices_for_tests()
 
 
 @pytest.fixture
@@ -648,3 +650,104 @@ def test_the_reason_is_read_from_the_real_validator(broken_store):
     path = turn_context.settings.schedules_path
     assert schedules.load(path) is None
     assert schedules.rejection_reason(path)
+
+
+# --- notices the model never saw (docs/tasks/todos-and-reminders.md part 1) -
+
+def _notice(text: str, now: float | None = None):
+    """What `WorkQueue.post_system_message` writes for a fired `notify`."""
+    return transcript.append_assistant(
+        turn_id=f"sys-{text}", text=text, source="system", status="done", now=now
+    )
+
+
+def _model_reply(text: str = "ok", source: str = "chat"):
+    return transcript.append_assistant(turn_id=f"t-{text}", text=text, source=source, status="done")
+
+
+def test_a_reminder_fired_between_turns_reaches_the_next_one(no_devices):
+    """The 2026-11-02 misread: the user saw the reminder in the chat and
+    replied to it, and Marlow, which never ran for it, answered something else."""
+    _model_reply("earlier answer")
+    _notice("Order the photo book")
+    out = build_turn_context(resume=True, session_id="s1", source="chat")
+    assert '"Order the photo book"' in out
+
+
+def test_a_notice_is_shown_once(no_devices):
+    _notice("Order the photo book")
+    build_turn_context(resume=True, session_id="s1", source="chat")
+    assert "Order the photo book" not in build_turn_context(resume=True, session_id="s1", source="chat")
+
+
+def test_after_a_restart_notices_the_model_already_answered_past_stay_quiet(no_devices):
+    """No cursor survives a restart, so the newest reply the model wrote is the
+    line: what came before it was in a turn the session already holds."""
+    _notice("Old reminder")
+    _model_reply("an answer after it", source="cron")
+    _notice("New reminder")
+    out = build_turn_context(resume=True, session_id="s1", source="chat")
+    assert "New reminder" in out
+    assert "Old reminder" not in out
+
+
+def test_a_notice_fired_during_a_turn_reaches_the_turn_after(no_devices):
+    """Its row lands before that turn's reply, so "after the newest reply"
+    alone would bury it for good: exactly when the user is chatting, which is
+    when they'd answer it."""
+    build_turn_context(resume=True, session_id="s1", source="chat")  # the turn starts
+    _notice("Call the garage")                                         # fires mid-turn
+    _model_reply("the turn's reply")                                   # then it finishes
+    assert "Call the garage" in build_turn_context(resume=True, session_id="s1", source="chat")
+
+
+def test_a_backlog_shows_the_newest_and_counts_the_rest(no_devices):
+    for i in range(turn_context.MAX_NOTICES + 2):
+        _notice(f"reminder {i}")
+    out = build_turn_context(resume=True, session_id="s1", source="chat")
+    newest = turn_context.MAX_NOTICES + 1
+    assert f"reminder {newest}" in out
+    assert "reminder 0" not in out and "reminder 1" not in out
+    assert "2 earlier" in out
+
+
+def test_notice_times_are_the_users_local_time(phone_in):
+    phone_in("America/St_Johns")
+    when = datetime(2026, 11, 2, 18, 0, tzinfo=dt_timezone.utc).timestamp()
+    _notice("Bins out tonight", now=when)
+    assert '14:30 "Bins out tonight"' in build_turn_context(resume=True, session_id="s1", source="chat")
+
+
+def test_an_unreadable_transcript_keeps_the_block_and_the_notice(no_devices, monkeypatch):
+    """Advisory like the store warnings: a failed read costs this sentence,
+    never the block or the gap, and does not count the notice as shown."""
+    _notice("Order the photo book")
+
+    def boom(*_a, **_k):
+        raise OSError("db locked")
+    real = transcript.notices_after
+    monkeypatch.setattr(transcript, "notices_after", boom)
+    out = build_turn_context(resume=True, session_id="s1", source="chat")
+    assert out.startswith("[Context:")
+    monkeypatch.setattr(transcript, "notices_after", real)
+    assert "Order the photo book" in build_turn_context(resume=True, session_id="s1", source="chat")
+
+
+def test_a_later_failure_in_the_block_does_not_use_up_the_notices(no_devices, monkeypatch):
+    """Reading notices moves a cursor, like the gap, so it goes after every
+    other read: a failure there drops the whole block, and the notice must
+    still be there next turn."""
+    _notice("Order the photo book")
+
+    def boom():
+        raise OSError("location file is gone")
+    monkeypatch.setattr(turn_context.location_store, "latest", boom)
+    assert build_turn_context(resume=True, session_id="s1", source="chat") == ""
+    monkeypatch.undo()
+    monkeypatch.setattr(turn_context.pairing_store, "latest_timezone", lambda: None)
+    assert "Order the photo book" in build_turn_context(resume=True, session_id="s1", source="chat")
+
+
+def test_a_cut_notice_says_so(no_devices):
+    _notice("x" * (turn_context._NOTICE_CHARS + 50))
+    assert "x…\"" in build_turn_context(resume=True, session_id="s1", source="chat")

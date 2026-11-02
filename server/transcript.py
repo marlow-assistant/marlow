@@ -458,6 +458,36 @@ def read_before(before: int | None, limit: int | None = None) -> dict[str, Any]:
         return _page(conn, rows, limit)
 
 
+def notices_after(after: int | None, limit: int) -> tuple[list[dict[str, Any]], int, int]:
+    """Server notices (`source = 'system'`: a fired `notify`, a skipped
+    approval, the greeting) the model has not been shown, for the turn context
+    (docs/tasks/todos-and-reminders.md part 1).
+
+    Returns `(newest `limit` notices oldest first, how many matched in all,
+    the seq read up to)`. Notices with `seq > after`; `after=None` (no cursor,
+    as after a restart) means after the newest reply a turn wrote, since
+    everything before that ran past a session that already holds it. The
+    seq read up to is taken FIRST and bounds the query, so a notice landing
+    mid-read is left for the next call rather than skipped. Raises on a failed
+    read; the caller decides what that costs."""
+    with closing(_connect()) as conn:
+        upto = _latest_seq(conn)
+        if after is None:
+            row = conn.execute(
+                "SELECT COALESCE(MAX(seq), 0) FROM transcript"
+                " WHERE role = 'assistant' AND source != 'system' AND seq <= ?",
+                (upto,),
+            ).fetchone()
+            after = int(row[0])
+        where = "role = 'assistant' AND source = 'system' AND seq > ? AND seq <= ?"
+        total = conn.execute(f"SELECT COUNT(*) FROM transcript WHERE {where}", (after, upto)).fetchone()[0]
+        rows = conn.execute(
+            f"SELECT {_COLUMNS} FROM transcript WHERE {where} ORDER BY seq DESC LIMIT ?",
+            (after, upto, limit),
+        ).fetchall()
+        return [dict(r) for r in reversed(rows)], int(total), upto
+
+
 def get_attachment(attachment_id: str) -> tuple[Path, str] | None:
     """`(file, stored mime)` for an attachment id, or None if the id is not a
     canonical uuid or names no attachment. The mime is the server's own record

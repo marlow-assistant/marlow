@@ -1,7 +1,7 @@
 # To-dos and reminders that follow up
 
-**Status: proposed 2026-11-02, nothing built.** Part 1 (fired reminders
-reach the model) is ready to build and needs nobody's input. Part 2 (a
+**Status: Part 1 built 2026-11-02 (fired reminders reach the model), not
+yet deployed.** Part 2 (a
 first-class to-do store that reminders hang off) waits on input from Taylor
 and the Android user, because three boxes already have reminders live and
 none of us can see what the other two Marlows have built on top of them.
@@ -39,25 +39,35 @@ counters) would build half of a to-do system inside the scheduler.
 
 ## Part 1: put fired notices into the next turn's context
 
-When a user turn starts, `turn_context` adds the system notices posted since
-the model last ran: time and text, newest last, capped (a handful; a backlog
-past the cap says how many were dropped). Read them from the transcript, not
-an in-memory list, so a restart between the fire and the reply loses
-nothing. "Since the model last ran" is the newest non-system turn in the
-transcript; cron `prompt` and `job` turns already run in the session and are
-not repeated.
+Every turn's context (`server/turn_context.py`, `_notices_sentence`) lists
+the `source="system"` transcript rows posted since the last turn was built:
+time in the user's zone and the text, the newest `MAX_NOTICES` (5), with a
+count of any older ones. That covers every server notice, not only `notify`:
+the skipped-approval line and the first-run greeting are also bubbles the
+model never wrote, and a reply to either has the same problem.
 
-Test first: a notice posted, then a user message, and the turn's context
-names the notice; a second message does not repeat it; a restart in
-between still carries it.
+"Since the last turn" is a cursor: the transcript seq read up to when the
+last context was built. Kept in memory like the gap. After a restart it falls
+back to the newest reply any turn wrote. The cursor is not just "after the
+newest reply" because a notice that fires *during* a turn is written before
+that turn's reply, and would be buried by it on exactly the turns when the
+user is there to answer it (`test_a_notice_fired_during_a_turn_reaches_the_turn_after`).
+A failed read costs that turn the sentence and leaves the cursor, so the next
+turn still shows it.
 
-Same PR: the identity line becomes what the context now shows, and a
-`changes.json` entry ("Marlow now sees reminders it sent you, so you can
-reply to one"). No client change, so both clients have it by construction.
+Cron `prompt` and `job` turns build the same context, so a job that runs
+after a notice is the turn that is shown it. That is right while jobs share
+the conversation. Gaps accepted (`/code-review high`, 2026-11-02), each
+waiting on a felt symptom: a notice shown only to the nightly consolidate,
+whose session then retires, is gone by the morning, as is one shown to a job
+that fell back to a fresh session. The cursor moves when the context is
+built, not when the turn succeeds, so a turn that then errors uses up its
+notices (the gap sentence has the same property). After a restart, a
+server-written error row counts as "a turn ran". The restart-interrupted
+line is a `system` row too, and is listed with the rest, which is accurate.
 
-Open edge, not worth machinery yet: a notice that fires *during* a turn
-lands after that turn's context was built, so it reaches the model one turn
-late. Note it; fix it if it is observed.
+Shipped with it: the identity's "they may reply to one you never saw"
+became a pointer to the context, and `changes.json` entry 14.
 
 ## Part 2: what is live today, and why we ask first
 

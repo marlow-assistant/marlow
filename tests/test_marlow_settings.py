@@ -261,6 +261,7 @@ def test_product_owned_rules_are_edit_denied_and_still_readable(policy) -> None:
         "/home/marlow/marlow-identity/cron/email-flash.md",
         "/home/marlow/marlow-identity/cron/ideas.md",
         "/home/marlow/marlow-identity/cron/consolidate.md",
+        "/home/marlow/marlow-identity/cron/todo-migration.md",
     )
     for path in expected:
         assert _rule("Edit", path) in deny, f"{_rule('Edit', path)} missing from deny"

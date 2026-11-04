@@ -178,6 +178,11 @@ PRODUCT_OWNED_PATHS: tuple[str, ...] = (
     # (docs/tasks/default-infrastructure.md): otherwise Marlow could empty the
     # prompt of a job it can no longer delete.
     str(settings.working_dir / "cron" / "consolidate.md"),
+    # The one-off that moves a box's to-dos into the store
+    # (deploy/migrations/0008-todos.py): shipped so every box runs the same
+    # instructions, and denied so the turn it schedules can't be rewritten
+    # before it fires.
+    str(settings.working_dir / "cron" / "todo-migration.md"),
 )
 
 # Working-dir files the SERVER writes and the agent changes only through a

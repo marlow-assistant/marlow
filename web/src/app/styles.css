@@ -2095,12 +2095,19 @@ button {
   border-left: 1px solid var(--bg-2);
 }
 
+/* Stacked: side by side, the date field was clipped to "yyyy-mm-dd, –". */
 .todo-popover .todo-pick {
+  flex-direction: column;
+  align-items: stretch;
   padding: 4px 6px 6px;
 }
 
+.todo-popover .todo-pick input {
+  flex: none;
+}
+
 .todo-popover .todo-pick button {
-  width: auto;
+  text-align: center;
 }
 
 .todo-popover .todo-menu-destructive {

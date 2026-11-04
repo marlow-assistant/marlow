@@ -184,6 +184,27 @@ describe("to-dos panel", () => {
     expect(within(r).queryByRole("menu")).toBeNull();
   });
 
+  // Mike, 2026-11-04, Chrome on a Mac: Snooze blanked the page. Chrome's
+  // scrollIntoView returns a promise, and an effect that returned it handed
+  // React a "cleanup" that isn't a function. jsdom has no scrollIntoView, so
+  // stand in Chrome's.
+  it("opening Snooze survives a scrollIntoView that returns a promise, as Chrome's does", () => {
+    const proto = Element.prototype as unknown as { scrollIntoView?: unknown };
+    const had = proto.scrollIntoView;
+    proto.scrollIntoView = () => Promise.resolve();
+    try {
+      panel({ todos: [todo("a")] });
+      const r = row("Title a");
+      fireEvent.click(within(r).getByRole("button", { name: "More for Title a" }));
+      fireEvent.click(within(r).getByRole("menuitem", { name: "Snooze" }));
+      expect(within(r).getByRole("menuitem", { name: "Tomorrow 09:00" })).toBeTruthy();
+      fireEvent.click(within(r).getByRole("menuitem", { name: "Snooze" }));
+      expect(within(r).queryByRole("menuitem", { name: "Tomorrow 09:00" })).toBeNull();
+    } finally {
+      proto.scrollIntoView = had;
+    }
+  });
+
   it("Snooze offers the presets, and a tap hands over the ISO instant", () => {
     const a = todo("a");
     const { props } = panel({ todos: [a] });

@@ -236,7 +236,11 @@ function RowMenu({
   useMenuDismiss(wrapRef, onClose, { anchored: true });
   // On the last rows it opens past the bottom of the sheet: bring it in.
   const menuRef = useRef<HTMLDivElement>(null);
-  useEffect(() => menuRef.current?.scrollIntoView?.({ block: "nearest" }), [snoozing, picking]);
+  // Braces, so nothing is returned: Chrome's scrollIntoView returns a promise,
+  // which React would call as the cleanup and crash the page (2026-11-04).
+  useEffect(() => {
+    menuRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [snoozing, picking]);
 
   const snooze = (until: string) => {
     onClose();

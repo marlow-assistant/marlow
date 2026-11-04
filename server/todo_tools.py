@@ -33,7 +33,7 @@ ARGUMENTS: dict[str, dict[str, bool]] = {
 LIST_STATES = ("active", "done", "dropped", "all")
 
 
-def _when(text: str) -> str:
+def format_when(text: str) -> str:
     """A due or snooze as the user would read it, in their zone."""
     moment = due_instant(text)
     if moment is None:
@@ -47,9 +47,9 @@ def _when(text: str) -> str:
 def line(item: dict[str, Any], *, notes: bool = False) -> str:
     parts = [item["id"], item["state"], item["title"]]
     if item.get("due"):
-        parts.append(f"due {_when(item['due'])}")
+        parts.append(f"due {format_when(item['due'])}")
     if item.get("snoozed_until"):
-        parts.append(f"snoozed until {_when(item['snoozed_until'])}")
+        parts.append(f"snoozed until {format_when(item['snoozed_until'])}")
     text = " · ".join(parts)
     if notes and item.get("notes"):
         text += "\n  notes: " + item["notes"].replace("\n", "\n  ")
@@ -60,7 +60,7 @@ def _add(a: dict[str, Any]) -> str:
     item = todo_store.add(a["title"], notes=a.get("notes"), due=a.get("due"), source=a["source"])
     text = f"Added {item['id']} ({item['state']}): {item['title']}"
     if item["due"]:
-        text += f" · due {_when(item['due'])}"
+        text += f" · due {format_when(item['due'])}"
     if item["state"] == "proposed":
         text += (" — a proposal: it won't be reminded until they accept it."
                  " If it matters, ask them about it now.")

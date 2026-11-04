@@ -506,7 +506,7 @@ class TodoStore:
                 else:
                     at = None
                 if at is not None and now >= at:
-                    out.append(item)
+                    out.append({**item, "reminded_before": fired is not None})
         return out
 
     def mark_fired(self, item_ids: Iterable[str]) -> dict[str, str]:

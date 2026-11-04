@@ -42,6 +42,7 @@ from server.identity import build_identity_context
 from server.todos import TODO_QUOTE_EMOJI, TodoError, TodoNotFound, todo_context, todo_store
 from server.idle_compaction import SOURCE as COMPACTION_SOURCE
 from server.idle_compaction import idle_compaction_watcher
+from server.todo_reminders import reminder_watcher
 from server.location import Location, location_store
 from server.location import validate as validate_location
 from server.log import get_logger
@@ -152,12 +153,14 @@ async def _lifespan(app: FastAPI):
     work_queue.start()
     auth_watcher.start()
     idle_compaction_watcher.start()
+    reminder_watcher.start(work_queue)
     # In the background, on the transcription worker. If loading holds the GIL
     # the loop pauses for it (2.4 s on the slowest box measured), which
     # update.sh's 10 s health wait covers.
     transcriber.preload_if_used()
     yield
     transcriber.shutdown()
+    await reminder_watcher.stop()
     await idle_compaction_watcher.stop()
     await auth_watcher.stop()
     await work_queue.stop()

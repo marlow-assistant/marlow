@@ -233,6 +233,11 @@ class Turn:
     # 600s dedup window forgot. The row is not rewritten, so the new turn's
     # reply has to name it. Empty for every other turn, which answers its own id.
     answers_turn_ids: list[str] = field(default_factory=list)
+    # Set on a to-do reminder turn (server/todo_reminders.py): item id -> the
+    # fired_at its bookkeeping recorded. When the turn ends, the queue asks the
+    # store which of them still need the server's plain-title notice. Keyed
+    # off this, never off `label`, which a schedules.json entry also sets.
+    todo_reminder: dict[str, str] | None = None
 
 
 # Every Turn field must be classified here before it can participate in
@@ -277,6 +282,8 @@ _COALESCING_CLASSIFIED_TURN_FIELDS = frozenset(
         # cron job dispatch sets it.
         "label",
         "tier",
+        # Only a to-do reminder turn sets it, and that turn is cron.
+        "todo_reminder",
         "started_at",
         "tool_calls",
         "tool_calls_dropped",
@@ -586,6 +593,7 @@ class WorkQueue:
         label: str | None = None,
         tier: str | None = None,
         answers_turn_ids: list[str] | None = None,
+        todo_reminder: dict[str, str] | None = None,
     ) -> str:
         """Returns a turn_id. Resending the same client_msg_id returns the
         existing turn_id instead of enqueuing a duplicate (§3.1 idempotency).
@@ -648,6 +656,7 @@ class WorkQueue:
             label=label,
             tier=tier,
             answers_turn_ids=list(answers_turn_ids or []),
+            todo_reminder=dict(todo_reminder) if todo_reminder else None,
         )
         self._turns[turn_id] = turn
         if client_msg_id:
@@ -812,6 +821,19 @@ class WorkQueue:
         morning does not quietly lose the rollover."""
         if session_state.retire(session_id):
             logger.info("session %s retired: its consolidation turn completed successfully", session_id)
+
+    async def _settle_todo_reminder(self, turn: Turn, *, delivered: bool) -> None:
+        from server.todo_reminders import settle_turn
+
+        try:
+            notices = await asyncio.to_thread(settle_turn, turn.todo_reminder, delivered=delivered)
+            for text in notices:
+                ref = self.post_system_message(text)
+                push_broadcast_nowait(PushPayload(type=PushType.NOTIFY, ref=ref, alert_body=text))
+            if notices:
+                logger.info("to-do reminder turn %s delivered nothing; sent %d plain notice(s)", turn.turn_id, len(notices))
+        except Exception:
+            logger.exception("to-do reminder fallback failed for turn %s", turn.turn_id)
 
     def post_system_message(self, text: str, *, client_msg_id: str | None = None) -> str:
         """Injects an already-DONE turn directly, bypassing invoke.py/`claude
@@ -1329,6 +1351,13 @@ class WorkQueue:
             # (docs/tasks/idle-compaction.md). Nor for a silent cron run.
             if turn.source != COMPACTION_SOURCE and not silent:
                 push_broadcast_nowait(PushPayload(type=PushType.TURN_READY, ref=turn_id))
+
+            # A to-do reminder the turn didn't deliver: the server sends each
+            # item's title itself, unless the turn changed it on the list
+            # (docs/tasks/todos-and-reminders.md, "no silent skip"). After the
+            # reply's own row, so the notice reads below whatever Marlow said.
+            if turn.todo_reminder:
+                await self._settle_todo_reminder(turn, delivered=turn.status == TurnStatus.DONE and not silent)
 
             # Unconditional on turn.status, deliberately (docs/tasks/ios-image-input.md
             # acceptance #4): an ERRORed turn leaves the same bytes on disk as a

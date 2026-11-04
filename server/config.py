@@ -467,6 +467,22 @@ class Settings:
         return self.working_dir / "ideas" / "ideas-responses.json"
 
     @property
+    def todos_path(self) -> Path:
+        """The to-do list (server/todos.py, docs/tasks/todos-and-reminders.md).
+        Server-written only: the model changes it through the todos MCP tools,
+        never by editing it. In the working tree so the harness commit and the
+        bundle backup carry it, in its own directory for the `ideas_path`
+        reason (outside `memory/`, which is pasted into every turn)."""
+        return self.working_dir / "todos" / "todos.json"
+
+    @property
+    def todo_reminders_path(self) -> Path:
+        """The server's reminder bookkeeping per to-do: last fired, snoozed
+        until, re-asked. In data_dir for the session_state reason: it is the
+        server's, and the model has no business reading or writing it."""
+        return self.data_dir / "todo_reminders.json"
+
+    @property
     def stt_model_dir(self) -> Path:
         """The speech model's folder (see `stt_model`). A name, not a path, in
         the env var (checked in __post_init__), so it can only ever point

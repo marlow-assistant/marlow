@@ -70,7 +70,13 @@ WRITE_TOOLS: frozenset[str] = frozenset({"Edit", "Write"})
 PATH_OPTIONAL_TOOLS: frozenset[str] = frozenset({"Glob", "Grep"})
 
 WRITABLE_SUBTREE = "memory"
-WRITABLE_NAMED_FILES: frozenset[str] = frozenset({"cron/schedules.json", "ideas/ideas.json"})
+# todo-migration-report.md: the one-off to-do move (deploy/migrations/
+# 0008-todos.py) is a cron turn, where a prompt is a deny, and its report is
+# the point of the run. Beside USER.md rather than in memory/, which every
+# turn reads in full. A markdown file nothing executes or loads.
+WRITABLE_NAMED_FILES: frozenset[str] = frozenset(
+    {"cron/schedules.json", "ideas/ideas.json", "todo-migration-report.md"}
+)
 
 # `boundaries.PATH_ARG_KEYS` verbatim, never a local copy -- the copy that used
 # to live here had drifted from the hook's by one key (`notebook_path`), and a

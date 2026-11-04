@@ -100,13 +100,24 @@ def test_there_is_at_least_one_migration() -> None:
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
 @pytest.mark.parametrize("migration", MIGRATIONS, ids=lambda p: p.name)
-def test_every_migration_is_a_noop_on_a_fresh_template_seed(tmp_path, migration) -> None:
+def test_every_migration_is_a_noop_on_a_fresh_template_seed(tmp_path, monkeypatch, migration) -> None:
     """A fresh install already has every migration's effects from the seed.
 
     That is what lets install skip any "mark as applied" step: if a migration
     changed a freshly seeded box, adding a feature to the seed without also
     updating its migration would double-apply it on the next deploy.
+
+    With an empty data_dir, as a fresh install has: the suite's own one holds
+    the device tokens other tests paired, and a migration that reads it
+    (0008-todos asks whether anyone has paired) would see a used box.
     """
+    from dataclasses import replace
+
+    import server.config
+
+    data = tmp_path / "data"
+    data.mkdir()
+    monkeypatch.setattr(server.config, "settings", replace(server.config.settings, data_dir=data))
     wd = tmp_path / "marlow-identity"
     r = _run(["--template", "--user-name", "Test", "--timezone", "America/Edmonton"], wd)
     assert r.returncode == 0, r.stderr
@@ -521,3 +532,79 @@ def test_handover_second_run_is_a_noop(tmp_path, capsys) -> None:
     assert _handover(wd, prefs) == 0
     assert (_snapshot(wd), _prefs(prefs)) == after
     assert "nothing to hand over" in capsys.readouterr().out
+
+
+# --- 0008-todos ------------------------------------------------------------------
+
+TODOS = REPO / "deploy" / "migrations" / "0008-todos.py"
+
+
+def _todos_dir(tmp_path: Path, entries: list[dict], *, paired: bool = True, split: bool = True) -> tuple[Path, Path]:
+    wd = _working_dir(tmp_path, entries, prompts=("morning", "todo-migration"))
+    if split:
+        (wd / "PREFERENCES.md").write_text("prefs\n")
+    data = tmp_path / "data"
+    data.mkdir()
+    if paired:
+        (data / "device_tokens.json").write_text("{}")
+    return wd, data
+
+
+def _todos(wd: Path, data: Path) -> int:
+    return _load(TODOS).main(["--working-dir", str(wd), "--repo", str(REPO), "--data-dir", str(data)])
+
+
+def test_todos_schedules_the_one_off_job_soon_and_touches_nothing_else(tmp_path, capsys) -> None:
+    from datetime import datetime, timedelta
+
+    routine = {"id": "evening", "cron": "0 20 * * *", "prompt": "check the routine; [silent] if done"}
+    nudge = {"id": "dentist", "at": "2030-11-06T09:00", "notify": "Book the dentist"}
+    wd, data = _todos_dir(tmp_path, [_morning("0 8 * * *"), routine, nudge])
+    before = datetime.now().astimezone()
+    assert _todos(wd, data) == 0
+    entries = _entries(wd)
+    # Routines and reminders are the job's to judge, not this script's.
+    assert entries[:3] == [_morning("0 8 * * *"), routine, nudge]
+    added = entries[3]
+    assert {k: v for k, v in added.items() if k != "at"} == {"id": "todo-migration", "job": "todo-migration", "effort": "high"}
+    at = schedules.at_instant(added["at"], "America/Edmonton")
+    assert timedelta(minutes=5) <= at - before <= timedelta(minutes=20)
+    assert schedules.rejection_reason(wd / "cron" / "schedules.json") is None
+    assert "todo-migration" in capsys.readouterr().out
+
+
+def test_todos_second_run_is_a_noop(tmp_path) -> None:
+    wd, data = _todos_dir(tmp_path, [_morning("0 8 * * *")])
+    assert _todos(wd, data) == 0
+    before = _snapshot(wd)
+    assert _todos(wd, data) == 0
+    assert _snapshot(wd) == before
+
+
+def test_todos_does_nothing_on_a_box_never_paired(tmp_path, capsys) -> None:
+    """A fresh install has no to-dos to move; it starts on the store."""
+    wd, data = _todos_dir(tmp_path, [_morning("0 8 * * *")], paired=False)
+    before = _snapshot(wd)
+    assert _todos(wd, data) == 0
+    assert _snapshot(wd) == before
+
+
+def test_todos_waits_for_the_split_identity(tmp_path) -> None:
+    """The job leans on the identity's To-dos section, which update.sh only
+    installs on a box with PREFERENCES.md."""
+    wd, data = _todos_dir(tmp_path, [_morning("0 8 * * *")], split=False)
+    before = _snapshot(wd)
+    assert _todos(wd, data) == 75
+    assert _snapshot(wd) == before
+
+
+def test_todos_defers_on_an_invalid_store_or_one_at_the_cap(tmp_path) -> None:
+    wd, data = _todos_dir(tmp_path, [_morning("0 8 * * *")])
+    (wd / "cron" / "schedules.json").write_text("{nope")
+    assert _todos(wd, data) == 75
+    full = [{"id": f"r{i}", "cron": f"{i} 3 * * *", "prompt": "x"} for i in range(schedules.MAX_ENTRIES)]
+    wd2, data2 = _todos_dir(tmp_path / "b", full)
+    before = _snapshot(wd2)
+    # The move matters too much to skip for good: try again next deploy.
+    assert _todos(wd2, data2) == 75
+    assert _snapshot(wd2) == before

@@ -719,11 +719,13 @@ echo "== installing the software's own job prompts (cron/<job>.md) =="
 # four times the template's length. A job joins this list when it ships; its
 # seed copy in identity/cron/ is then the live one. consolidate.md joined when
 # the harness took over running it (docs/tasks/default-infrastructure.md):
-# this overwrites any copy the user's Marlow had edited.
+# this overwrites any copy the user's Marlow had edited. todo-migration.md
+# is the one-off that 0008-todos schedules (docs/tasks/todos-and-reminders.md);
+# inert once it has run, like any prompt with no entry.
 #
 # On every box, not only converted ones: on a box that predates the job there
 # is no file to lose, and the migration that schedules it needs it present.
-SHIPPED_JOBS=(email-flash ideas consolidate)
+SHIPPED_JOBS=(email-flash ideas consolidate todo-migration)
 sudo -u "$MARLOW_USER" -H mkdir -p "$WORKING_DIR/cron"
 # The ideas job writes ideas/ideas.json; don't make its first night depend on
 # the CLI's Write creating a missing directory.

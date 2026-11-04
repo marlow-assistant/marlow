@@ -1151,8 +1151,9 @@ def _confinement_prefix() -> list[str]:
 
 
 def weather_mcp_config(onboarding_steps: list[dict[str, str]] | None = None) -> str:
-    """The `--mcp-config` JSON for server/weather_mcp.py, plus
-    server/onboarding_mcp.py when `onboarding_steps` is given.
+    """The `--mcp-config` JSON for server/weather_mcp.py and
+    server/todos_mcp.py, plus server/onboarding_mcp.py when
+    `onboarding_steps` is given.
 
     `sys.executable` is the server's own venv interpreter, so the paths are
     right on any box without templating. `-I` is load-bearing: the CLI spawns
@@ -1179,6 +1180,23 @@ def weather_mcp_config(onboarding_steps: list[dict[str, str]] | None = None) -> 
         "alwaysLoad": True,
     }
     servers: dict[str, dict] = {"weather": server}
+    # The to-do tools (server/todos_mcp.py, docs/tasks/todos-and-reminders.md),
+    # on every turn: cron needs them too (a reminder turn closes its item, a
+    # mail watch proposes one). The relay is handed the internal socket and
+    # nothing else; server/todos.py, in this process, is the list's one
+    # writer. Always loaded, like weather: a reminder turn that had to find
+    # them behind ToolSearch first is a round trip on every reminder.
+    servers["todos"] = {
+        "type": "stdio",
+        "command": sys.executable,
+        "args": [
+            "-I",
+            str(Path(__file__).resolve().with_name("todos_mcp.py")),
+            "--socket",
+            str(settings.internal_socket_path),
+        ],
+        "alwaysLoad": True,
+    }
     if onboarding_steps:
         # Only on an attended turn of a box still onboarding (see
         # `_onboarding_for_turn`), so its schema costs nothing anywhere else.

@@ -19,7 +19,7 @@ from tests.test_app import _paired_headers, isolated_pairing_state  # noqa: F401
 
 
 # What GET answers on a box where nobody has set "Your day".
-DEFAULT_DAY = {"day_start": "08:00", "day_end": "23:00", "checkin_every_hours": 3}
+DEFAULT_DAY = {"day_start": "08:00", "day_end": "23:00", "checkin_every_hours": 3, "renudge": True}
 
 
 @pytest.fixture
@@ -62,6 +62,7 @@ def test_sending_one_keeps_the_other(clients):
         {"face": 2, "day_end": "04:30"},
         {"checkin_every_hours": 7}, {"checkin_every_hours": -1}, {"checkin_every_hours": "3"},
         {"checkin_every_hours": True}, {"checkin_every_hours": 2.5},
+        {"renudge": "no"}, {"renudge": 0},
     ],
 )
 def test_junk_is_refused_and_leaves_the_choice_alone(clients, body):
@@ -188,7 +189,7 @@ def test_the_endpoint_sets_the_day_and_words_nothing(clients, monkeypatch):
     monkeypatch.setattr("server.app.schedules.sync_after_turn", lambda *a: synced.append(1))
 
     got = client.post("/v1/preferences", json={"day_end": "01:00"}, headers=headers)
-    assert got.json() == {"face": None, "effort": None, "day_start": "08:00", "day_end": "01:00", "checkin_every_hours": 3}
+    assert got.json() == {"face": None, "effort": None, "day_start": "08:00", "day_end": "01:00", "checkin_every_hours": 3, "renudge": True}
     assert synced == [1], "a changed day re-renders the crontab at once"
 
     client.post("/v1/preferences", json={"face": 2}, headers=headers)

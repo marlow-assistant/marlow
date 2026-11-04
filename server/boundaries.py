@@ -178,6 +178,23 @@ PRODUCT_OWNED_PATHS: tuple[str, ...] = (
     # (docs/tasks/default-infrastructure.md): otherwise Marlow could empty the
     # prompt of a job it can no longer delete.
     str(settings.working_dir / "cron" / "consolidate.md"),
+    # The one-off that moves a box's to-dos into the store
+    # (deploy/migrations/0008-todos.py): shipped so every box runs the same
+    # instructions, and denied so the turn it schedules can't be rewritten
+    # before it fires.
+    str(settings.working_dir / "cron" / "todo-migration.md"),
+)
+
+# Working-dir files the SERVER writes and the agent changes only through a
+# tool (docs/tasks/todos-and-reminders.md, 2026-11-04). The to-do list's one
+# writer is server/todos.py, reached through the todos MCP tools; an Edit
+# would bypass its validation and race a tap from the phone. Write-deny for
+# the structured file tools with a reason that names the tools, and READABLE,
+# for the PRODUCT_OWNED_PATHS reasons: the model and the morning brief read
+# it, and nothing in it runs. Bash is left to bash_policy, whose writes go to
+# the phone (and auto-deny unattended), the same backstop as above.
+SERVER_OWNED_PATHS: tuple[str, ...] = (
+    str(settings.working_dir / "todos"),
 )
 
 # Where an uploaded image lands (docs/tasks/ios-image-input.md). An ALLOW, not
@@ -829,6 +846,23 @@ VETTED_PATHLESS_TOOLS: frozenset[str] = frozenset({
     # chat turn of a box still onboarding, and a phone prompt there would be
     # the new user's first, for nothing.
     "mcp__onboarding__step_done",
+    # Our own to-do server (server/todos_mcp.py,
+    # docs/tasks/todos-and-reminders.md). It takes no path and reaches only
+    # the server's to-do store, through the internal socket, where every
+    # argument is validated and the list is the only thing written. Vetted
+    # because cron turns use it -- a reminder turn marks its item done, a
+    # mail watch proposes one -- and an unvetted tool auto-denies there. A
+    # prompt-injected add from a stranger's mail is `proposed` at worst if
+    # the model follows the tool's own rule, and a proposal never pushes.
+    "mcp__todos__todo_add",
+    "mcp__todos__todo_update",
+    "mcp__todos__todo_done",
+    "mcp__todos__todo_drop",
+    "mcp__todos__todo_reopen",
+    "mcp__todos__todo_accept",
+    "mcp__todos__todo_snooze",
+    "mcp__todos__todo_list",
+    "mcp__todos__todo_renudge",
 })
 
 
@@ -950,6 +984,11 @@ def is_harness_only_path(path: str) -> bool:
     `cron/schedules.json` and the harness renders the rest.
     """
     return _under_any(path, HARNESS_ONLY_PATHS)
+
+
+def is_server_owned_path(path: str) -> bool:
+    """Under SERVER_OWNED_PATHS. `path` must already be anchored to the tree."""
+    return _under_any(path, SERVER_OWNED_PATHS)
 
 
 def is_product_owned_path(path: str) -> bool:

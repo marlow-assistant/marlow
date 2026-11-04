@@ -148,6 +148,14 @@ class PreferencesStore:
             return value
         return DEFAULT_CHECKIN_EVERY_HOURS
 
+    def renudge(self) -> bool:
+        """Whether an unanswered to-do reminder fires again a day later
+        (docs/tasks/todos-and-reminders.md). On unless turned off: two of the
+        three first users wanted it, and the one who might not can say so."""
+        with self._lock:
+            value = self._read().get("renudge", True)
+        return value if isinstance(value, bool) else True
+
     def checkin_is_set(self) -> bool:
         with self._lock:
             return "checkin_every_hours" in self._read()
@@ -167,6 +175,7 @@ class PreferencesStore:
         day_start: str | None = None,
         day_end: str | None = None,
         checkin_every_hours: int | None = None,
+        renudge: bool | None = None,
     ) -> None:
         """Sets what is given and keeps the rest. Raises OSError if it can't
         be written: the client keeps its choice and sends it again, so it must
@@ -190,6 +199,8 @@ class PreferencesStore:
                 if not 0 <= checkin_every_hours <= MAX_CHECKIN_EVERY_HOURS:
                     raise ValueError(f"checkin_every_hours out of range: {checkin_every_hours}")
                 data["checkin_every_hours"] = checkin_every_hours
+            if renudge is not None:
+                data["renudge"] = bool(renudge)
             if face is not None:
                 data["face"] = face
             if effort is not None:

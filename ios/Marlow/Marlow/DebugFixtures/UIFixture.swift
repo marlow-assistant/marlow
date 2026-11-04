@@ -41,6 +41,10 @@ import os
 /// `until`. A "Do it" sends and starts a turn that never finishes. The other
 /// states have no ideas, so their screenshots carry no card.
 ///
+/// `todos` is `idle` plus a to-do list behind the checklist icon: an overdue
+/// item, a timed and a dated one, a snoozed one, a suggestion and a done one.
+/// Taps are accepted and forgotten.
+///
 /// `markdown` is `idle` plus a reply exercising the block renderer: a GFM
 /// table with alignment, inline formatting and cells too long for the bubble.
 ///
@@ -48,7 +52,7 @@ import os
 /// that has never shown it: one scripted server entry and this build's own.
 enum UIFixture {
     enum State: String {
-        case empty, idle, working, streaming, interrupted, failed, follow, approval, approvalBash, ideas, markdown, whatsNew
+        case empty, idle, working, streaming, interrupted, failed, follow, approval, approvalBash, ideas, todos, markdown, whatsNew
     }
 
     /// Read from the launch argument, which UserDefaults exposes in its
@@ -215,6 +219,59 @@ enum UIFixture {
         let defaults = UserDefaults(suiteName: "ui-fixture-ideas") ?? .standard
         defaults.removeObject(forKey: IdeasStore.lastOpenedKey)
         return IdeasStore(api: IdeasFixture(), deviceToken: "fixture", defaults: defaults)
+    }
+
+    /// To-dos for `-uiFixture todos`, none for any other state. Dates are
+    /// relative to launch so "overdue", "today" and "tomorrow" hold. The taps
+    /// answer with the item unchanged: this is for looking at.
+    struct TodosFixture: TodosAPI {
+        func todos(deviceToken: String) async throws -> [Todo] {
+            guard UIFixture.state == .todos else { return [] }
+            let calendar = Calendar.current
+            let day = DateFormatter()
+            day.locale = Locale(identifier: "en_US_POSIX")
+            day.dateFormat = "yyyy-MM-dd"
+            func date(_ offset: Int) -> String {
+                day.string(from: calendar.date(byAdding: .day, value: offset, to: Date())!)
+            }
+            func moment(_ offset: Int, hour: Int) -> String {
+                let start = calendar.date(byAdding: .day, value: offset, to: calendar.startOfDay(for: Date()))!
+                return TodoFormat.wireInstant(
+                    calendar.date(bySettingHour: hour, minute: 0, second: 0, of: start)!, timeZone: calendar.timeZone
+                )
+            }
+            let created = Date().addingTimeInterval(-3 * 86_400)
+            return [
+                Todo(id: "t1", title: "Send the signed form back", notes: "The PDF is in the shared folder.\nTwo pages to initial.",
+                     due: date(-2), state: .open, source: "user", created: created),
+                Todo(id: "t2", title: "Call the garage about the winter tyres", due: moment(0, hour: 17), state: .open,
+                     source: "user", created: created),
+                Todo(id: "t3", title: "Renew the library card", due: date(3), state: .open, source: "user", created: created),
+                Todo(id: "t4", title: "Pick up the dry cleaning", state: .open, source: "user", created: created,
+                     snoozedUntil: Date().addingTimeInterval(20 * 3600)),
+                Todo(id: "t5", title: "Book a table for Saturday", notes: "You mentioned it in passing on Tuesday.",
+                     state: .proposed, source: "inferred", created: Date().addingTimeInterval(-3600)),
+                Todo(id: "t6", title: "Water the plants", state: .done, source: "user", created: created,
+                     closed: Date().addingTimeInterval(-7200)),
+            ]
+        }
+
+        func doneTodo(id: String, deviceToken: String) async throws -> Todo { try await unchanged(id) }
+        func dropTodo(id: String, deviceToken: String) async throws -> Todo { try await unchanged(id) }
+        func acceptTodo(id: String, deviceToken: String) async throws -> Todo { try await unchanged(id) }
+        func snoozeTodo(id: String, until: String, deviceToken: String) async throws -> Todo { try await unchanged(id) }
+
+        private func unchanged(_ id: String) async throws -> Todo {
+            guard let item = try await todos(deviceToken: "").first(where: { $0.id == id }) else {
+                throw APIError.server(status: 404, detail: nil)
+            }
+            return item
+        }
+    }
+
+    @MainActor
+    static func makeTodosStore() -> TodosStore {
+        TodosStore(api: TodosFixture(), deviceToken: "fixture")
     }
 
     struct ChangesFixture: ChangesAPI {
@@ -494,7 +551,7 @@ enum UIFixture {
                 createdAt: at(3.5), turnId: "t3", status: .done
             ))
         }
-        guard state != .idle, state != .ideas, state != .markdown, state != .whatsNew else { return messages }
+        guard state != .idle, state != .ideas, state != .todos, state != .markdown, state != .whatsNew else { return messages }
         let userMessage = ChatMessage(
             id: UUID(), role: .user, text: "Can you find a cheaper quote for the insurance?",
             createdAt: at(0.2), turnId: nil, status: .done
@@ -553,7 +610,7 @@ private struct FixtureChatAPI: ChatAPI {
         let search = TurnActivity(kind: "tool_start", tool: "WebSearch", at: 1)
         let writing = TurnActivity(kind: "text", tool: nil, at: 2)
         let (activities, text): ([TurnActivity], String) = switch state {
-        case .empty, .idle, .working, .failed, .follow, .approval, .approvalBash, .ideas, .markdown, .whatsNew: ([search], "")
+        case .empty, .idle, .working, .failed, .follow, .approval, .approvalBash, .ideas, .todos, .markdown, .whatsNew: ([search], "")
         case .streaming: ([writing], Self.streamed)
         case .interrupted: ([writing, TurnActivity(kind: "tool_start", tool: "WebSearch", at: 3)], Self.streamed)
         }
@@ -633,10 +690,10 @@ private struct FixtureChatAPI: ChatAPI {
 
     func sendMessage(
         text: String, clientMsgId: String?, imagesBase64: [String],
-        effort: ThinkingEffort, location: OutgoingLocation?, ideaId: String?, spoken: Bool,
+        effort: ThinkingEffort, location: OutgoingLocation?, ideaId: String?, todoId: String?, spoken: Bool,
         timeout: TimeInterval?, deviceToken: String
     ) async throws -> MessageResponse {
-        guard state == .follow || state == .ideas else { throw URLError(.notConnectedToInternet) }
+        guard state == .follow || state == .ideas || state == .todos else { throw URLError(.notConnectedToInternet) }
         let turnId = "fixture-follow-\(UUID().uuidString)"
         await MainActor.run { Self.followStarts[turnId] = Date() }
         return MessageResponse(turnId: turnId)

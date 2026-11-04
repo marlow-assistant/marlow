@@ -24,9 +24,13 @@ struct PresenceHeader: View {
     /// A spotlight is waiting, or an idea has arrived since the panel was last
     /// opened (`IdeaFormat.showsDot`).
     let ideasHaveNews: Bool
+    /// Overdue to-dos plus suggestions waiting on an answer
+    /// (`TodoFormat.badgeCount`); no badge at 0.
+    let todosBadge: Int
     let onSettings: () -> Void
     let onAvatar: () -> Void
     let onIdeas: () -> Void
+    let onTodos: () -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -46,6 +50,7 @@ struct PresenceHeader: View {
 
             HStack(spacing: 0) {
                 ideasButton
+                todosButton
                 Spacer()
                 FloatingIconButton(systemName: "gearshape", action: onSettings)
                     .accessibilityLabel("Settings")
@@ -138,6 +143,28 @@ struct PresenceHeader: View {
                 }
             }
             .accessibilityLabel(ideasHaveNews ? "Ideas, new" : "Ideas")
+    }
+
+    /// The to-do list beside the lightbulb (docs/tasks/todos-and-reminders.md).
+    /// Unlike the lightbulb's dot this carries a count, because the number is
+    /// the point: how many things are overdue or waiting on an answer.
+    private var todosButton: some View {
+        FloatingIconButton(systemName: "checklist", action: onTodos)
+            .overlay(alignment: .topTrailing) {
+                if todosBadge > 0 {
+                    Text(todosBadge > 99 ? "99+" : "\(todosBadge)")
+                        .font(.system(size: 11, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 5)
+                        .frame(minWidth: 18, minHeight: 18)
+                        .background(Color.accentColor, in: Capsule())
+                        .overlay(Capsule().stroke(Color(.systemBackground), lineWidth: 1.5))
+                        .offset(x: -1, y: 3)
+                        .accessibilityHidden(true)
+                }
+            }
+            .accessibilityLabel(todosBadge > 0 ? "To-dos, \(todosBadge) need attention" : "To-dos")
     }
 
     private var accessibilityText: String {

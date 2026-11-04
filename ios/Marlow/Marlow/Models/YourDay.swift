@@ -3,7 +3,9 @@ import Foundation
 /// The calls "Your day" makes, as a seam for tests.
 protocol YourDayAPI {
     func preferences(deviceToken: String) async throws -> Preferences
-    func setDay(start: String?, end: String?, checkinEveryHours: Int?, deviceToken: String) async throws -> Preferences
+    func setDay(
+        start: String?, end: String?, checkinEveryHours: Int?, renudge: Bool?, deviceToken: String
+    ) async throws -> Preferences
 }
 
 extension APIClient: YourDayAPI {}
@@ -91,6 +93,8 @@ final class YourDayModel: ObservableObject {
         var end: String
         /// Hours between check-ins, 0 = off. Nil from a box that predates it.
         var checkinEveryHours: Int?
+        /// Daily re-reminders for to-dos. Nil from a box that predates it.
+        var renudge: Bool?
     }
 
     enum Field { case start, end }
@@ -115,6 +119,7 @@ final class YourDayModel: ObservableObject {
                 start: field == .start ? value : nil,
                 end: field == .end ? value : nil,
                 checkinEveryHours: nil,
+                renudge: nil,
                 deviceToken: deviceToken
             )
         }
@@ -124,7 +129,19 @@ final class YourDayModel: ObservableObject {
         guard var shown = times, shown.checkinEveryHours != nil, shown.checkinEveryHours != hours else { return }
         shown.checkinEveryHours = hours
         await save(shown, refusal: { YourDay.message(for: $0, checkin: true) }) {
-            try await api.setDay(start: nil, end: nil, checkinEveryHours: hours, deviceToken: deviceToken)
+            try await api.setDay(
+                start: nil, end: nil, checkinEveryHours: hours, renudge: nil, deviceToken: deviceToken
+            )
+        }
+    }
+
+    /// "Remind me again daily" (docs/tasks/todos-and-reminders.md). Rides the
+    /// same preferences object and the same revert-on-failure as the others.
+    func setRenudge(_ on: Bool, api: YourDayAPI, deviceToken: String) async {
+        guard var shown = times, shown.renudge != nil, shown.renudge != on else { return }
+        shown.renudge = on
+        await save(shown, refusal: { YourDay.message(for: $0, checkin: true) }) {
+            try await api.setDay(start: nil, end: nil, checkinEveryHours: nil, renudge: on, deviceToken: deviceToken)
         }
     }
 
@@ -148,7 +165,7 @@ final class YourDayModel: ObservableObject {
         guard let start = prefs.dayStart, let end = prefs.dayEnd,
               YourDay.minutes(from: start) != nil, YourDay.minutes(from: end) != nil
         else { return false }
-        confirmed = Times(start: start, end: end, checkinEveryHours: prefs.checkinEveryHours)
+        confirmed = Times(start: start, end: end, checkinEveryHours: prefs.checkinEveryHours, renudge: prefs.renudge)
         times = confirmed
         return true
     }

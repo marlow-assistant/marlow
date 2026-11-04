@@ -44,6 +44,7 @@ struct ChatView: View {
     @State private var showingSettings = false
     @State private var showingMarlow = false
     @State private var showingIdeas = false
+    @State private var showingTodos = false
     /// The "Marlow was updated" card (docs/tasks/whats-new.md), raised by
     /// `presentWhatsNewIfDue()` rather than a tap.
     @State private var showingWhatsNew = false
@@ -53,6 +54,9 @@ struct ChatView: View {
     /// Lives as long as the chat screen, unlike the Marlow sheet's stores: the
     /// lightbulb's dot and the spotlight card show without the panel open.
     @StateObject private var ideasStore: IdeasStore
+    /// Same lifetime as `ideasStore`, for the same reason: the checklist
+    /// icon's count shows without the panel open.
+    @StateObject private var todosStore: TodosStore
     /// Same lifetime as `ideasStore`, for the same reason: the card shows
     /// without Settings open.
     @StateObject private var whatsNew: WhatsNewStore
@@ -115,6 +119,7 @@ struct ChatView: View {
             currentLocation: { [weak location] in location?.currentLocation() }
         ))
         _ideasStore = StateObject(wrappedValue: IdeasStore(deviceToken: deviceToken))
+        _todosStore = StateObject(wrappedValue: TodosStore(deviceToken: deviceToken))
         _whatsNew = StateObject(wrappedValue: WhatsNewStore(deviceToken: deviceToken))
     }
 
@@ -123,6 +128,7 @@ struct ChatView: View {
     init(store: @autoclosure @escaping () -> ChatStore) {
         _store = StateObject(wrappedValue: store())
         _ideasStore = StateObject(wrappedValue: UIFixture.makeIdeasStore())
+        _todosStore = StateObject(wrappedValue: UIFixture.makeTodosStore())
         _whatsNew = StateObject(wrappedValue: UIFixture.makeWhatsNewStore())
     }
     #endif
@@ -159,6 +165,7 @@ struct ChatView: View {
                 showingSettings = false
                 showingMarlow = false
                 showingIdeas = false
+                showingTodos = false
                 // OK and a swipe both land here.
                 // Not on the approval card's dismissal, which skips this
                 // block: the card comes back once the request is answered.
@@ -175,6 +182,8 @@ struct ChatView: View {
                 MarlowView(marlow: makeMarlowStore(), activity: makeActivityStore(), usage: makeUsageStore())
             case .ideas:
                 IdeasPanel(store: ideasStore, onDoIt: doIt)
+            case .todos:
+                TodosPanel(store: todosStore, onTalkAbout: talkAbout)
             case .whatsNew:
                 WhatsNewSheet(store: whatsNew)
             }
@@ -296,6 +305,7 @@ struct ChatView: View {
                 clearUnreadBadge()
                 store.handleDidBecomeActive()
                 Task { await ideasStore.refresh() }
+                Task { await todosStore.refresh() }
                 Task { await pullPreferences() }
                 // A box can be updated while the app sits in the background.
                 // The present covers news that waited behind something else.
@@ -315,6 +325,7 @@ struct ChatView: View {
         .task { Self.ensureDictationAssets() }
         // Launch fetch; later foregrounds go through `onChange(of: scenePhase)`.
         .task { await ideasStore.refresh() }
+        .task { await todosStore.refresh() }
         .task { await pullPreferences() }
         .task { await whatsNew.refresh() }
         .onChange(of: whatsNew.pending) { _, _ in presentWhatsNewIfDue() }
@@ -593,9 +604,11 @@ struct ChatView: View {
                     PresenceHeader(
                         presence: ChatPresence.of(store.messages),
                         ideasHaveNews: ideasStore.showsDot,
+                        todosBadge: todosStore.badgeCount,
                         onSettings: { showingSettings = true },
                         onAvatar: { showingMarlow = true },
-                        onIdeas: { showingIdeas = true }
+                        onIdeas: { showingIdeas = true },
+                        onTodos: { showingTodos = true }
                     )
                 }
 
@@ -1124,6 +1137,19 @@ struct ChatView: View {
         }
     }
 
+    /// Talk about it on a to-do: closes the panel and sends `About this to-do`
+    /// (quoting the item) through the composer's own path, as `doIt` does for an
+    /// idea. The item's details do not ride in the text: `todo_id` lets the
+    /// server quote it into the turn. The item stays on the list.
+    private func talkAbout(_ todo: Todo) {
+        showingTodos = false
+        if store.send(text: TodoFormat.talkAboutMessage, todoId: todo.id, quote: IdeaQuote(todo)) {
+            ChatSoundPlayer.playSent()
+            ChatHaptics.sent()
+            scrollToBottomRequest += 1
+        }
+    }
+
     /// Routes a finished dictation to whichever endpoint ended it.
     ///
     /// `.review` appends rather than replaces: the draft can already hold
@@ -1371,6 +1397,7 @@ struct ChatView: View {
         case settings
         case marlow
         case ideas
+        case todos
         case whatsNew
 
         var id: String {
@@ -1378,6 +1405,7 @@ struct ChatView: View {
             case .settings: return "settings"
             case .marlow: return "marlow"
             case .ideas: return "ideas"
+            case .todos: return "todos"
             case .whatsNew: return "whatsNew"
             }
         }
@@ -1398,7 +1426,7 @@ struct ChatView: View {
     /// becoming active is simply there when it appears.
     private func presentWhatsNewIfDue() {
         guard !whatsNew.pending.isEmpty, !showingWhatsNew,
-              !showingSettings, !showingMarlow, !showingIdeas, !showingVoiceMode,
+              !showingSettings, !showingMarlow, !showingIdeas, !showingTodos, !showingVoiceMode,
               !dictation.isRecording
         else { return }
         showingWhatsNew = true
@@ -1414,6 +1442,7 @@ struct ChatView: View {
         if showingSettings { return .settings }
         if showingMarlow { return .marlow }
         if showingIdeas { return .ideas }
+        if showingTodos { return .todos }
         if showingWhatsNew { return .whatsNew }
         return nil
     }
@@ -1476,7 +1505,8 @@ struct ChatView: View {
     }
 }
 
-/// The idea a "Do it" answers, inside Mike's bubble above his words: a thin
+/// The idea a "Do it" answers, or the to-do a "Talk about it" answers, inside
+/// Mike's bubble above his words: a thin
 /// bar, then emoji and title, smaller and secondary. `.secondary` over the
 /// accent-tinted bubble stays legible in light and dark; the bar is the label
 /// colour at low opacity, not the accent, which would vanish into the tint.

@@ -574,8 +574,10 @@ final class ChatStore: ObservableObject {
     /// nothing could ever satisfy both "picked an image" and "typed a
     /// caption"). At least one of the two must be present.
     @discardableResult
-    func send(text: String, images: [Data] = [], ideaId: String? = nil, quote: IdeaQuote? = nil) -> Bool {
-        startSend(text: text, images: images, ideaId: ideaId, quote: quote) != nil
+    func send(
+        text: String, images: [Data] = [], ideaId: String? = nil, todoId: String? = nil, quote: IdeaQuote? = nil
+    ) -> Bool {
+        startSend(text: text, images: images, ideaId: ideaId, todoId: todoId, quote: quote) != nil
     }
 
     /// Voice mode's send (docs/tasks/voice-mode-hands-free.md): marked spoken
@@ -593,14 +595,15 @@ final class ChatStore: ObservableObject {
 
     /// The reply placeholder's id, or nil when there was nothing to send.
     private func startSend(
-        text: String, images: [Data] = [], ideaId: String? = nil, quote: IdeaQuote? = nil, spoken: Bool = false
+        text: String, images: [Data] = [], ideaId: String? = nil, todoId: String? = nil, quote: IdeaQuote? = nil,
+        spoken: Bool = false
     ) -> UUID? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !images.isEmpty else { return nil }
 
         var userMessage = ChatMessage(
             id: UUID(), role: .user, text: trimmed, createdAt: Date(), turnId: nil, status: .done,
-            clientMsgId: nil, ideaId: ideaId, quote: quote
+            clientMsgId: nil, ideaId: ideaId, todoId: todoId, quote: quote
         )
         let clientMsgId = userMessage.id.uuidString
         // Sent and persisted-for-retry must agree, or a retry (`resendable()`
@@ -652,7 +655,7 @@ final class ChatStore: ObservableObject {
 
         startSubmit(
             text: trimmed, clientMsgId: clientMsgId, placeholderId: placeholder.id,
-            images: imagesToSend, ideaId: ideaId, spoken: spoken
+            images: imagesToSend, ideaId: ideaId, todoId: todoId, spoken: spoken
         )
         return placeholder.id
     }
@@ -690,7 +693,8 @@ final class ChatStore: ObservableObject {
     /// bytes in memory and passes `images` directly instead.
     private func startSubmit(
         text: String, clientMsgId: String, placeholderId: UUID,
-        images: [Data] = [], imageFilenames: [String] = [], ideaId: String? = nil, spoken: Bool = false
+        images: [Data] = [], imageFilenames: [String] = [], ideaId: String? = nil, todoId: String? = nil,
+        spoken: Bool = false
     ) {
         activeTasks[placeholderId] = Task { [weak self] in
             guard let self else { return }
@@ -715,7 +719,7 @@ final class ChatStore: ObservableObject {
             }
             await self.submit(
                 text: text, clientMsgId: clientMsgId, placeholderId: placeholderId,
-                images: resolvedImages, ideaId: ideaId, spoken: spoken
+                images: resolvedImages, ideaId: ideaId, todoId: todoId, spoken: spoken
             )
             self.activeTasks.removeValue(forKey: placeholderId)
         }
@@ -734,7 +738,7 @@ final class ChatStore: ObservableObject {
     /// real stopping point, not a blip the user needed to notice.
     private func submit(
         text: String, clientMsgId: String, placeholderId: UUID, images: [Data] = [], ideaId: String? = nil,
-        spoken: Bool = false
+        todoId: String? = nil, spoken: Bool = false
     ) async {
         var attempt = 0
         // Encoded once, before the retry loop (CMP-3).
@@ -744,7 +748,7 @@ final class ChatStore: ObservableObject {
                 let response = try await sendMessageWithDeadline(
                     text: text, clientMsgId: clientMsgId,
                     imagesBase64: imagesBase64,
-                    ideaId: ideaId, spoken: spoken,
+                    ideaId: ideaId, todoId: todoId, spoken: spoken,
                     timeout: policy.sendAttemptTimeout
                 )
                 if Task.isCancelled { return }
@@ -790,7 +794,7 @@ final class ChatStore: ObservableObject {
     /// would incorrectly make the first timed-out attempt terminal.
     private func sendMessageWithDeadline(
         text: String, clientMsgId: String?,
-        imagesBase64: [String], ideaId: String?, spoken: Bool, timeout: TimeInterval
+        imagesBase64: [String], ideaId: String?, todoId: String?, spoken: Bool, timeout: TimeInterval
     ) async throws -> MessageResponse {
         // Read per attempt rather than captured once at submit(): a retry that
         // happens after Mike changes the picker should carry what the picker is
@@ -805,7 +809,8 @@ final class ChatStore: ObservableObject {
                 try await client.sendMessage(
                     text: text, clientMsgId: clientMsgId,
                     imagesBase64: imagesBase64, effort: effort,
-                    location: location, ideaId: ideaId, spoken: spoken, timeout: timeout, deviceToken: deviceToken
+                    location: location, ideaId: ideaId, todoId: todoId, spoken: spoken, timeout: timeout,
+                    deviceToken: deviceToken
                 )
             }
             group.addTask {
@@ -867,7 +872,7 @@ final class ChatStore: ObservableObject {
         guard
             let message = messages.first(where: { $0.id == placeholderId }),
             message.status == .error,
-            let (clientMsgId, text, imageFilenames, ideaId) = resendable(message)
+            let (clientMsgId, text, imageFilenames, ideaId, todoId) = resendable(message)
         else { return }
         update(placeholderId) {
             $0.status = .sending
@@ -885,7 +890,7 @@ final class ChatStore: ObservableObject {
         persist()
         startSubmit(
             text: text, clientMsgId: clientMsgId, placeholderId: placeholderId,
-            imageFilenames: imageFilenames, ideaId: ideaId
+            imageFilenames: imageFilenames, ideaId: ideaId, todoId: todoId
         )
     }
 
@@ -908,12 +913,12 @@ final class ChatStore: ObservableObject {
     /// (`/code-review medium` finding).
     private func resendable(
         _ message: ChatMessage
-    ) -> (clientMsgId: String, text: String, imageFilenames: [String], ideaId: String?)? {
+    ) -> (clientMsgId: String, text: String, imageFilenames: [String], ideaId: String?, todoId: String?)? {
         guard
             let clientMsgId = message.clientMsgId,
             let userMessage = messages.first(where: { $0.id.uuidString == clientMsgId })
         else { return nil }
-        return (clientMsgId, userMessage.text, userMessage.allImageFilenames, userMessage.ideaId)
+        return (clientMsgId, userMessage.text, userMessage.allImageFilenames, userMessage.ideaId, userMessage.todoId)
     }
 
     /// Fast phase (`fastAttempts` at `fastInterval`, ~5min) covers normal
@@ -1259,7 +1264,7 @@ final class ChatStore: ObservableObject {
                 resumedPlaceholders.insert(message.id)
                 startPoll(turnId: turnId, placeholderId: message.id)
             case .sending:
-                guard let (clientMsgId, text, imageFilenames, ideaId) = resendable(message) else {
+                guard let (clientMsgId, text, imageFilenames, ideaId, todoId) = resendable(message) else {
                     update(message.id) {
                         $0.status = .error
                         $0.text = "Interrupted before sending — please resend."
@@ -1275,7 +1280,7 @@ final class ChatStore: ObservableObject {
                 }
                 startSubmit(
                     text: text, clientMsgId: clientMsgId, placeholderId: message.id,
-                    imageFilenames: imageFilenames, ideaId: ideaId
+                    imageFilenames: imageFilenames, ideaId: ideaId, todoId: todoId
                 )
             case .done, .error:
                 continue

@@ -70,7 +70,8 @@ actor FakeChatAPI: ChatAPI {
     private(set) var sentMessages: [(
         text: String, clientMsgId: String?,
         imagesBase64: [String], effort: ThinkingEffort,
-        location: OutgoingLocation?, ideaId: String?, spoken: Bool, timeout: TimeInterval?, deviceToken: String
+        location: OutgoingLocation?, ideaId: String?, todoId: String?, spoken: Bool, timeout: TimeInterval?,
+        deviceToken: String
     )] = []
     private(set) var getTurnCalls: [(turnId: String, deviceToken: String)] = []
     private(set) var permissionsCallCount = 0
@@ -128,12 +129,14 @@ actor FakeChatAPI: ChatAPI {
     func sendMessage(
         text: String, clientMsgId: String?,
         imagesBase64: [String], effort: ThinkingEffort,
-        location: OutgoingLocation?, ideaId: String?, spoken: Bool, timeout: TimeInterval?, deviceToken: String
+        location: OutgoingLocation?, ideaId: String?, todoId: String?, spoken: Bool, timeout: TimeInterval?,
+        deviceToken: String
     ) async throws -> MessageResponse {
         sentMessages.append((
             text: text, clientMsgId: clientMsgId,
             imagesBase64: imagesBase64, effort: effort,
-            location: location, ideaId: ideaId, spoken: spoken, timeout: timeout, deviceToken: deviceToken
+            location: location, ideaId: ideaId, todoId: todoId, spoken: spoken, timeout: timeout,
+            deviceToken: deviceToken
         ))
         if let onSend { await onSend(sentMessages.count) }
         let result = sendScript.isEmpty ? sendFallback : sendScript.removeFirst()

@@ -91,6 +91,17 @@ def test_done_drop_accept_snooze(store) -> None:
     assert not err and "snoozed until Thu 2026-11-05 09:00" in text
 
 
+def test_reopen_undoes_a_done(store) -> None:
+    # "I didn't actually finish that" (Mike, 2026-11-04).
+    _call("todo_add", title="a", source="user")
+    _call("todo_done", id="t1")
+    text, err = _call("todo_reopen", id="t1")
+    assert not err and "open" in text
+    assert store.get("t1")["state"] == "open"
+    _call("todo_drop", id="t1")
+    assert _call("todo_reopen", id="t1")[1], "a drop is a decision; re-add it instead"
+
+
 def test_list_filters_by_state(store) -> None:
     _call("todo_add", title="a", source="user")
     _call("todo_add", title="b", source="user")

@@ -463,6 +463,25 @@ class TodoStore:
     def drop(self, item_id: Any) -> dict[str, Any]:
         return self._close(item_id, "dropped")
 
+    def reopen(self, item_id: Any) -> dict[str, Any]:
+        """Undo a done: the pane's untick (Mike, 2026-11-04). Done only, not
+        dropped, which is a decision rather than a slip of the thumb."""
+        with self._lock:
+            data = self._read()
+            item = self._find(data, item_id)
+            if item["state"] == "open":
+                return self._with_state(item, self._read_state())
+            if item["state"] != "done":
+                raise TodoError(f"only a done to-do can be reopened; {item['id']} is {item['state']}")
+            for other in data["items"]:
+                if other is not item and other["state"] in ACTIVE and _same_title(other["title"], item["title"]):
+                    raise TodoError(f"that is already on the list as {other['id']} ({other['state']})")
+            if sum(1 for i in data["items"] if i["state"] in ACTIVE) >= MAX_ACTIVE:
+                raise TodoError(f"the list is full ({MAX_ACTIVE} open or proposed); close or drop some first")
+            item.update(state="open", closed=None, updated=_iso(self._now()))
+            self._write(data)
+            return self._with_state(item, self._read_state())
+
     def accept(self, item_id: Any) -> dict[str, Any]:
         with self._lock:
             data = self._read()

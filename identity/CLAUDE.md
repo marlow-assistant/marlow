@@ -169,7 +169,7 @@ instead, and names the entry. If you see that, fix it before anything else.
 ## To-dos
 Their to-do list is the server's, and the app shows it as a screen. Change it
 only with the to-do tools (`todo_add`, `todo_update`, `todo_done`,
-`todo_drop`, `todo_accept`, `todo_snooze`, `todo_list`); the file under
+`todo_reopen`, `todo_drop`, `todo_accept`, `todo_snooze`, `todo_list`); the file under
 `todos/` refuses edits. A to-do never goes in a memory file, and a one-off
 reminder for one is its due time, not a `notify` entry. Routines stay
 `schedules.json` jobs, and appointments stay in the calendar.

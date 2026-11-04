@@ -339,7 +339,7 @@ Where each decided piece lives, and the calls the design left open.
   Done items are kept 30 days, dropped 180 (so "not gonna happen" sticks).
 - **Tools:** `server/todos_mcp.py`, a stdio relay that `invoke.py` adds to
   every call, posts each call to `/internal/todos/tool`; `server/todo_tools.py`
-  answers it. A refusal is a tool error with the reason. All eight tools are
+  answers it. A refusal is a tool error with the reason. All nine tools are
   vetted pathless tools, so a cron turn (a reminder) can use them.
 - **Reminders:** `server/todo_reminders.py`, a once-a-minute loop in the
   server, not crontab lines: the state is all the server's, and it keeps
@@ -355,7 +355,8 @@ Where each decided piece lives, and the calls the design left open.
   entry id) get a `[To-do list …]` block in front of their prompt, open items
   with due and overdue, then proposals.
 - **API:** `GET /v1/todos` (open and proposed, plus done in the last 7 days;
-  dropped never listed), taps `done`, `drop`, `accept`, `snooze` (an instant
+  dropped never listed), taps `done`, `reopen` (undoes a done; Mike,
+  2026-11-04), `drop`, `accept`, `snooze` (an instant
   with offset, at most a year out), `todo_id` on `/v1/message` with a ☑️
   quote, `renudge` in `/v1/preferences`.
 - **Migration:** `deploy/migrations/0008-todos.py` adds a one-off `at` job

@@ -174,6 +174,33 @@ def test_accept_moves_a_proposal_to_open(store) -> None:
         store.accept("t1")
 
 
+def test_reopen_undoes_done_and_is_idempotent(store, clock) -> None:
+    # The pane's untick (Mike, 2026-11-04: a tick he couldn't take back).
+    store.add("x", source="user")
+    store.done("t1")
+    item = store.reopen("t1")
+    assert (item["state"], item["closed"]) == ("open", None)
+    assert store.reopen("t1")["state"] == "open"
+
+
+def test_only_a_done_item_can_be_reopened(store) -> None:
+    store.add("x", source="user")
+    store.drop("t1")
+    with pytest.raises(TodoError, match="dropped"):
+        store.reopen("t1")
+    store.add("y", source="inferred")
+    with pytest.raises(TodoError, match="proposed"):
+        store.reopen("t2")
+
+
+def test_a_reopened_title_counts_as_active_again(store) -> None:
+    store.add("Book the dentist", source="user")
+    store.done("t1")
+    store.add("Book the dentist", source="user")
+    with pytest.raises(TodoError, match="already"):
+        store.reopen("t1")
+
+
 def test_an_unknown_id_is_named_in_the_error(store) -> None:
     with pytest.raises(TodoError, match="t9"):
         store.done("t9")

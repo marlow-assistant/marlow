@@ -370,6 +370,24 @@ Where each decided piece lives, and the calls the design left open.
   names a to-do not on the list and not handled in memory comes over as a
   proposal.
 
+## Part 2: parked (2026-11-04)
+
+Review findings left open at merge: each is an edge case nobody has hit.
+Build one when its symptom is felt.
+
+- **A proposal's one ask can be spent unseen.** `reasked_at` is set when
+  the turn context is built, so a chat turn that then errors uses up the
+  ask, and the proposal is never raised again.
+- **Reminder state is never pruned.** Entries in `todo_reminders.json`
+  outlive their items. The file grows only with the number of to-dos ever
+  made, so it's small.
+- **The migration job can outlive its server.** The one-off `at` job is
+  queued ten minutes out. A box rolled back to a branch without the to-do
+  tools in that window runs the move with no store to move into.
+
+Not seen on a device: accepting a proposal (Mike's trial had only one, and
+he dismissed it), and the re-nudge a day after a reminder.
+
 ## Part 3: Trello as an optional backing store (direction only)
 
 Mike, 2026-11-02: Marlow needs good to-dos without Trello, so part 2 comes

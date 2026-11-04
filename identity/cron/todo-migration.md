@@ -64,17 +64,22 @@ moved, and leave every other entry and field as it was.
 
 ## 3. Point the old places at the list
 
-- **Rules.** A line in `PREFERENCES.md` or a memory file that sends to-dos
-  somewhere else ("add to-dos to todo.md", "set a reminder when there's a due
-  time") outranks the identity, so the old system would keep being used.
-  Rewrite it to say to-dos go on the to-do list through the to-do tools. Keep
-  the rest of the rule if it says something else too (when to close one
-  without asking, the hour for errand reminders).
-- **Job prompts.** A `cron/*.md` you can edit that reads a to-do file (a
-  briefing, a digest, a check-in, the "waiting on you" part of a brief):
-  change it to work from the to-do list. A briefing already gets the list in
-  its context; any other job can call `todo_list`. Some prompts are the
-  software's and refuse edits; skip those, they are already updated.
+In this run you can write only inside `memory/`, `cron/schedules.json` and
+the report; anything else would need their approval, and nobody is there to
+give it. So:
+
+- **Rules in a memory file.** A line that sends to-dos somewhere else ("add
+  to-dos to todo.md", "set a reminder when there's a due time") outranks the
+  identity, so the old system would keep being used. Rewrite it to say to-dos
+  go on the to-do list through the to-do tools. Keep the rest of the rule if
+  it says something else too (when to close one without asking, the hour for
+  errand reminders).
+- **`PREFERENCES.md` and job prompts** (a `cron/*.md` that reads a to-do
+  file: a briefing, a digest, a check-in, the "waiting on you" part of a
+  brief): don't try to edit them. Write the exact change each needs in the
+  report, and offer it in your summary; when they say yes in chat, make it.
+  A briefing already gets the list in its context; any other job can call
+  `todo_list`. Prompts that are the software's are already updated.
 - **The files themselves.** A file that was only a to-do list: replace its
   body with one line, "Moved to the to-do list on <date>; use the to-do
   tools." Elsewhere, remove a bullet you moved when the bullet is only the
@@ -89,9 +94,11 @@ Write `todo-migration-report.md` at the top of the identity tree (beside
 without redoing it. List every to-do-like line you found, grouped by the file
 it was in, each with what it became (`t3`, its title, its due) or that it was
 left, and why. Then every rule, prompt and `schedules.json` entry you changed
-or removed, with a short before and after. Plain markdown, no preamble.
+or removed, with a short before and after, and the changes you are
+proposing to `PREFERENCES.md` and job prompts. Plain markdown, no preamble.
 
 Then reply with a short summary for the chat, three or four lines: how many
 items are on the list now, anything with a due date coming up, what you left
-where it was, and that the full report is in `todo-migration-report.md`.
+where it was, the rule or prompt changes you'd like their OK for, and that
+the full report is in `todo-migration-report.md`.
 Never `[silent]`: they should know this happened.

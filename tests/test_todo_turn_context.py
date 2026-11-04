@@ -116,3 +116,10 @@ def test_an_accepted_proposal_is_not_raised(store, clock) -> None:
     store.accept("t1")
     clock.at = T0 + timedelta(days=3)
     assert "Pay the water bill" not in turn_context.build_turn_context(resume=False, source="ios")
+
+
+def test_the_briefing_clips_long_notes(store) -> None:
+    store.add("Call the bank", notes="x" * todos.MAX_NOTES_CHARS, source="user")
+    block = todo_reminders.briefing_block()
+    assert len(block) < todo_reminders.BRIEFING_NOTES_CHARS + 400
+    assert "…" in block

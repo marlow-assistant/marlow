@@ -72,12 +72,20 @@ def reminder_prompt(items: list[dict[str, Any]]) -> str:
     )
 
 
-def _item_line(item: dict[str, Any], facts: list[str]) -> str:
+# A brief lists every open item, and notes run to 2000 characters each; a long
+# list at full length would be most of the prompt. The tools give the rest.
+BRIEFING_NOTES_CHARS = 300
+
+
+def _item_line(item: dict[str, Any], facts: list[str], *, notes_limit: int | None = None) -> str:
     text = f"- `{item['id']}` \"{_flat(item['title'])}\""
     if facts:
         text += f" ({'; '.join(facts)})"
     if item.get("notes"):
-        text += f". Notes: {_flat(item['notes'])}"
+        notes = _flat(item["notes"])
+        if notes_limit is not None and len(notes) > notes_limit:
+            notes = notes[:notes_limit].rstrip() + "…"
+        text += f". Notes: {notes}"
     return text
 
 
@@ -104,8 +112,10 @@ def briefing_block() -> str:
             facts.append("overdue")
         if item.get("snoozed_until"):
             facts.append(f"snoozed until {format_when(item['snoozed_until'])}")
-        lines.append(_item_line(item, facts))
-    proposed = [_item_line(i, []) for i in active if i["state"] == "proposed"]
+        lines.append(_item_line(item, facts, notes_limit=BRIEFING_NOTES_CHARS))
+    proposed = [
+        _item_line(i, [], notes_limit=BRIEFING_NOTES_CHARS) for i in active if i["state"] == "proposed"
+    ]
     if proposed:
         lines.append("Proposed by you, not yet accepted (they don't remind):")
         lines.extend(proposed)
@@ -138,7 +148,8 @@ async def tick(queue: "WorkQueue") -> str | None:
     """One pass: queue a reminder turn for whatever is due. Returns its turn
     id, or None when nothing was. Store reads and writes run in a thread;
     enqueue runs on the loop, as it must."""
-    items = await asyncio.to_thread(todo_store.due_for_reminder, renudge=preferences_store.renudge())
+    # Both reads in the thread: the preference is a file too.
+    items = await asyncio.to_thread(lambda: todo_store.due_for_reminder(renudge=preferences_store.renudge()))
     if not items:
         return None
     fired = await asyncio.to_thread(todo_store.mark_fired, [i["id"] for i in items])

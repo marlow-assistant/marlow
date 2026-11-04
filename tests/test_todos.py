@@ -357,3 +357,26 @@ def test_the_client_list_is_active_items_plus_a_week_of_done(store, clock) -> No
     store.add("new done", source="user")
     store.done("t5")
     assert [i["id"] for i in store.client_items()] == ["t1", "t2", "t5"]
+
+
+def test_a_snooze_before_the_due_time_still_leaves_the_due_reminder(store, clock) -> None:
+    """Snoozing a not-yet-due item ("in 2 hours" today, due tomorrow 09:00)
+    must not swallow tomorrow's reminder, re-nudge on or off."""
+    store.add("Book the dentist", due="2026-11-05 09:00", source="user")
+    store.snooze("t1", "2026-11-04 12:00")
+    clock.advance(hours=2)
+    assert _due_ids(store) == ["t1"]
+    store.settle(store.mark_fired(["t1"]), delivered=True)
+    clock.at = datetime(2026, 11, 5, 13, 59, tzinfo=timezone.utc)  # 08:59 local
+    assert _due_ids(store, renudge=False) == []
+    clock.advance(minutes=1)
+    assert _due_ids(store, renudge=False) == ["t1"]
+
+
+def test_a_reminder_recovered_after_a_restart_is_not_shown_as_a_snooze(store, clock) -> None:
+    store.add("timed", due="2026-11-04 11:00", source="user")
+    clock.advance(hours=1)
+    store.mark_fired(["t1"])
+    store.recover()
+    assert store.get("t1")["snoozed_until"] is None
+    assert _due_ids(store) == ["t1"]

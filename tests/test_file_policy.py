@@ -369,3 +369,12 @@ def test_webfetchs_url_is_not_treated_as_a_path() -> None:
     three), accepting the egress hole until §9 lands. Counting `url` as
     path-shaped would reinstate the prompt he removed, by the back door."""
     assert vet_pathless_tool("WebFetch", {"url": "https://example.com"})[0] == ALLOW
+
+
+@pytest.mark.parametrize("tool", ["Edit", "Write"])
+def test_the_todo_migration_report_is_writable_unattended(tool) -> None:
+    """The one-off to-do move (deploy/migrations/0008-todos.py) runs as a cron
+    turn, where a prompt is a deny; its report is the point of the run, and
+    it belongs beside USER.md, not in memory/, which every turn reads."""
+    assert _decide(tool, f"{TREE}/todo-migration-report.md") == ALLOW
+    assert _decide(tool, f"{TREE}/todo-migration-report.md.bak") == PROMPT

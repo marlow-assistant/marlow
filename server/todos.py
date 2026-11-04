@@ -340,7 +340,9 @@ class TodoStore:
 
     def _with_state(self, item: dict[str, Any], state: dict[str, dict[str, Any]]) -> dict[str, Any]:
         out = dict(item)
-        snoozed = state.get(item["id"], {}).get("snoozed_until")
+        entry = state.get(item["id"], {})
+        # A restart's re-fire (`recover`) is bookkeeping, not their snooze.
+        snoozed = None if entry.get("recovered") else entry.get("snoozed_until")
         out["snoozed_until"] = snoozed if item["state"] == "open" else None
         return out
 
@@ -485,6 +487,7 @@ class TodoStore:
             state = self._read_state()
             entry = state.setdefault(item["id"], {})
             entry["snoozed_until"] = text
+            entry.pop("recovered", None)
             self._write_state(state)
             return self._with_state(item, state)
 
@@ -509,10 +512,13 @@ class TodoStore:
                     continue
                 snoozed = _parse_instant(entry.get("snoozed_until") or "")
                 fired = _parse_instant(entry.get("fired_at") or "")
+                due_at = due_instant(item["due"])
                 if snoozed is not None:
                     at = snoozed
-                elif fired is None:
-                    at = due_instant(item["due"])
+                elif fired is None or (due_at is not None and due_at > fired):
+                    # Never fired, or fired only early (a snooze set before
+                    # the due time): the due time is still its own reminder.
+                    at = due_at
                 elif renudge:
                     at = fired + RENUDGE_AFTER
                 else:
@@ -532,6 +538,7 @@ class TodoStore:
                 entry = state.setdefault(item_id, {})
                 entry.update(fired_at=now, pending=True)
                 entry.pop("snoozed_until", None)
+                entry.pop("recovered", None)
                 fired[item_id] = now
             self._write_state(state)
         return fired
@@ -578,7 +585,7 @@ class TodoStore:
             now = _iso(self._now())
             for item_id in lost:
                 state[item_id].pop("pending", None)
-                state[item_id]["snoozed_until"] = now
+                state[item_id].update(snoozed_until=now, recovered=True)
             self._write_state(state)
             logger.info("re-queuing %d to-do reminder(s) lost to a restart", len(lost))
 

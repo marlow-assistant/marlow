@@ -1396,6 +1396,15 @@ async def cron_message(body: CronMessageBody) -> dict[str, str]:
     # session lookup and the enqueue below it would let the conversation move
     # under a consolidate that had already bound it.
     effort = await asyncio.to_thread(_cron_effort, job=body.job, entry=body.entry)
+    # The list a briefing works from, fixed by the server
+    # (docs/tasks/todos-and-reminders.md). Read here, beside the effort, for
+    # the same reason: no await may come between the session lookup and the
+    # enqueue. By job only; an entry's id is model-chosen.
+    briefing = (
+        await asyncio.to_thread(todo_reminders.briefing_block)
+        if body.job in todo_reminders.BRIEFING_JOBS
+        else None
+    )
     session_id = None
     resume = False
     if body.entry is not None:
@@ -1435,13 +1444,8 @@ async def cron_message(body: CronMessageBody) -> dict[str, str]:
             return {"status": "skipped", "reason": "no conversation session"}
         resume = True
     logger.info("cron job %r enqueuing a turn", body.job)
-    text = body.text
-    if body.job in todo_reminders.BRIEFING_JOBS:
-        # The list the brief works from, fixed by the server
-        # (docs/tasks/todos-and-reminders.md). A file read, in a thread.
-        text = f"{await asyncio.to_thread(todo_reminders.briefing_block)}\n\n{text}"
     turn_id = work_queue.enqueue(
-        text,
+        f"{briefing}\n\n{body.text}" if briefing else body.text,
         source="cron",
         client_msg_id=body.client_msg_id,
         session_id=session_id,

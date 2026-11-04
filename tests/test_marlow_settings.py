@@ -272,6 +272,18 @@ def test_product_owned_rules_are_edit_denied_and_still_readable(policy) -> None:
     )
 
 
+def test_the_todo_list_is_edit_denied_and_still_readable(policy) -> None:
+    """Mirror of boundaries.SERVER_OWNED_PATHS (docs/tasks/todos-and-reminders.md):
+    the list's one writer is the server, through the todos tools."""
+    from server.boundaries import SERVER_OWNED_PATHS
+    from server.config import settings
+
+    deny = policy["permissions"]["deny"]
+    assert SERVER_OWNED_PATHS == (str(settings.working_dir / "todos"),)
+    assert "Edit(//home/marlow/marlow-identity/todos/**)" in deny
+    assert not any(rule.startswith("Read(") and "/todos" in rule for rule in deny)
+
+
 def test_identity_files_are_not_writable_unattended(policy) -> None:
     """SOUL.md, USER.md and PREFERENCES.md must fall through to the phone, never
     be pre-allowed.

@@ -31,7 +31,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
-from server import active_turn, activity_log, changes, deny_detail, health, ideas, onboarding, schedules, transcribe, transcript, transparency, usage_report, web_static, webpush
+from server import active_turn, activity_log, changes, deny_detail, health, ideas, onboarding, schedules, todo_tools, transcribe, transcript, transparency, usage_report, web_static, webpush
 from server.auth_monitor import auth_watcher
 from server.body_limit import BodyLimitMiddleware
 from server.request_deadline import RequestDeadlineProtocol
@@ -1241,6 +1241,23 @@ def _cron_effort(*, job: str | None = None, entry: str | None = None) -> str | N
     if chosen:
         return max(chosen, key=EFFORTS.index)
     return "high" if job in HIGH_EFFORT_JOBS else None
+
+
+class TodoToolBody(BaseModel):
+    name: str
+    arguments: Any = None
+
+
+@internal_app.post("/internal/todos/tool")
+async def todo_tool(body: TodoToolBody) -> dict[str, Any]:
+    """A to-do tool call, relayed by server/todos_mcp.py
+    (docs/tasks/todos-and-reminders.md). Socket trust, like the cron
+    endpoints: reaching this socket already means this instance's user, and
+    the tool is no more than the model could do through the MCP server.
+    A refusal is a 200 with `is_error`, so its reason reaches the model; the
+    relay sees non-2xx only for a broken request. In a thread: file I/O."""
+    text, is_error = await asyncio.to_thread(todo_tools.call, body.name, body.arguments)
+    return {"text": text, "is_error": is_error}
 
 
 @internal_app.post("/internal/cron/notify", status_code=202)

@@ -40,6 +40,7 @@ from server.boundaries import (
     is_agent_config_path,
     is_harness_only_path,
     is_product_owned_path,
+    is_server_owned_path,
     is_secret_path,
     matches_deny_arg_shape,
 )
@@ -89,6 +90,15 @@ _PRODUCT_OWNED_REASON = (
     "you work with this person -- their style, their preferences -- goes in "
     "PREFERENCES.md instead, which CLAUDE.md imports. Who or what matters to "
     "them, which the shipped jobs read, goes in USER.md or memory."
+)
+
+
+# Names the way forward, like the reason above: the change was reasonable,
+# it just goes through the tools.
+_SERVER_OWNED_REASON = (
+    "Not approved: the to-do list (todos/) is kept by the Marlow server, so "
+    "it can't be edited as a file. Use the to-do tools instead -- todo_add, "
+    "todo_update, todo_done, todo_drop, todo_accept, todo_snooze, todo_list."
 )
 
 
@@ -145,6 +155,8 @@ def boundary_deny_reason(tool_name: str, tool_input: dict) -> str | None:
         # cwd -- the working dir -- and the roots here are absolute.
         if tool_name in WRITE_TOOLS and isinstance(value, str):
             anchored = anchor_to_tree(value, settings.working_dir)
+            if anchored is not None and is_server_owned_path(anchored):
+                return _SERVER_OWNED_REASON
             if anchored is None or is_product_owned_path(anchored):
                 return _PRODUCT_OWNED_REASON
     return None

@@ -90,6 +90,22 @@ def test_product_owned_rules_stay_readable():
     assert boundary_deny_reason("Grep", {"path": str(base_settings.working_dir / "CLAUDE.md")}) is None
 
 
+@pytest.mark.parametrize("tool", ["Edit", "Write"])
+@pytest.mark.parametrize("path", ["todos/todos.json", "todos/../todos/new.json", "todos/x"])
+def test_the_todo_list_is_edited_only_through_its_tools(tool, path):
+    """server/todos.py is the list's one writer (docs/tasks/todos-and-reminders.md).
+    The reason names the tools, so the model takes the route that works."""
+    reason = boundary_deny_reason(tool, {"file_path": path})
+    assert reason is not None and "todo_add" in reason
+    absolute = str(base_settings.working_dir / path)
+    assert boundary_deny_reason(tool, {"file_path": absolute}) == reason
+
+
+def test_the_todo_list_stays_readable():
+    path = str(base_settings.working_dir / "todos" / "todos.json")
+    assert boundary_deny_reason("Read", {"file_path": path}) is None
+
+
 def test_preferences_are_not_hard_denied():
     """The user's half: an edit asks the phone, like SOUL.md and USER.md."""
     path = str(base_settings.working_dir / "PREFERENCES.md")

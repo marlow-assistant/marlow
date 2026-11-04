@@ -1110,6 +1110,24 @@ def _mcp_servers(argv: list[str]) -> dict:
     return json.loads(flags[0].removeprefix("--mcp-config="))["mcpServers"]
 
 
+def test_every_call_carries_the_todos_server_pointed_at_the_internal_socket(tmp_path, monkeypatch):
+    """The to-do tools on every turn, cron included: a reminder turn marks its
+    item done and the mail watch proposes one (docs/tasks/todos-and-reminders.md).
+    The relay is handed the socket, never a file to write."""
+    fake_bin = tmp_path / "claude"
+    write_executable(fake_bin, _ARGV_ECHO_CLAUDE)
+    _with_claude_bin(monkeypatch, str(fake_bin))
+
+    for source in ("chat", "cron"):
+        argv = asyncio.run(run_claude("hello", source=source)).result_text.split("\x00")
+        server = _mcp_servers(argv)["todos"]
+        assert server["type"] == "stdio"
+        assert server["alwaysLoad"] is True, "a reminder turn shouldn't need ToolSearch"
+        assert server["args"][0] == "-I"
+        assert os.path.isfile(server["args"][1]) and server["args"][1].endswith("todos_mcp.py")
+        assert server["args"][2:] == ["--socket", str(real_settings.internal_socket_path)]
+
+
 _ONBOARDING_USER = "## Everything else\nNot yet known.\n"
 
 
@@ -1124,7 +1142,7 @@ def test_onboarding_turn_carries_the_step_line_and_the_tool(tmp_path, monkeypatc
 
     assert result.onboarding_step == "name", "queue counts the turn against this step"
     servers = _mcp_servers(argv)
-    assert set(servers) == {"weather", "onboarding"}
+    assert set(servers) == {"weather", "todos", "onboarding"}
     server = servers["onboarding"]
     assert server["type"] == "stdio" and server["alwaysLoad"] is True
     assert server["args"][0] == "-I"
@@ -1142,7 +1160,7 @@ def test_onboarding_is_never_on_an_unattended_turn(tmp_path, monkeypatch):
 
     argv = asyncio.run(run_claude("job", source="cron")).result_text.split("\x00")
 
-    assert set(_mcp_servers(argv)) == {"weather"}
+    assert set(_mcp_servers(argv)) == {"weather", "todos"}
     assert "Onboarding step" not in argv[-1]
 
 
@@ -1154,7 +1172,7 @@ def test_onboarding_is_off_once_finished(tmp_path, monkeypatch):
     argv = result.result_text.split("\x00")
 
     assert result.onboarding_step is None
-    assert set(_mcp_servers(argv)) == {"weather"}
+    assert set(_mcp_servers(argv)) == {"weather", "todos"}
     assert "Onboarding step" not in argv[-1]
 
 
@@ -1164,7 +1182,7 @@ def test_onboarding_skips_a_raw_prompt(tmp_path, monkeypatch):
 
     argv = asyncio.run(run_claude("compact", source="chat", raw_prompt=True)).result_text.split("\x00")
 
-    assert set(_mcp_servers(argv)) == {"weather"}
+    assert set(_mcp_servers(argv)) == {"weather", "todos"}
     assert "Onboarding step" not in argv[-1]
 
 
@@ -1178,7 +1196,7 @@ def test_onboarding_survives_a_broken_step_file(tmp_path, monkeypatch):
 
     assert not result.is_error
     argv = result.result_text.split("\x00")
-    assert set(_mcp_servers(argv)) == {"weather"}
+    assert set(_mcp_servers(argv)) == {"weather", "todos"}
     assert "Onboarding step" not in argv[-1]
 
 

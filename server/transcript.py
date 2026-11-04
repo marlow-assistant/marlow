@@ -488,6 +488,22 @@ def notices_after(after: int | None, limit: int) -> tuple[list[dict[str, Any]], 
         return [dict(r) for r in reversed(rows)], int(total), upto
 
 
+def notices_since(since: float, limit: int) -> tuple[list[dict[str, Any]], int]:
+    """Server notices written at or after `since` (a timestamp), for the
+    to-do move (docs/tasks/todos-and-reminders.md): a fired one-off prunes
+    itself from the schedule store, so a reminder nobody answered survives
+    only here. Returns `(newest `limit` oldest first, how many matched in
+    all)`. Raises on a failed read."""
+    where = "role = 'assistant' AND source = 'system' AND created_at >= ?"
+    with closing(_connect()) as conn:
+        total = conn.execute(f"SELECT COUNT(*) FROM transcript WHERE {where}", (since,)).fetchone()[0]
+        rows = conn.execute(
+            f"SELECT {_COLUMNS} FROM transcript WHERE {where} ORDER BY seq DESC LIMIT ?",
+            (since, limit),
+        ).fetchall()
+    return [dict(r) for r in reversed(rows)], int(total)
+
+
 def get_attachment(attachment_id: str) -> tuple[Path, str] | None:
     """`(file, stored mime)` for an attachment id, or None if the id is not a
     canonical uuid or names no attachment. The mime is the server's own record

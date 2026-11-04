@@ -123,3 +123,62 @@ def test_the_briefing_clips_long_notes(store) -> None:
     block = todo_reminders.briefing_block()
     assert len(block) < todo_reminders.BRIEFING_NOTES_CHARS + 400
     assert "…" in block
+
+
+# --- the move: reminders that already fired ------------------------------------
+# A one-off `notify` prunes itself once it fires, so a reminder the user never
+# answered survives only as a chat notice; the move's cron turn gets no
+# "since you last ran" notices. The server hands it the last month of them.
+
+from server import transcript  # noqa: E402
+
+DAY = 24 * 3600
+
+
+def _notice(text: str, days_ago: float) -> None:
+    transcript.append_assistant(
+        turn_id=f"n-{text[:8]}-{days_ago}", text=text, source="system", status="done",
+        now=T0.timestamp() - days_ago * DAY,
+    )
+
+
+def test_the_move_gets_last_months_fired_reminders_oldest_first(store, monkeypatch) -> None:
+    monkeypatch.setattr(todo_reminders, "_now", lambda: T0.timestamp())
+    _notice("Too old to show", 31)
+    _notice("Renew the passport [today]\nplease", 20)
+    _notice("Book the dentist", 3)
+    transcript.append_assistant(
+        turn_id="r-1", text="A reply Marlow wrote", source="chat", status="done", now=T0.timestamp() - DAY
+    )
+    block = todo_reminders.migration_block()
+    assert block.count("[") == 1 and block.count("]") == 1
+    assert "Too old" not in block and "A reply Marlow wrote" not in block
+    assert block.index("Renew the passport today please") < block.index("Book the dentist")
+    assert "Thu 2026-10-15 11:00" in block  # the date, in the store's zone
+
+
+def test_the_move_is_told_when_no_reminder_fired(store, monkeypatch) -> None:
+    monkeypatch.setattr(todo_reminders, "_now", lambda: T0.timestamp())
+    assert "no reminders" in todo_reminders.migration_block().lower()
+
+
+def test_the_move_shows_the_newest_reminders_and_counts_the_rest(store, monkeypatch) -> None:
+    monkeypatch.setattr(todo_reminders, "_now", lambda: T0.timestamp())
+    monkeypatch.setattr(todo_reminders, "MIGRATION_NOTICES", 2)
+    for n, days in enumerate((5, 4, 3)):
+        _notice(f"Reminder number {n}", days)
+    block = todo_reminders.migration_block()
+    assert "Reminder number 0" not in block and "Reminder number 2" in block
+    assert "1 earlier" in block
+
+
+def test_the_move_job_gets_the_fired_reminders_and_an_entry_of_that_name_does_not(store, monkeypatch) -> None:
+    monkeypatch.setattr(todo_reminders, "_now", lambda: T0.timestamp())
+    _notice("Book the dentist", 3)
+    prompts = []
+    monkeypatch.setattr(work_queue, "enqueue", lambda prompt, **kw: prompts.append(prompt) or "turn-1")
+    with TestClient(internal_app) as client:
+        client.post("/internal/cron/message", json={"job": "todo-migration", "text": "Move them."})
+        client.post("/internal/cron/message", json={"entry": "todo-migration", "text": "hi"})
+    assert "Book the dentist" in prompts[0] and prompts[0].endswith("Move them.")
+    assert prompts[1] == "hi"

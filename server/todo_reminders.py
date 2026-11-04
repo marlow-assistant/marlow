@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import asyncio
 import re
+import time
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from server.log import get_logger
@@ -123,6 +125,54 @@ def briefing_block() -> str:
         "[To-do list, from the store (the server's copy is the list; memory notes "
         "about to-dos may be stale):\n" + "\n".join(lines) + "]"
     )
+
+
+# The move (deploy/migrations/0008-todos.py). A one-off `notify` prunes itself
+# once it fires, so a reminder the user never answered is gone from
+# schedules.json and lives on only as a chat notice; the move's cron turn gets
+# no "since you last ran" notices either. The transcript keeps 30 days.
+MIGRATION_JOB = "todo-migration"
+MIGRATION_DAYS = 30
+MIGRATION_NOTICES = 60
+
+
+def _now() -> float:
+    return time.time()
+
+
+def migration_block() -> str:
+    """The server notices of the last month, for the to-do move: the
+    reminders that already fired, so it can find a to-do whose only record
+    was its reminder. Notice text is the model's, maybe from mail: flattened,
+    like the list's."""
+    from server import transcript
+
+    notices, total = transcript.notices_since(_now() - MIGRATION_DAYS * 86400, MIGRATION_NOTICES)
+    if not notices:
+        return f"[Reminders: no reminders or server notices reached the chat in the last {MIGRATION_DAYS} days.]"
+    zone = todo_store.zone()
+    lines = [
+        f"- {datetime.fromtimestamp(n['created_at'], zone).strftime('%a %Y-%m-%d %H:%M')} "
+        f"\"{_flat(n['text'])}\""
+        for n in notices
+    ]
+    earlier = f" ({total - len(notices)} earlier not shown)" if total > len(notices) else ""
+    return (
+        f"[Reminders and server notices the chat showed in the last {MIGRATION_DAYS} days, "
+        f"oldest first{earlier}. Fired reminders are no longer in schedules.json:\n"
+        + "\n".join(lines)
+        + "]"
+    )
+
+
+def job_block(job: str | None) -> str | None:
+    """The block the server puts in front of a shipped job's prompt, or None.
+    By job name only: an entry's id is model-chosen."""
+    if job in BRIEFING_JOBS:
+        return briefing_block()
+    if job == MIGRATION_JOB:
+        return migration_block()
+    return None
 
 
 def stale_proposals_sentence() -> str:

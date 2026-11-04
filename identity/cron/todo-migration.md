@@ -40,6 +40,17 @@ When you can't tell, leave it where it is and list it in the report as left,
 with why. A missed item the user can add; a routine broken by this run is
 much worse.
 
+**Reminders that already fired.** A one-off reminder removes itself from
+`schedules.json` once it goes out, so one the user never acted on survives
+only in the chat. The block at the top of this prompt lists what the chat
+showed them in the last month. A reminder there that names a one-off thing
+that isn't on the list, and that memory doesn't show done or dropped, is a
+to-do whose only record was its reminder: add it with `source: inferred`, so
+it lands as a proposal they confirm or drop with a tap, and say in the notes
+when it was reminded. Skip the rest: reminders from recurring entries, ones
+memory shows handled, and notices that aren't reminders (a greeting, a
+skipped approval).
+
 ## 2. Move each one
 
 `todo_add` with:
@@ -92,7 +103,7 @@ Anything you don't recognise, leave alone.
 Write `todo-migration-report.md` at the top of the identity tree (beside
 `USER.md`, not in `memory/`). Its point is that someone can check this run
 without redoing it. List every to-do-like line you found, grouped by the file
-it was in, each with what it became (`t3`, its title, its due) or that it was
+it was in (the fired reminders as one group of their own), each with what it became (`t3`, its title, its due) or that it was
 left, and why. Then every rule, prompt and `schedules.json` entry you changed
 or removed, with a short before and after, and the changes you are
 proposing to `PREFERENCES.md` and job prompts. Plain markdown, no preamble.

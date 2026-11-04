@@ -362,7 +362,12 @@ Where each decided piece lives, and the calls the design left open.
   ten minutes out, on a paired box with the split identity; the shipped
   `cron/todo-migration.md` does the move and writes
   `todo-migration-report.md` beside `USER.md`, then a short summary in chat.
-  It never touches a routine.
+  It never touches a routine. The server puts the last 30 days of chat
+  notices in front of that job's prompt (`todo_reminders.migration_block`;
+  Mike, 2026-11-04): a fired one-off prunes itself from `schedules.json`, so
+  a reminder nobody acted on is otherwise invisible to the move. One that
+  names a to-do not on the list and not handled in memory comes over as a
+  proposal.
 
 ## Part 3: Trello as an optional backing store (direction only)
 

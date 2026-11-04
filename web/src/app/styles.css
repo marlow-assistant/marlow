@@ -338,6 +338,31 @@ button {
   border: 1.5px solid var(--bg);
 }
 
+/* The ideas bulb and the to-dos checklist, side by side at the left. */
+.presence-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.todo-badge {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  border: 1.5px solid var(--bg);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+}
+
 /* STA-2: above the transcript. */
 /* The top banner and the +N toggle share the first row; an expanded banner gets
    a row of its own below (found by the STA-2 e2e test: as a wrapping flex row,
@@ -1893,6 +1918,139 @@ button {
   background: var(--bg);
   color: var(--text);
   font: inherit;
+}
+
+/* --- to-dos ------------------------------------------------------------------ */
+
+.todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.todo-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--bg-2);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.todo-check {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+}
+
+.todo-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.todo-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.todo-due {
+  margin-top: 2px;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+}
+
+.todo-overdue {
+  color: var(--orange);
+}
+
+.todo-done .todo-title,
+.todo-done .todo-due {
+  text-decoration: line-through;
+  color: var(--text-2);
+}
+
+/* One greyed line; the whole line is the control that opens it. */
+.todo-notes {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-notes-open {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.todo-more {
+  min-width: 44px;
+  min-height: 44px;
+  margin: -6px 0 -6px -12px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: 1.25rem;
+  text-align: left;
+}
+
+.todo-actions,
+.todo-snooze,
+.todo-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.todo-actions button,
+.todo-snooze button,
+.todo-pick button {
+  min-height: 44px;
+}
+
+.todo-pick input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0.5px solid var(--bg-3);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.todo-snooze {
+  flex-basis: 100%;
+  margin-top: 0;
+}
+
+.todo-notice {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: 0.875rem;
+}
+
+.todo-footnote {
+  margin: -2px 4px 12px;
+  font-size: 0.8125rem;
+  color: var(--text-2);
 }
 
 /* The spotlight: one compact card between the transcript and the composer. */

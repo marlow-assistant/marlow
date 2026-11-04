@@ -607,3 +607,57 @@ describe("idea_id and the quote (Do it on an idea)", () => {
     expect(posts()[0].body).toMatchObject({ client_msg_id: "u1", idea_id: "dinner-invites" });
   });
 });
+
+const TODO_QUOTE = { todo_id: "t3", emoji: "☑️", title: "Book the dentist" };
+
+describe("todo_id and the quote (Talk about it on a to-do)", () => {
+  it("carries todo_id, and not idea_id, in the body", async () => {
+    h = makeHarness();
+    await h.store.send("About this to-do", [], TODO_QUOTE);
+    expect(posts()[0].body).toMatchObject({ text: "About this to-do", todo_id: "t3" });
+    expect(posts()[0].body).not.toHaveProperty("idea_id");
+  });
+
+  it("an idea send has no todo_id", async () => {
+    h = makeHarness();
+    await h.store.send("Do it", [], QUOTE);
+    expect(posts()[0].body).not.toHaveProperty("todo_id");
+  });
+
+  it("the optimistic bubble has the to-do quote at once", async () => {
+    h = makeHarness();
+    h.server.script("POST /v1/message", hang());
+    await h.store.send("About this to-do", [], TODO_QUOTE);
+    expect(state().messages[0]).toMatchObject({ role: "user", quote: TODO_QUOTE });
+  });
+
+  it("a retry after a permanent failure sends the same todo_id", async () => {
+    h = makeHarness();
+    h.server.script("POST /v1/message", json({ detail: "nope" }, 400));
+    await h.store.send("About this to-do", [], TODO_QUOTE);
+    await flush();
+    h.store.retry(placeholderOf(h).id);
+    await flush();
+    expect(posts()[1].body.todo_id).toBe("t3");
+  });
+
+  it("an outbox resume of a persisted message, old or new quote shape, sends its own id", async () => {
+    for (const [quote, expected] of [
+      [TODO_QUOTE, { todo_id: "t3" }],
+      [QUOTE, { idea_id: "dinner-invites" }],
+    ] as const) {
+      h = makeHarness({
+        persist: new MemPersistence({
+          messages: [
+            msg({ id: "u1", text: "x", quote }),
+            msg({ id: "p1", role: "assistant", status: "sending", clientMsgId: "u1" }),
+          ],
+          cursor: { latestSeq: 100, hasOlderOnServer: false },
+        }),
+      });
+      await h.store.start();
+      await flush();
+      expect(posts()[0].body).toMatchObject({ client_msg_id: "u1", ...expected });
+    }
+  });
+});

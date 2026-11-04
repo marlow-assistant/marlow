@@ -2050,16 +2050,27 @@ button {
   overflow-wrap: anywhere;
 }
 
+/* The row's ⋯ sits at its right edge, in the accent, as on iOS (Mike,
+   2026-11-04: under the title it read as text, not a button). Out of flow, so
+   the actions it opens still expand beneath the title. */
+.todo-has-menu {
+  position: relative;
+  padding-right: 56px;
+}
+
 .todo-more {
-  min-width: 44px;
-  min-height: 44px;
-  margin: -6px 0 -6px -12px;
-  padding: 0 12px;
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   border: 0;
   background: none;
-  color: var(--text-2);
-  font-size: 1.25rem;
-  text-align: left;
+  color: var(--accent);
 }
 
 .todo-actions,

@@ -101,7 +101,10 @@ function TodoRow({ todo, now, busy, onDone, onReopen, onDrop, onAccept, onSnooze
   const snoozed = todo.state === "open" ? snoozedLine(todo, now) : null;
 
   return (
-    <li className={done ? "todo-row todo-done" : "todo-row"} aria-label={todo.title}>
+    <li
+      className={done ? "todo-row todo-done" : todo.state === "open" ? "todo-row todo-has-menu" : "todo-row"}
+      aria-label={todo.title}
+    >
       {(todo.state === "open" || done) && (
         <input
           type="checkbox"
@@ -186,7 +189,13 @@ function OpenMenu({
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        <span aria-hidden="true">⋯</span>
+        {/* The circled ellipsis in the accent, as on iOS: a control, not text. */}
+        <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.6" />
+          <circle cx="7.5" cy="12" r="1.4" fill="currentColor" />
+          <circle cx="12" cy="12" r="1.4" fill="currentColor" />
+          <circle cx="16.5" cy="12" r="1.4" fill="currentColor" />
+        </svg>
       </button>
       {open && (
         <div className="todo-actions" role="group" aria-label={`Actions for ${todo.title}`}>

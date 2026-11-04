@@ -84,6 +84,7 @@ final class APIClient {
         effort: ThinkingEffort = .default,
         location: OutgoingLocation? = nil,
         ideaId: String? = nil,
+        todoId: String? = nil,
         spoken: Bool = false,
         timeout: TimeInterval? = nil, deviceToken: String
     ) async throws -> MessageResponse {
@@ -125,6 +126,10 @@ final class APIClient {
         // it was; an id it doesn't recognise is dropped and the message still
         // sends (docs/tasks/ideas-panel.md).
         if let ideaId { body["idea_id"] = ideaId }
+        // Likewise only on "Talk about it" from the To-dos panel
+        // (docs/tasks/todos-and-reminders.md): the server quotes the item into
+        // the turn. An id it no longer has is dropped and the message sends.
+        if let todoId { body["todo_id"] = todoId }
         // Present only when said aloud in voice mode, ABSENT otherwise; the
         // server then tells Marlow its reply will be read out
         // (docs/tasks/voice-mode-hands-free.md).
@@ -205,6 +210,40 @@ final class APIClient {
         return response.ideas
     }
 
+    // MARK: - To-dos (docs/tasks/todos-and-reminders.md, part 2)
+
+    /// The list in the store's order: open, proposed, and done in the last week.
+    func todos(deviceToken: String) async throws -> [Todo] {
+        let response: TodosResponse = try await get("/v1/todos", auth: deviceToken)
+        return response.todos
+    }
+
+    /// Each tap answers with the item as it now is. A 404 means the item is
+    /// gone and a 409 that it can't take the tap; the detail is a sentence for
+    /// the box's logs, not for the screen.
+    func doneTodo(id: String, deviceToken: String) async throws -> Todo {
+        try await todoTap(id, "done", body: [:], deviceToken: deviceToken)
+    }
+
+    func dropTodo(id: String, deviceToken: String) async throws -> Todo {
+        try await todoTap(id, "drop", body: [:], deviceToken: deviceToken)
+    }
+
+    func acceptTodo(id: String, deviceToken: String) async throws -> Todo {
+        try await todoTap(id, "accept", body: [:], deviceToken: deviceToken)
+    }
+
+    /// `until` is an ISO instant WITH an offset; the box refuses a bare local
+    /// time (`TodoFormat.wireInstant`).
+    func snoozeTodo(id: String, until: String, deviceToken: String) async throws -> Todo {
+        try await todoTap(id, "snooze", body: ["until": until], deviceToken: deviceToken)
+    }
+
+    private func todoTap(_ id: String, _ action: String, body: [String: Any], deviceToken: String) async throws -> Todo {
+        let response: TodoResponse = try await post("/v1/todos/\(id)/\(action)", body: body, auth: deviceToken)
+        return response.todo
+    }
+
     /// The box's half of What's new: `server` entries only, newest first
     /// (docs/tasks/whats-new.md), and whether first-run onboarding has ended.
     /// The app's half is bundled.
@@ -239,12 +278,15 @@ final class APIClient {
     /// object; a refusal is `APIError.server(status: 422, detail: code)`.
     /// Not part of `PreferenceSync`: the box is the only copy.
     func setDay(
-        start: String? = nil, end: String? = nil, checkinEveryHours: Int? = nil, deviceToken: String
+        start: String? = nil, end: String? = nil, checkinEveryHours: Int? = nil, renudge: Bool? = nil,
+        deviceToken: String
     ) async throws -> Preferences {
         var body: [String: Any] = [:]
         if let start { body["day_start"] = start }
         if let end { body["day_end"] = end }
         if let checkinEveryHours { body["checkin_every_hours"] = checkinEveryHours }
+        // Daily re-reminders for to-dos; a box-side setting like the others.
+        if let renudge { body["renudge"] = renudge }
         return try await post("/v1/preferences", body: body, auth: deviceToken)
     }
 

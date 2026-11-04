@@ -231,29 +231,69 @@ struct TranscriptPage: Decodable {
     }
 }
 
-/// The idea a "Do it" answers, quoted above Mike's bubble
-/// (docs/tasks/ideas-panel.md). Server rows carry it as `quote` once the server
-/// has matched `idea_id` to an open idea; the phone also builds one itself for
-/// the optimistic bubble, so it looks right before the transcript syncs. One
-/// snake_case shape both ways, because `ChatMessage` persists it.
+/// The idea a "Do it" answers, or the to-do "Talk about it" answers, quoted
+/// above Mike's bubble (docs/tasks/ideas-panel.md,
+/// docs/tasks/todos-and-reminders.md). Server rows carry it as `quote` once the
+/// server has matched `idea_id` / `todo_id` to an item; the phone also builds
+/// one itself for the optimistic bubble, so it looks right before the
+/// transcript syncs. One snake_case shape both ways, because `ChatMessage`
+/// persists it. Exactly one of the two ids is set. The type keeps its name from
+/// when it only quoted ideas.
 struct IdeaQuote: Codable, Equatable {
-    let ideaId: String
+    let ideaId: String?
+    let todoId: String?
     let emoji: String
     let title: String
 
     enum CodingKeys: String, CodingKey {
         case ideaId = "idea_id"
+        case todoId = "todo_id"
         case emoji, title
     }
 
     init(ideaId: String, emoji: String, title: String) {
         self.ideaId = ideaId
+        self.todoId = nil
+        self.emoji = emoji
+        self.title = title
+    }
+
+    init(todoId: String, emoji: String, title: String) {
+        self.ideaId = nil
+        self.todoId = todoId
         self.emoji = emoji
         self.title = title
     }
 
     init(_ idea: Idea) {
         self.init(ideaId: idea.id, emoji: idea.emoji, title: idea.title)
+    }
+
+    init(_ todo: Todo) {
+        self.init(todoId: todo.id, emoji: TodoFormat.quoteEmoji, title: todo.title)
+    }
+
+    /// A quote with neither id is malformed and throws, so the row it came on
+    /// reads as quote-less. Caches written before to-dos have only `idea_id`.
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        ideaId = try c.decodeIfPresent(String.self, forKey: .ideaId)
+        todoId = try c.decodeIfPresent(String.self, forKey: .todoId)
+        guard ideaId != nil || todoId != nil else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath, debugDescription: "a quote needs idea_id or todo_id"
+            ))
+        }
+        emoji = try c.decode(String.self, forKey: .emoji)
+        title = try c.decode(String.self, forKey: .title)
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(ideaId, forKey: .ideaId)
+        try c.encodeIfPresent(todoId, forKey: .todoId)
+        try c.encode(emoji, forKey: .emoji)
+        try c.encode(title, forKey: .title)
     }
 }
 
@@ -1120,19 +1160,24 @@ struct Preferences: Decodable, Equatable {
     let dayEnd: String?
     /// Hours between check-ins, 0 = off. Nil from a box that predates it.
     let checkinEveryHours: Int?
+    /// Daily re-reminders for to-dos. Nil from a box that predates it; a
+    /// current one never sends null.
+    let renudge: Bool?
 
     init(
-        face: Int?, effort: String?, dayStart: String? = nil, dayEnd: String? = nil, checkinEveryHours: Int? = nil
+        face: Int?, effort: String?, dayStart: String? = nil, dayEnd: String? = nil, checkinEveryHours: Int? = nil,
+        renudge: Bool? = nil
     ) {
         self.face = face
         self.effort = effort
         self.dayStart = dayStart
         self.dayEnd = dayEnd
         self.checkinEveryHours = checkinEveryHours
+        self.renudge = renudge
     }
 
     enum CodingKeys: String, CodingKey {
-        case face, effort
+        case face, effort, renudge
         case dayStart = "day_start"
         case dayEnd = "day_end"
         case checkinEveryHours = "checkin_every_hours"
@@ -1150,4 +1195,88 @@ struct IdeasResponse: Decodable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         ideas = try c.decode([Lossy<Idea>].self, forKey: .ideas).compactMap(\.value)
     }
+}
+
+// MARK: - To-dos (docs/tasks/todos-and-reminders.md, part 2)
+
+/// One item from `GET /v1/todos` or a tap's answer. Facts only: the grouping,
+/// sort, overdue and every word on screen are `TodoFormat`'s. `due` stays the
+/// server's text (a bare `YYYY-MM-DD` day, or an ISO instant with an offset)
+/// because what it means depends on the phone's calendar and zone; the
+/// instants are parsed here. An item this build can't read (a state it doesn't
+/// know, no `created`) fails to decode and `TodosResponse` drops it alone.
+struct Todo: Decodable, Equatable, Identifiable {
+    /// `dropped` is never in the list, but a drop's answer carries it.
+    enum State: String, Decodable {
+        case open, proposed, done, dropped
+    }
+
+    let id: String
+    let title: String
+    let notes: String?
+    let due: String?
+    let state: State
+    /// `user` or `inferred`.
+    let source: String
+    let created: Date
+    let closed: Date?
+    /// Only on an open item.
+    let snoozedUntil: Date?
+
+    init(
+        id: String, title: String, notes: String? = nil, due: String? = nil, state: State, source: String,
+        created: Date, closed: Date? = nil, snoozedUntil: Date? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.notes = notes
+        self.due = due
+        self.state = state
+        self.source = source
+        self.created = created
+        self.closed = closed
+        self.snoozedUntil = snoozedUntil
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, notes, due, state, source, created, closed
+        case snoozedUntil = "snoozed_until"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        due = try c.decodeIfPresent(String.self, forKey: .due)
+        state = try c.decode(State.self, forKey: .state)
+        source = try c.decodeIfPresent(String.self, forKey: .source) ?? "user"
+        let createdText = try c.decode(String.self, forKey: .created)
+        guard let createdAt = TodoFormat.instant(createdText) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .created, in: c, debugDescription: "not an ISO instant: \(createdText)"
+            )
+        }
+        created = createdAt
+        // A bad value reads as absent: neither is worth losing the item over.
+        closed = ((try? c.decodeIfPresent(String.self, forKey: .closed)) ?? nil).flatMap(TodoFormat.instant)
+        snoozedUntil = ((try? c.decodeIfPresent(String.self, forKey: .snoozedUntil)) ?? nil).flatMap(TodoFormat.instant)
+    }
+}
+
+/// `GET /v1/todos`, flat and in list order. A malformed item drops alone.
+struct TodosResponse: Decodable {
+    let todos: [Todo]
+
+    enum CodingKeys: String, CodingKey { case todos }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        todos = try c.decode([Lossy<Todo>].self, forKey: .todos).compactMap(\.value)
+    }
+}
+
+/// What each tap answers with.
+struct TodoResponse: Decodable {
+    let todo: Todo
 }

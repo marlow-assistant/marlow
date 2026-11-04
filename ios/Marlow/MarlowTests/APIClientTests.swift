@@ -515,6 +515,94 @@ struct APIClientTests {
         #expect(body["idea_id"] as? String == "dinner-invites")
     }
 
+    // MARK: - To-dos (docs/tasks/todos-and-reminders.md, part 2)
+
+    private let todoJSON = """
+    {"id": "t3", "title": "Book the dentist", "notes": null, "due": "2026-11-06", "state": "done",
+     "source": "user", "created": "2026-11-01T10:30:00+00:00", "closed": "2026-11-02T10:30:00+00:00",
+     "snoozed_until": null}
+    """
+
+    @Test func todosIsAGetWithTheDeviceTokenAndDecodesTheFlatList() async throws {
+        StubURLProtocol.respond(json: #"{"todos": [\#(todoJSON)]}"#)
+
+        let todos = try await makeClient().todos(deviceToken: "tok")
+
+        let request = try #require(StubURLProtocol.lastRequest)
+        #expect(request.httpMethod == "GET")
+        #expect(request.url?.path == "/v1/todos")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
+        #expect(todos.map(\.id) == ["t3"])
+        #expect(todos.first?.state == .done)
+    }
+
+    @Test(arguments: ["done", "drop", "accept"])
+    func eachTapIsAPostToItsOwnPathAnsweringWithTheItem(action: String) async throws {
+        StubURLProtocol.respond(json: #"{"todo": \#(todoJSON)}"#)
+        let client = makeClient()
+
+        let item: Todo
+        switch action {
+        case "done": item = try await client.doneTodo(id: "t3", deviceToken: "tok")
+        case "drop": item = try await client.dropTodo(id: "t3", deviceToken: "tok")
+        default: item = try await client.acceptTodo(id: "t3", deviceToken: "tok")
+        }
+
+        let request = try #require(StubURLProtocol.lastRequest)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/todos/t3/\(action)")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
+        #expect(item.id == "t3")
+    }
+
+    @Test func snoozeSendsTheInstantUnderUntil() async throws {
+        StubURLProtocol.respond(json: #"{"todo": \#(todoJSON)}"#)
+
+        _ = try await makeClient().snoozeTodo(id: "t3", until: "2026-11-05T09:00:00-05:00", deviceToken: "tok")
+
+        let request = try #require(StubURLProtocol.lastRequest)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/todos/t3/snooze")
+        let body = try #require(StubURLProtocol.lastBodyJSON)
+        #expect(body["until"] as? String == "2026-11-05T09:00:00-05:00")
+    }
+
+    @Test(arguments: [404, 409])
+    func aRefusedTapSurfacesTheStatusForTheStoreToJudge(status: Int) async throws {
+        StubURLProtocol.respond(json: #"{"detail": "a sentence for the logs"}"#, status: status)
+
+        do {
+            _ = try await makeClient().doneTodo(id: "t3", deviceToken: "tok")
+            Issue.record("expected a throw")
+        } catch let APIError.server(got, _) {
+            #expect(got == status)
+        }
+    }
+
+    @Test func sendMessageCarriesTheTodoIdWhenGivenAndOtherwiseHasNoKey() async throws {
+        StubURLProtocol.respond(json: #"{"turn_id": "t40"}"#, status: 202)
+        _ = try await makeClient().sendMessage(text: "About this to-do", todoId: "t3", deviceToken: "tok")
+        let with = try #require(StubURLProtocol.lastBodyJSON)
+        #expect(with["todo_id"] as? String == "t3")
+        #expect(with["idea_id"] == nil)
+
+        StubURLProtocol.respond(json: #"{"turn_id": "t41"}"#, status: 202)
+        _ = try await makeClient().sendMessage(text: "hi", deviceToken: "tok")
+        let without = try #require(StubURLProtocol.lastBodyJSON)
+        #expect(without["todo_id"] == nil, "absent, so an older server never sees it")
+    }
+
+    @Test func setDayCanSendRenudgeAloneAndAsABool() async throws {
+        StubURLProtocol.respond(json: #"{"face": null, "effort": null, "renudge": false}"#)
+
+        let prefs = try await makeClient().setDay(renudge: false, deviceToken: "tok")
+
+        let body = try #require(StubURLProtocol.lastBodyJSON)
+        #expect(body.keys.sorted() == ["renudge"])
+        #expect(body["renudge"] as? Bool == false)
+        #expect(prefs.renudge == false)
+    }
+
     // MARK: - Voice mode (docs/tasks/voice-mode-hands-free.md)
 
     @Test func sendMessageMarksASpokenMessage() async throws {

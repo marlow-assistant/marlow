@@ -102,11 +102,18 @@ struct SettingsView: View {
                             }
                             .pickerStyle(.menu)
                         }
+                        // Absent from a box that predates to-do reminders.
+                        if let renudge = times.renudge {
+                            Toggle("Remind me again daily", isOn: renudgeBinding(renudge))
+                        }
                     } header: {
                         Text("Your day")
                     } footer: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Marlow tidies up after your day ends, and checks your inbox during it.")
+                            if times.renudge != nil {
+                                Text("If you don't act on a reminder, it comes back a day later until it's done, dropped or snoozed.")
+                            }
                             if let message = yourDay.message {
                                 Text(message).foregroundStyle(.red)
                             }
@@ -269,6 +276,16 @@ struct SettingsView: View {
             set: { picked in
                 guard let deviceToken = session.deviceToken else { return }
                 Task { await yourDay.setCheckin(picked, api: APIClient(), deviceToken: deviceToken) }
+            }
+        )
+    }
+
+    private func renudgeBinding(_ on: Bool) -> Binding<Bool> {
+        Binding(
+            get: { on },
+            set: { picked in
+                guard let deviceToken = session.deviceToken else { return }
+                Task { await yourDay.setRenudge(picked, api: APIClient(), deviceToken: deviceToken) }
             }
         )
     }

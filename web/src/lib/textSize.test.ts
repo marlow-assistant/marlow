@@ -31,7 +31,7 @@ describe("text size", () => {
   // A px font-size ignores the setting, and nothing else notices: the text just
   // stays small. Only the glyphs sized to a fixed circle may use px.
   it("every font size in the app's CSS is in rem, apart from the fixed-circle glyphs", () => {
-    const allowed = new Set([".retry-arrow", ".jump", ".send", ".preview-remove", ".mic"]);
+    const allowed = new Set([".retry-arrow", ".jump", ".send", ".preview-remove", ".staged-todo-remove", ".mic"]);
     const offenders: string[] = [];
     for (const file of ["src/app/styles.css", "src/app/views.css", "src/markdown/markdown.css"]) {
       let selector = "";

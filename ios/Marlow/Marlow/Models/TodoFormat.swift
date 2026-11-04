@@ -66,9 +66,21 @@ enum TodoFormat {
     static let talkAbout = "Talk about it"
     static let pickATime = "Pick a time\u{2026}"
 
-    /// What "Talk about it" sends. Just the words: the item is quoted above
-    /// them by `IdeaQuote`, and its details travel server-side by `todo_id`.
+    /// What "Talk about it" sends when the chip goes out with nothing typed.
+    /// The item is quoted above the words by `IdeaQuote`, and its details
+    /// travel server-side by `todo_id`.
     static let talkAboutMessage = "About this to-do"
+
+    /// The words a message about a staged to-do carries: what they typed, or
+    /// `talkAboutMessage` when they sent the chip alone. Talk about it stages
+    /// the item above the composer instead of sending at once (Mike,
+    /// 2026-11-04: a tap that speaks for him isn't talking about it).
+    static func talkAboutText(_ typed: String) -> String {
+        typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? talkAboutMessage : typed
+    }
+
+    /// The staged chip's remove control.
+    static let unstageLabel = "Don't talk about this to-do"
 
     /// The emoji on a to-do's quote. The server writes the same one on its row.
     static let quoteEmoji = "\u{2611}\u{FE0F}"

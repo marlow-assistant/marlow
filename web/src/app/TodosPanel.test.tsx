@@ -475,27 +475,51 @@ describe("Chat and the to-dos panel", () => {
     expect((within(dialog).getByRole("checkbox") as HTMLInputElement).disabled).toBe(false);
   });
 
-  it("Talk about it closes the pane and sends 'About this to-do' with the to-do as its quote", async () => {
-    const api = fakeApi([todo("t3", { title: "Book the dentist" })]);
-    const store = chat(api);
+  async function stageTalk(store: ReturnType<typeof chat>, title: string) {
     const dialog = await openPanel();
-    const r = await within(dialog).findByRole("listitem", { name: "Book the dentist" });
-    fireEvent.click(within(r).getByRole("button", { name: "More for Book the dentist" }));
+    const r = await within(dialog).findByRole("listitem", { name: title });
+    const more = within(r).queryByRole("button", { name: `More for ${title}` });
+    if (more) fireEvent.click(more);
     fireEvent.click(within(r).getByRole("button", { name: "Talk about it" }));
+    return store;
+  }
+
+  // Mike, 2026-11-04: sending "About this to-do" on the tap spoke for him.
+  it("Talk about it closes the pane and stages the to-do above the composer, sending nothing", async () => {
+    const api = fakeApi([todo("t3", { title: "Book the dentist" })]);
+    const store = await stageTalk(chat(api), "Book the dentist");
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(TALK_TEXT).toBe("About this to-do");
-    expect(store.send).toHaveBeenCalledTimes(1);
-    expect(store.send).toHaveBeenCalledWith("About this to-do", undefined, { todo_id: "t3", emoji: "☑️", title: "Book the dentist" });
+    expect(store.send).not.toHaveBeenCalled();
+    expect(screen.getByTestId("staged-todo").textContent).toContain("Book the dentist");
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Message" })));
     // Nothing was tapped on the list itself.
     expect(api.doneTodo).not.toHaveBeenCalled();
   });
 
-  it("Talk about it on a suggestion sends the same", async () => {
-    const store = chat(fakeApi([todo("t4", { state: "proposed", title: "Pay the water bill" })]));
-    const dialog = await openPanel();
-    const r = await within(dialog).findByRole("listitem", { name: "Pay the water bill" });
-    fireEvent.click(within(r).getByRole("button", { name: "Talk about it" }));
-    expect(store.send).toHaveBeenCalledWith("About this to-do", undefined, { todo_id: "t4", emoji: "☑️", title: "Pay the water bill" });
+  it("what they type goes out with the to-do as its quote, and the chip clears", async () => {
+    const store = await stageTalk(chat(fakeApi([todo("t3", { title: "Book the dentist" })])), "Book the dentist");
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "can this wait a week?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(store.send).toHaveBeenCalledTimes(1));
+    expect(store.send).toHaveBeenCalledWith("can this wait a week?", [], { todo_id: "t3", emoji: "☑️", title: "Book the dentist" });
+    await waitFor(() => expect(screen.queryByTestId("staged-todo")).toBeNull());
+  });
+
+  it("the chip alone sends the default words", async () => {
+    const store = await stageTalk(chat(fakeApi([todo("t4", { state: "proposed", title: "Pay the water bill" })])), "Pay the water bill");
+    expect(TALK_TEXT).toBe("About this to-do");
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(store.send).toHaveBeenCalledWith("About this to-do", [], { todo_id: "t4", emoji: "☑️", title: "Pay the water bill" }));
+  });
+
+  it("removing the chip unstages it, and the next message is an ordinary one", async () => {
+    const store = await stageTalk(chat(fakeApi([todo("t3", { title: "Book the dentist" })])), "Book the dentist");
+    fireEvent.click(screen.getByRole("button", { name: "Don't talk about this to-do" }));
+    expect(screen.queryByTestId("staged-todo")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "hi" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() => expect(store.send).toHaveBeenCalledWith("hi", []));
   });
 });
 

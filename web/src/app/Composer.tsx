@@ -5,7 +5,9 @@ import type { ChatStore } from "../lib/chatStore";
 import { Dictation, PartialTranscriptError, transcribeErrorText } from "../lib/dictation";
 import { downscaleToJpeg, ImageUnsupportedError, MAX_IMAGES } from "../lib/imageDownscale";
 import { Microphone } from "../lib/segmentRecorder";
+import type { Todo } from "../lib/apiModels";
 import { unlockAudio } from "./feedback";
+import { quoteOf, TALK_TEXT } from "./TodosPanel";
 
 /** Speech to text through the box (docs/tasks/voice-mode-android.md). Null
  * when the box or this browser can't. */
@@ -85,7 +87,19 @@ function AttachMenu({
   );
 }
 
-export function Composer({ store, voice = null }: { store: ChatStore; voice?: ComposerVoice | null }) {
+export function Composer({
+  store,
+  voice = null,
+  todo = null,
+  onTodo = () => {},
+}: {
+  store: ChatStore;
+  voice?: ComposerVoice | null;
+  /** The to-do a Talk about it tap staged: it rides on the next send, with
+   * TALK_TEXT as the words if nothing was typed. */
+  todo?: Todo | null;
+  onTodo?: (todo: Todo | null) => void;
+}) {
   const [text, setText] = useState("");
   const [dictating, setDictating] = useState<Dictating>("idle");
   const dictationRef = useRef<{ dictation: Dictation; microphone: Microphone } | null>(null);
@@ -124,7 +138,12 @@ export function Composer({ store, voice = null }: { store: ChatStore; voice?: Co
   // send puts the same thumbnails back.
   useEffect(() => () => imagesRef.current.forEach((i) => URL.revokeObjectURL(i.url)), []);
 
-  const canSend = (text.trim() !== "" || images.length > 0) && dictating === "idle";
+  const canSend = (text.trim() !== "" || images.length > 0 || todo !== null) && dictating === "idle";
+
+  // A staged to-do means they're about to say something about it.
+  useEffect(() => {
+    if (todo) taRef.current?.focus();
+  }, [todo]);
 
   const onDictating = voice?.onDictating;
   useEffect(() => onDictating?.(dictating !== "idle"), [dictating, onDictating]);
@@ -259,13 +278,19 @@ export function Composer({ store, voice = null }: { store: ChatStore; voice?: Co
     // send refuses.
     const draft = text;
     const staged = imagesRef.current;
+    const about = todo;
     setText("");
     imagesRef.current = [];
     setImages([]);
-    const ok = await store.send(draft, staged.map((i) => i.blob));
+    if (about) onTodo(null);
+    const blobs = staged.map((i) => i.blob);
+    const ok = about
+      ? await store.send(draft.trim() ? draft : TALK_TEXT, blobs, quoteOf(about))
+      : await store.send(draft, blobs);
     if (ok) staged.forEach((i) => URL.revokeObjectURL(i.url));
     else {
       setText(draft);
+      if (about) onTodo(about);
       const merged = [...staged, ...imagesRef.current];
       // Photos added while the send was in flight can push past the cap: drop
       // the newest, free their blob URLs, and say so.
@@ -303,6 +328,24 @@ export function Composer({ store, voice = null }: { store: ChatStore; voice?: Co
   return (
     <div className="composer">
       {imageError && <div className="notice">{imageError}</div>}
+      {todo && (
+        <div className="staged-todo" data-testid="staged-todo">
+          <div className="user-quote">
+            <span className="user-quote-emoji" aria-hidden="true">
+              {quoteOf(todo).emoji}
+            </span>
+            <span className="user-quote-title">{todo.title}</span>
+          </div>
+          <button
+            type="button"
+            className="staged-todo-remove"
+            aria-label="Don't talk about this to-do"
+            onClick={() => onTodo(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
       {images.length > 0 && (
         <div className="preview-row" data-testid="preview-row">
           {images.map((image) => (

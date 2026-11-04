@@ -649,7 +649,8 @@ button {
 }
 
 /* SND-8: red circular arrow beside the bubble, vertically centred. */
-/* Glyphs in fixed circles (this, .jump, .send, .mic, .preview-remove) stay in px:
+/* Glyphs in fixed circles (this, .jump, .send, .mic, .preview-remove,
+   .staged-todo-remove) stay in px:
    they are icons sized to their button, and scaled with the text setting they
    would overflow it. Everything else is in rem (lib/textSize.ts). */
 .retry-arrow {
@@ -977,6 +978,32 @@ button {
 /* CMP-5: 64x64 thumbnails, three across (six are two rows), each with a
  * remove control on its corner. A single row of six at 44px left a control
  * too small to hit with confidence on a phone (Mike, 2026-10-24). */
+/* A to-do staged by Talk about it: quoted as its bubble will quote it, with a
+   remove control at full tap size. */
+.staged-todo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px 44px;
+}
+
+.staged-todo .user-quote {
+  flex: 1;
+  margin: 0;
+}
+
+.staged-todo-remove {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: none;
+  color: inherit;
+  opacity: 0.6;
+  font-size: 22px;
+  line-height: 1;
+}
+
 .preview-row {
   display: grid;
   grid-template-columns: repeat(3, 64px);

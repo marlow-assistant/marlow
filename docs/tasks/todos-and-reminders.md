@@ -358,6 +358,11 @@ Where each decided piece lives, and the calls the design left open.
   dropped never listed), taps `done`, `drop`, `accept`, `snooze` (an instant
   with offset, at most a year out), `todo_id` on `/v1/message` with a ☑️
   quote, `renudge` in `/v1/preferences`.
+- **Talk about it** stages the item as a quote chip above the composer, with
+  the field focused, and the next send carries it (typed or dictated words;
+  the chip alone sends "About this to-do"). Sending on the tap, as Do it
+  does for an idea, was tried first: it spoke for the user before they'd
+  said anything (Mike, 2026-11-04).
 - **Migration:** `deploy/migrations/0008-todos.py` adds a one-off `at` job
   ten minutes out, on a paired box with the split identity; the shipped
   `cron/todo-migration.md` does the move and writes

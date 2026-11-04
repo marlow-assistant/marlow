@@ -76,6 +76,9 @@ struct ChatView: View {
     /// captured and cleared together, or a send could carry the text without
     /// the images or vice versa).
     @State private var pendingImages: [Data] = []
+    /// The to-do a Talk about it tap staged above the composer, sent with the
+    /// next message (typed, dictated, or the chip alone) and cleared with it.
+    @State private var pendingTodo: Todo?
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     /// Presents the photo library. A separate flag from `selectedPhotoItems`
     /// because the picker is no longer its own button: `PhotosPicker` as a
@@ -395,6 +398,7 @@ struct ChatView: View {
                 TransientNotice(text: notice)
             }
 
+            pendingTodoChip
             pendingImageTray
 
             // The spotlight: the one idea Marlow thinks is worth interrupting
@@ -779,6 +783,29 @@ struct ChatView: View {
         }
     }
 
+    /// The staged to-do, quoted the way the sent bubble will quote it, with a
+    /// remove control. Sits with the image tray: both are "rides on the next
+    /// send".
+    @ViewBuilder private var pendingTodoChip: some View {
+        if let todo = pendingTodo {
+            HStack(alignment: .center, spacing: 8) {
+                IdeaQuoteBlock(quote: IdeaQuote(todo))
+                Spacer(minLength: 0)
+                Button {
+                    pendingTodo = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel(TodoFormat.unstageLabel)
+            }
+            .padding(.leading, 12)
+            .padding(.horizontal, 8)
+        }
+    }
+
     @ViewBuilder private var pendingImageTray: some View {
         if !pendingImages.isEmpty {
             // One 64x64 thumbnail per staged image, three across, so six
@@ -1106,9 +1133,11 @@ struct ChatView: View {
             // must ride the same run-loop hop as the text it was cleared
             // alongside, or a send could carry one without the other.
             let images = pendingImages
+            let todo = pendingTodo
             draft = ""
             pendingImages = []
-            if store.send(text: text, images: images) {
+            pendingTodo = nil
+            if sendStaged(text: text, images: images, todo: todo) {
                 ChatSoundPlayer.playSent()
                 ChatHaptics.sent()
                 scrollToBottomRequest += 1
@@ -1117,6 +1146,7 @@ struct ChatView: View {
                 // save). Put what was staged back rather than swallowing it.
                 draft = text
                 pendingImages = images
+                pendingTodo = todo
             }
         }
     }
@@ -1137,17 +1167,31 @@ struct ChatView: View {
         }
     }
 
-    /// Talk about it on a to-do: closes the panel and sends `About this to-do`
-    /// (quoting the item) through the composer's own path, as `doIt` does for an
-    /// idea. The item's details do not ride in the text: `todo_id` lets the
-    /// server quote it into the turn. The item stays on the list.
+    /// Talk about it on a to-do: closes the panel and stages the item above
+    /// the composer, with the field focused, so Mike says what he wants about
+    /// it before anything goes (Mike, 2026-11-04: sending `About this to-do`
+    /// on the tap spoke for him). The item stays on the list. A second tap on
+    /// another item replaces the first: a message is about one to-do.
     private func talkAbout(_ todo: Todo) {
         showingTodos = false
-        if store.send(text: TodoFormat.talkAboutMessage, todoId: todo.id, quote: IdeaQuote(todo)) {
-            ChatSoundPlayer.playSent()
-            ChatHaptics.sent()
-            scrollToBottomRequest += 1
+        pendingTodo = todo
+        // After the sheet's dismissal, not during it: focus asked for while a
+        // sheet is still presented can be dropped. The delay is a guess at the
+        // dismissal, not a measured value; check it on the device.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            if pendingTodo != nil { draftFocused = true }
         }
+    }
+
+    /// The composer's one send, with whatever is staged. A staged to-do sends
+    /// its id and quote, and the words fall back to `TodoFormat.talkAboutText`
+    /// when nothing was typed. Its details don't ride in the text: `todo_id`
+    /// lets the server quote the item into the turn.
+    private func sendStaged(text: String, images: [Data], todo: Todo?) -> Bool {
+        guard let todo else { return store.send(text: text, images: images) }
+        return store.send(
+            text: TodoFormat.talkAboutText(text), images: images, todoId: todo.id, quote: IdeaQuote(todo)
+        )
     }
 
     /// Routes a finished dictation to whichever endpoint ended it.
@@ -1202,6 +1246,7 @@ struct ChatView: View {
         if dictation.isTranscribing { return false }
         if dictation.isRecording { return true }
         return !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingImages.isEmpty
+            || pendingTodo != nil
     }
 
     /// Whether another image can be staged; says so when it cannot. The cap is
@@ -1239,9 +1284,11 @@ struct ChatView: View {
             // impossible to attribute.
             let outgoing = joined(draft, text)
             let images = pendingImages
+            let todo = pendingTodo
             draft = ""
             pendingImages = []
-            if store.send(text: outgoing, images: images) {
+            pendingTodo = nil
+            if sendStaged(text: outgoing, images: images, todo: todo) {
                 ChatSoundPlayer.playSent()
                 ChatHaptics.sent()
                 scrollToBottomRequest += 1
@@ -1251,6 +1298,7 @@ struct ChatView: View {
                 // Restores the combined text, which is what he'd want to retry.
                 draft = outgoing
                 pendingImages = images
+                pendingTodo = todo
             }
         }
     }

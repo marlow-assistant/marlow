@@ -54,3 +54,16 @@ struct TodoSendTests {
         #expect(sent[1].todoId == "t3", "the item must not be lost to a flaky first attempt")
     }
 }
+
+// MARK: - Talk about it stages the item; the words are the user's
+
+struct TodoTalkAboutTextTests {
+    @Test func whatTheyTypedIsSentAsIs() {
+        #expect(TodoFormat.talkAboutText("can this move to Friday?") == "can this move to Friday?")
+    }
+
+    @Test func sendingTheChipAloneFallsBackToTheDefaultWords() {
+        #expect(TodoFormat.talkAboutText("") == "About this to-do")
+        #expect(TodoFormat.talkAboutText("  \n ") == "About this to-do")
+    }
+}

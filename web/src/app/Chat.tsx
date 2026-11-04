@@ -24,7 +24,7 @@ import { PermissionCard } from "./PermissionCard";
 import { FaceImage } from "./Face";
 import { PresenceHeader } from "./Header";
 import { Settings } from "./Settings";
-import { quoteOf as todoQuoteOf, TALK_TEXT, TodosPanel } from "./TodosPanel";
+import { TodosPanel } from "./TodosPanel";
 import { useIdeas } from "./useIdeas";
 import { useTodos } from "./useTodos";
 import type { ChangeEntry } from "../lib/whatsNew";
@@ -157,11 +157,13 @@ export function Chat({
     todos.refresh();
     setSheet("todos");
   };
-  // Like Do it: the panel closes and the chat takes over, the to-do quoted in
-  // the bubble. Nothing about the list changes.
+  // The panel closes and the to-do is staged above the composer, which sends
+  // it with whatever they then say (Mike, 2026-11-04: sending "About this
+  // to-do" on the tap spoke for him). Nothing about the list changes.
+  const [talking, setTalking] = useState<Todo | null>(null);
   const talkAbout = (todo: Todo) => {
     setSheet(null);
-    void store.send(TALK_TEXT, undefined, todoQuoteOf(todo));
+    setTalking(todo);
   };
 
   // --- geometry helpers ------------------------------------------------------
@@ -509,7 +511,7 @@ export function Chat({
             onNotNow={() => ideas.dismiss(ideas.spotlight!.id, null)}
           />
         )}
-        <Composer store={store} voice={composerVoice} />
+        <Composer store={store} voice={composerVoice} todo={talking} onTodo={setTalking} />
       </footer>
 
       {voiceOpen && <VoiceMode store={store} api={api} onClose={() => setVoiceOpen(false)} />}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Api } from "../lib/api";
 import type { ChatStore, Effort } from "../lib/chatStore";
-import type { Idea } from "../lib/apiModels";
+import type { Idea, Todo } from "../lib/apiModels";
 import type { LocationWatcher } from "../lib/location";
 import { dividerLabels } from "../lib/dividers";
 import type { Face } from "../lib/faces";
@@ -24,7 +24,9 @@ import { PermissionCard } from "./PermissionCard";
 import { FaceImage } from "./Face";
 import { PresenceHeader } from "./Header";
 import { Settings } from "./Settings";
+import { TodosPanel } from "./TodosPanel";
 import { useIdeas } from "./useIdeas";
+import { useTodos } from "./useTodos";
 import type { ChangeEntry } from "../lib/whatsNew";
 import { useWhatsNew } from "./useWhatsNew";
 import { WhatsNewCard } from "./WhatsNew";
@@ -79,7 +81,7 @@ export function Chat({
   const measuredTop = useRef(0);
   const [unseen, setUnseen] = useState(false);
   /** One sheet at a time, as iOS's single `ActiveSheet`. */
-  const [sheet, setSheet] = useState<"settings" | "marlow" | "ideas" | null>(null);
+  const [sheet, setSheet] = useState<"settings" | "marlow" | "ideas" | "todos" | null>(null);
   const following = useRef<Following | null>(null);
   const localSends = useRef(new Set<string>());
   const pendingSendScroll = useRef(false);
@@ -92,6 +94,9 @@ export function Chat({
   // last day passes, without waiting on the server.
   const today = localToday(new Date(now));
   const ideas = useIdeas(api, today);
+  // The same tick as a Date, for the to-dos' overdue test and their wording.
+  const nowDate = useMemo(() => new Date(now), [now]);
+  const todos = useTodos(api, nowDate);
   const whatsNew = useWhatsNew(api, bundledChanges);
   /** The card's "Don't show again" note, here so it outlives the card being
    * held back by an approval or a sheet, or a refresh emptying `pending`. */
@@ -145,6 +150,20 @@ export function Chat({
     setSheet(null);
     ideas.take(idea.id);
     void store.send(DO_IT_TEXT, undefined, quoteOf(idea));
+  };
+
+  const openTodos = () => {
+    todos.clearNotice();
+    todos.refresh();
+    setSheet("todos");
+  };
+  // The panel closes and the to-do is staged above the composer, which sends
+  // it with whatever they then say (Mike, 2026-11-04: sending "About this
+  // to-do" on the tap spoke for him). Nothing about the list changes.
+  const [talking, setTalking] = useState<Todo | null>(null);
+  const talkAbout = (todo: Todo) => {
+    setSheet(null);
+    setTalking(todo);
   };
 
   // --- geometry helpers ------------------------------------------------------
@@ -415,9 +434,11 @@ export function Chat({
         presence={presence}
         face={face}
         ideasDot={ideas.dot}
+        todosBadge={todos.badge}
         onSettings={() => setSheet("settings")}
         onAvatar={() => setSheet("marlow")}
         onIdeas={openIdeas}
+        onTodos={openTodos}
       />
 
       <StatusStrip items={strip} />
@@ -490,7 +511,7 @@ export function Chat({
             onNotNow={() => ideas.dismiss(ideas.spotlight!.id, null)}
           />
         )}
-        <Composer store={store} voice={composerVoice} />
+        <Composer store={store} voice={composerVoice} todo={talking} onTodo={setTalking} />
       </footer>
 
       {voiceOpen && <VoiceMode store={store} api={api} onClose={() => setVoiceOpen(false)} />}
@@ -510,6 +531,21 @@ export function Chat({
           today={today}
           onDoIt={doIt}
           onDismiss={ideas.dismiss}
+          onClose={() => setSheet(null)}
+        />
+      )}
+      {sheet === "todos" && (
+        <TodosPanel
+          todos={todos.todos}
+          now={nowDate}
+          notice={todos.notice}
+          busy={todos.busy}
+          onDone={(t) => todos.tap(t, { kind: "done" })}
+          onReopen={(t) => todos.tap(t, { kind: "reopen" })}
+          onDrop={(t) => todos.tap(t, { kind: "drop" })}
+          onAccept={(t) => todos.tap(t, { kind: "accept" })}
+          onSnooze={(t, until) => todos.tap(t, { kind: "snooze", until })}
+          onTalk={talkAbout}
           onClose={() => setSheet(null)}
         />
       )}

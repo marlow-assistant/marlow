@@ -532,3 +532,53 @@ export function decodeIdeas(raw: unknown): Idea[] {
     .map(decodeIdea)
     .filter((i): i is Idea => i !== null);
 }
+
+// MARK: To-dos
+
+export type TodoState = "open" | "proposed" | "done" | "dropped";
+
+/** One to-do from `GET /v1/todos` or a tap's `{todo}` (docs/tasks/todos-and-reminders.md,
+ * part 2). `due` is a `YYYY-MM-DD` day or an ISO instant with offset; the
+ * list never carries `dropped`, but a drop's own answer does. Instants are
+ * kept as the strings the box sent: lib/todoFormat.ts reads them. */
+export interface Todo {
+  id: string;
+  title: string;
+  notes: string | null;
+  due: string | null;
+  state: TodoState;
+  source: "user" | "inferred";
+  created: string;
+  closed: string | null;
+  snoozedUntil: string | null;
+}
+
+const TODO_STATES: readonly string[] = ["open", "proposed", "done", "dropped"];
+
+/** Lenient like the rest: an item without an id, a title or a state this
+ * build knows is skipped alone. A malformed optional field falls back to null. */
+export function decodeTodo(raw: unknown): Todo | null {
+  const o = obj(raw);
+  if (!o) return null;
+  const id = optStr(o.id);
+  const title = optStr(o.title);
+  if (!id || !title) return null;
+  if (typeof o.state !== "string" || !TODO_STATES.includes(o.state)) return null;
+  return {
+    id,
+    title,
+    notes: optStr(o.notes) || null,
+    due: optStr(o.due) || null,
+    state: o.state as TodoState,
+    source: o.source === "inferred" ? "inferred" : "user",
+    created: optStr(o.created) ?? "",
+    closed: optStr(o.closed) || null,
+    snoozedUntil: optStr(o.snoozed_until) || null,
+  };
+}
+
+export function decodeTodos(raw: unknown): Todo[] {
+  return list(obj(raw)?.todos)
+    .map(decodeTodo)
+    .filter((t): t is Todo => t !== null);
+}

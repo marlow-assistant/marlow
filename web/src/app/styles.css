@@ -338,6 +338,31 @@ button {
   border: 1.5px solid var(--bg);
 }
 
+/* The ideas bulb and the to-dos checklist, side by side at the left. */
+.presence-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.todo-badge {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  border: 1.5px solid var(--bg);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+}
+
 /* STA-2: above the transcript. */
 /* The top banner and the +N toggle share the first row; an expanded banner gets
    a row of its own below (found by the STA-2 e2e test: as a wrapping flex row,
@@ -624,7 +649,8 @@ button {
 }
 
 /* SND-8: red circular arrow beside the bubble, vertically centred. */
-/* Glyphs in fixed circles (this, .jump, .send, .mic, .preview-remove) stay in px:
+/* Glyphs in fixed circles (this, .jump, .send, .mic, .preview-remove,
+   .staged-todo-remove) stay in px:
    they are icons sized to their button, and scaled with the text setting they
    would overflow it. Everything else is in rem (lib/textSize.ts). */
 .retry-arrow {
@@ -952,6 +978,61 @@ button {
 /* CMP-5: 64x64 thumbnails, three across (six are two rows), each with a
  * remove control on its corner. A single row of six at 44px left a control
  * too small to hit with confidence on a phone (Mike, 2026-10-24). */
+/* A to-do staged by Talk about it: a tinted card saying what the next message
+   is about, with a remove control at full tap size. Sized to be noticed
+   (Mike, 2026-11-04: the first cut reused the bubble's small quote). */
+.staged-todo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 6px;
+  padding: 4px 0 4px 14px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.staged-todo-emoji {
+  flex: none;
+  font-size: 1.25rem;
+}
+
+.staged-todo-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.staged-todo-caption {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
+.staged-todo-title {
+  font-size: 1rem;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.staged-todo-remove {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border: 0;
+  background: none;
+  color: inherit;
+  opacity: 0.65;
+  font-size: 30px;
+  line-height: 1;
+  padding: 0;
+}
+
 .preview-row {
   display: grid;
   grid-template-columns: repeat(3, 64px);
@@ -1893,6 +1974,191 @@ button {
   background: var(--bg);
   color: var(--text);
   font: inherit;
+}
+
+/* --- to-dos ------------------------------------------------------------------ */
+
+.todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.todo-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--bg-2);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.todo-check {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+}
+
+.todo-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.todo-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.todo-due {
+  margin-top: 2px;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+}
+
+.todo-overdue {
+  color: var(--orange);
+}
+
+.todo-done .todo-title,
+.todo-done .todo-due {
+  text-decoration: line-through;
+  color: var(--text-2);
+}
+
+/* One greyed line; the whole line is the control that opens it. */
+.todo-notes {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: var(--text-2);
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-notes-open {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* The row's ⋯ sits at its right edge, in the accent, as on iOS (Mike,
+   2026-11-04: under the title it read as text, not a button). Its menu is a
+   popover anchored under it, not buttons in the row. */
+.todo-has-menu {
+  position: relative;
+  padding-right: 56px;
+}
+
+.todo-menu {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+
+.todo-more {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+}
+
+.todo-popover {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 4px;
+  z-index: 5;
+  min-width: 200px;
+}
+
+.todo-popover button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.todo-snooze-items {
+  margin: 0 0 4px 12px;
+  padding-left: 4px;
+  border-left: 1px solid var(--bg-2);
+}
+
+/* Stacked: side by side, the date field was clipped to "yyyy-mm-dd, –". */
+.todo-popover .todo-pick {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 4px 6px 6px;
+}
+
+.todo-popover .todo-pick input {
+  flex: none;
+}
+
+.todo-popover .todo-pick button {
+  text-align: center;
+}
+
+.todo-popover .todo-menu-destructive {
+  color: var(--red);
+}
+
+.todo-actions,
+.todo-snooze,
+.todo-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.todo-actions button,
+.todo-snooze button,
+.todo-pick button {
+  min-height: 44px;
+}
+
+.todo-pick input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0.5px solid var(--bg-3);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.todo-snooze {
+  flex-basis: 100%;
+  margin-top: 0;
+}
+
+.todo-notice {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--bg-2);
+  color: var(--text-2);
+  font-size: 0.875rem;
+}
+
+.todo-footnote {
+  margin: -2px 4px 12px;
+  font-size: 0.8125rem;
+  color: var(--text-2);
 }
 
 /* The spotlight: one compact card between the transcript and the composer. */

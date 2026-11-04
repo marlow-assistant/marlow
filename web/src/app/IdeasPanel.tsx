@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { Idea } from "../lib/apiModels";
-import type { IdeaQuote } from "../lib/types";
+import type { Quote } from "../lib/types";
 import { isNearing, sectionsOf, untilText } from "../lib/ideas";
 
 /** What a "Do it" sends as text. The bubble quotes the idea above it, so the
@@ -8,7 +8,7 @@ import { isNearing, sectionsOf, untilText } from "../lib/ideas";
 export const DO_IT_TEXT = "Do it";
 
 /** The quote the optimistic bubble carries, before the server row says so. */
-export function quoteOf(idea: Idea): IdeaQuote {
+export function quoteOf(idea: Idea): Quote {
   return { idea_id: idea.id, emoji: idea.emoji, title: idea.title };
 }
 

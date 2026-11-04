@@ -660,35 +660,59 @@ function YourDaySection({ api }: { api: Api }) {
     save({ ...shown, checkinEveryHours: hours }, { checkin_every_hours: hours }, () => CHECKIN_SAVE_FAILED);
   };
 
+  const changeRenudge = (on: boolean) => {
+    if (on === shown.renudge) return;
+    save({ ...shown, renudge: on }, { renudge: on }, () => CHECKIN_SAVE_FAILED);
+  };
+
   return (
-    <section className="settings-section" aria-label="Your day">
-      <h3 className="view-day">Your day</h3>
-      <div className="settings-group">
-        <TimeRow label="Starts" value={shown.dayStart} onChange={(v) => change("dayStart", v)} />
-        <TimeRow label="Ends" value={shown.dayEnd} onChange={(v) => change("dayEnd", v)} />
-        {/* Absent from a box that predates check-ins. */}
-        {shown.checkinEveryHours !== null && (
-          <div className="settings-row">
-            <label className="settings-time">
-              Check-ins
-              <select value={shown.checkinEveryHours} onChange={(e) => changeCheckin(Number(e.target.value))}>
-                {CHECKIN_HOURS.map((h) => (
-                  <option key={h} value={h}>
-                    {checkinLabel(h)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+    <>
+      <section className="settings-section" aria-label="Your day">
+        <h3 className="view-day">Your day</h3>
+        <div className="settings-group">
+          <TimeRow label="Starts" value={shown.dayStart} onChange={(v) => change("dayStart", v)} />
+          <TimeRow label="Ends" value={shown.dayEnd} onChange={(v) => change("dayEnd", v)} />
+          {/* Absent from a box that predates check-ins. */}
+          {shown.checkinEveryHours !== null && (
+            <div className="settings-row">
+              <label className="settings-time">
+                Check-ins
+                <select value={shown.checkinEveryHours} onChange={(e) => changeCheckin(Number(e.target.value))}>
+                  {CHECKIN_HOURS.map((h) => (
+                    <option key={h} value={h}>
+                      {checkinLabel(h)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+        </div>
+        <p className="settings-footer">Marlow tidies up after your day ends, and checks your inbox during it.</p>
+        {error && (
+          <p className="settings-footer settings-error" role="alert">
+            {error}
+          </p>
         )}
-      </div>
-      <p className="settings-footer">Marlow tidies up after your day ends, and checks your inbox during it.</p>
-      {error && (
-        <p className="settings-footer settings-error" role="alert">
-          {error}
-        </p>
+      </section>
+      {/* Absent from a box that predates to-do reminders. */}
+      {shown.renudge != null && (
+        <section className="settings-section" aria-label="Reminders">
+          <h3 className="view-day">Reminders</h3>
+          <div className="settings-group">
+            <div className="settings-row">
+              <label className="settings-time">
+                Remind me again daily
+                <input type="checkbox" checked={shown.renudge} onChange={(e) => changeRenudge(e.target.checked)} />
+              </label>
+            </div>
+          </div>
+          <p className="settings-footer">
+            If you don't act on a reminder, it comes back a day later until it's done, dropped or snoozed.
+          </p>
+        </section>
       )}
-    </section>
+    </>
   );
 }
 

@@ -12,7 +12,16 @@
 //     being replaced). Reachable too: counting our own cancel as unreachable
 //     would paint "Can't reach Marlow" on every sign-out (STA-4).
 
-import { decodeIdeas, decodePermissionSummary, decodeUsageReport, type Idea, type UsageReport } from "./apiModels";
+import {
+  decodeIdeas,
+  decodePermissionSummary,
+  decodeTodo,
+  decodeTodos,
+  decodeUsageReport,
+  type Idea,
+  type Todo,
+  type UsageReport,
+} from "./apiModels";
 import { isClockTime, type DayTimes } from "./dayFormat";
 import { decodeChanges, type ChangeEntry } from "./whatsNew";
 import {
@@ -123,6 +132,9 @@ export interface SendMessageBody {
   /** "Do it" on an idea (docs/tasks/ideas-panel.md). Absent for a normal
    * send; the server warns and drops an id that is not open, and still sends. */
   idea_id?: string;
+  /** "Talk about it" on a to-do (docs/tasks/todos-and-reminders.md). Like
+   * `idea_id`: absent for a normal send, and never both. */
+  todo_id?: string;
   /** Spoken in voice mode; the reply will be read aloud. Absent for a typed
    * message (server `MessageRequest.spoken`). */
   spoken?: true;
@@ -394,6 +406,47 @@ export class Api {
     await this.json(`/v1/ideas/${encodeURIComponent(id)}/dismiss`, { method: "POST", body: { reason }, signal });
   }
 
+  // --- to-dos ----------------------------------------------------------------
+
+  /** `GET /v1/todos`: flat, in list order; done items only from the last
+   * week, never a dropped one. */
+  async todos(signal?: AbortSignal): Promise<Todo[]> {
+    return decodeTodos(await this.json("/v1/todos", { signal }));
+  }
+
+  /** The taps. Each answers the item as it now is. 404 (HttpError) when the
+   * id is gone, 409 when it cannot take that tap; the `detail` is a sentence
+   * for logs, not for the screen. */
+  async doneTodo(id: string, signal?: AbortSignal): Promise<Todo> {
+    return this.todoTap(id, "done", undefined, signal);
+  }
+
+  /** Undoes a done (the untick). */
+  async reopenTodo(id: string, signal?: AbortSignal): Promise<Todo> {
+    return this.todoTap(id, "reopen", undefined, signal);
+  }
+
+  async dropTodo(id: string, signal?: AbortSignal): Promise<Todo> {
+    return this.todoTap(id, "drop", undefined, signal);
+  }
+
+  async acceptTodo(id: string, signal?: AbortSignal): Promise<Todo> {
+    return this.todoTap(id, "accept", undefined, signal);
+  }
+
+  /** `until` is an ISO instant WITH an offset (lib/todoFormat.ts): the phone
+   * resolves the time in its own zone, and a bare local time is a 422. */
+  async snoozeTodo(id: string, until: string, signal?: AbortSignal): Promise<Todo> {
+    return this.todoTap(id, "snooze", { until }, signal);
+  }
+
+  private async todoTap(id: string, action: string, body: object | undefined, signal?: AbortSignal): Promise<Todo> {
+    const raw = await this.json(`/v1/todos/${encodeURIComponent(id)}/${action}`, { method: "POST", body, signal });
+    const todo = decodeTodo((raw as { todo?: unknown } | null)?.todo);
+    if (!todo) throw new DecodeError();
+    return todo;
+  }
+
   // --- what's new ---------------------------------------------------------------
 
   /** `GET /v1/changes`: the box's half of What's new, `server` entries only
@@ -435,7 +488,7 @@ export class Api {
   /** Only the field that changed. Answers with the box's pair; a refusal is
    * an HttpError 422 whose `detail` is the code (lib/dayFormat.ts). */
   async setDayTimes(
-    update: { day_start?: string; day_end?: string; checkin_every_hours?: number },
+    update: { day_start?: string; day_end?: string; checkin_every_hours?: number; renudge?: boolean },
     signal?: AbortSignal,
   ): Promise<DayTimes> {
     return decodeDayTimes(await this.json("/v1/preferences", { method: "POST", body: update, signal }));
@@ -466,6 +519,7 @@ function decodeDayTimes(body: unknown): DayTimes {
     dayStart: start,
     dayEnd: end,
     checkinEveryHours: typeof every === "number" && Number.isInteger(every) && every >= 0 && every <= 6 ? every : null,
+    renudge: typeof b.renudge === "boolean" ? b.renudge : null,
   };
 }
 

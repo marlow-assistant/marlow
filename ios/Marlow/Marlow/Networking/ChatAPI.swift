@@ -11,7 +11,8 @@ protocol ChatAPI {
     func sendMessage(
         text: String, clientMsgId: String?,
         imagesBase64: [String], effort: ThinkingEffort,
-        location: OutgoingLocation?, ideaId: String?, spoken: Bool, timeout: TimeInterval?, deviceToken: String
+        location: OutgoingLocation?, ideaId: String?, todoId: String?, spoken: Bool, timeout: TimeInterval?,
+        deviceToken: String
     ) async throws -> MessageResponse
 
     func getTurn(_ turnId: String, deviceToken: String) async throws -> Turn

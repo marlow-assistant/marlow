@@ -98,9 +98,13 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     /// same `idea_id` the first attempt did. Optional for the same
     /// decode-compatibility reason as the other additions.
     var ideaId: String? = nil
-    /// The idea a "Do it" answers, drawn as a quote block above the text. Set
-    /// locally on the optimistic bubble from the idea tapped, and by the
-    /// server's row for a "Do it" sent from elsewhere. Optional for the same
+    /// The same for "Talk about it" on a to-do
+    /// (docs/tasks/todos-and-reminders.md): a retry carries the `todo_id`.
+    var todoId: String? = nil
+    /// The idea a "Do it" answers, or the to-do a "Talk about it" answers,
+    /// drawn as a quote block above the text. Set
+    /// locally on the optimistic bubble from the item tapped, and by the
+    /// server's row for one sent from elsewhere. Optional for the same
     /// decode-compatibility reason as the other additions.
     var quote: IdeaQuote? = nil
     /// Every image of a `.user` message, in attach order, as filenames inside

@@ -140,6 +140,58 @@ struct YourDayTests {
         #expect(api.sent.isEmpty)
     }
 
+    // MARK: Re-nudge (docs/tasks/todos-and-reminders.md)
+
+    @Test func renudgeDecodesAndAnOlderBoxWithoutItReadsAsNil() throws {
+        let off = try JSONDecoder().decode(
+            Preferences.self,
+            from: Data(#"{"face": null, "effort": null, "day_start": "08:00", "day_end": "23:00", "renudge": false}"#.utf8)
+        )
+        #expect(off.renudge == false)
+        let old = try JSONDecoder().decode(Preferences.self, from: Data(#"{"face": null, "effort": null}"#.utf8))
+        #expect(old.renudge == nil)
+    }
+
+    @Test func switchingRenudgeSendsOnlyThatAndShowsTheBoxsAnswer() async {
+        let api = FakeDayAPI(.success(Preferences(
+            face: nil, effort: nil, dayStart: "08:00", dayEnd: "23:00", checkinEveryHours: 3, renudge: true)))
+        let model = YourDayModel()
+        await model.load(api: api, deviceToken: "t")
+        #expect(model.times?.renudge == true)
+        api.next = .success(Preferences(
+            face: nil, effort: nil, dayStart: "08:00", dayEnd: "23:00", checkinEveryHours: 3, renudge: false))
+        await model.setRenudge(false, api: api, deviceToken: "t")
+        #expect(api.sent == [FakeDayAPI.Sent(start: nil, end: nil, checkin: nil, renudge: false)])
+        #expect(model.times?.renudge == false)
+        #expect(model.message == nil)
+    }
+
+    @Test func aRefusedRenudgeRevertsAndSaysSo() async {
+        let api = FakeDayAPI(.success(Preferences(
+            face: nil, effort: nil, dayStart: "08:00", dayEnd: "23:00", renudge: true)))
+        let model = YourDayModel()
+        await model.load(api: api, deviceToken: "t")
+        api.next = .failure(URLError(.notConnectedToInternet))
+        await model.setRenudge(false, api: api, deviceToken: "t")
+        #expect(model.times?.renudge == true)
+        #expect(model.message == "Couldn't save. Check your connection.")
+    }
+
+    @Test func aBoxWithoutRenudgeHasNothingToSetAndTheSameValueSendsNothing() async {
+        let old = FakeDayAPI(.success(Preferences(face: nil, effort: nil, dayStart: "08:00", dayEnd: "23:00")))
+        let model = YourDayModel()
+        await model.load(api: old, deviceToken: "t")
+        await model.setRenudge(false, api: old, deviceToken: "t")
+        #expect(old.sent.isEmpty)
+
+        let api = FakeDayAPI(.success(Preferences(
+            face: nil, effort: nil, dayStart: "08:00", dayEnd: "23:00", renudge: true)))
+        let current = YourDayModel()
+        await current.load(api: api, deviceToken: "t")
+        await current.setRenudge(true, api: api, deviceToken: "t")
+        #expect(api.sent.isEmpty)
+    }
+
     // MARK: Model
 
     @Test func nothingIsShownUntilTheBoxHasAnswered() async {
@@ -205,6 +257,7 @@ private final class FakeDayAPI: YourDayAPI {
         var start: String?
         var end: String?
         var checkin: Int?
+        var renudge: Bool?
     }
 
     private let initial: Result<Preferences, Error>
@@ -215,8 +268,10 @@ private final class FakeDayAPI: YourDayAPI {
 
     func preferences(deviceToken: String) async throws -> Preferences { try initial.get() }
 
-    func setDay(start: String?, end: String?, checkinEveryHours: Int?, deviceToken: String) async throws -> Preferences {
-        sent.append(Sent(start: start, end: end, checkin: checkinEveryHours))
+    func setDay(
+        start: String?, end: String?, checkinEveryHours: Int?, renudge: Bool?, deviceToken: String
+    ) async throws -> Preferences {
+        sent.append(Sent(start: start, end: end, checkin: checkinEveryHours, renudge: renudge))
         return try next.get()
     }
 }

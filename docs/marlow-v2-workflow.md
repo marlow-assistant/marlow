@@ -152,7 +152,16 @@ clone with neither is still blocked rather than waved through.
 4. `/code-review ultra` (the deep multi-agent cloud pass) is **Mike-triggered**
    and billed — Claude can't launch it. Reach for it on genuinely gnarly changes.
 5. With findings resolved, ask Mike before opening the PR, and again before
-   merging. Squash-merge so each change is one atomic,
+   merging.
+   - **Before suggesting a merge, run the new code on Mike's Marlow** (Mike,
+     2026-11-04). Green CI and review aren't enough: the box is where a
+     feature meets real data, the real CLI and the phone. Deploy the branch to
+     his instance, let him try it, and only then talk about merging. Expect
+     suggestions and tweaks from that trial; they land on the same branch
+     before the merge, so plan for a round of them rather than treating the
+     open PR as finished.
+
+   Squash-merge so each change is one atomic,
    revertable unit on `main` (clean `git bisect` + `git revert` later).
    - **Note 2026-08-01:** a run of early PRs was landed as *merge commits*, drifting
      from this rule without anyone deciding to. **The next one was the first squash** and

@@ -783,26 +783,52 @@ struct ChatView: View {
         }
     }
 
-    /// The staged to-do, quoted the way the sent bubble will quote it, with a
-    /// remove control. Sits with the image tray: both are "rides on the next
-    /// send".
+    /// The staged to-do: a tinted card saying what the next message is about,
+    /// with a remove control. Sits with the image tray: both are "rides on the
+    /// next send". Sized to be noticed (Mike, 2026-11-04: the first cut reused
+    /// the bubble's small footnote quote and was easy to miss, its x too small
+    /// to hit).
     @ViewBuilder private var pendingTodoChip: some View {
         if let todo = pendingTodo {
-            HStack(alignment: .center, spacing: 8) {
-                IdeaQuoteBlock(quote: IdeaQuote(todo))
+            HStack(alignment: .center, spacing: 10) {
+                Text(TodoFormat.quoteEmoji)
+                    .font(.title3)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(TodoFormat.stagedCaption)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(todo.title)
+                        .font(.body)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
                 Spacer(minLength: 0)
                 Button {
                     pendingTodo = nil
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 20))
+                        .font(.system(size: 28))
+                        .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(.secondary)
-                        .frame(width: 44, height: 44)
+                        .frame(width: 48, height: 48)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel(TodoFormat.unstageLabel)
             }
-            .padding(.leading, 12)
-            .padding(.horizontal, 8)
+            .padding(.leading, 14)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.14))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.accentColor.opacity(0.45), lineWidth: 1)
+            )
+            .accessibilityElement(children: .contain)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 6)
         }
     }
 

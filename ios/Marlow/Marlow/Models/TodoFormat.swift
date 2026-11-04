@@ -79,6 +79,9 @@ enum TodoFormat {
         typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? talkAboutMessage : typed
     }
 
+    /// The line over the staged to-do's title.
+    static let stagedCaption = "Talking about"
+
     /// The staged chip's remove control.
     static let unstageLabel = "Don't talk about this to-do"
 

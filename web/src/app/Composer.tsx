@@ -330,11 +330,12 @@ export function Composer({
       {imageError && <div className="notice">{imageError}</div>}
       {todo && (
         <div className="staged-todo" data-testid="staged-todo">
-          <div className="user-quote">
-            <span className="user-quote-emoji" aria-hidden="true">
-              {quoteOf(todo).emoji}
-            </span>
-            <span className="user-quote-title">{todo.title}</span>
+          <span className="staged-todo-emoji" aria-hidden="true">
+            {quoteOf(todo).emoji}
+          </span>
+          <div className="staged-todo-text">
+            <span className="staged-todo-caption">Talking about</span>
+            <span className="staged-todo-title">{todo.title}</span>
           </div>
           <button
             type="button"

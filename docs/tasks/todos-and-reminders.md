@@ -9,11 +9,11 @@ The fail-on-main control was not run. Other boxes get it on their next
 `update.sh`. Part 2 (a
 first-class to-do store that reminders hang off): all three installs
 inventoried and all three users answered, 2026-11-04. The sketch is revised and
-Mike settled its six decisions the same day, and it was built the same day,
-not yet merged or on any box: the server half (store, tools, reminders,
-briefing context, migration 0008, identity) and both clients' panes, iOS and
-web, on their own branches. Nothing has run on a device or a box. See
-"Part 2: as built" below.
+Mike settled its six decisions the same day, and it was built and merged
+the same day: the server half (store, tools, reminders, briefing context,
+migration 0008, identity) and both clients' panes, iOS and web. Live on Mike's
+box (migration 0008 ran there 2026-11-04 and moved the old to-dos and
+one-off notifies into the store). See "Part 2: as built" below.
 Part 3 (Trello as an optional backing store, for shared lists and maybe
 projects) is direction only, Mike 2026-11-02; part 2 keeps it possible but
 doesn't bend for it (Mike, 2026-11-04).

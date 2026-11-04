@@ -71,16 +71,18 @@ you finish something, mark it done there as well as here.
   The nightly job ships in the template. Next: watch the Android user's first run, and
   the first spotlight on any box.
 - **`todos-and-reminders.md`** (2026-11-02): Part 1, fired `notify` text
-  reaching the model, verified on Mike's box 2026-11-02. Part 2, a to-do store
-  reminders hang off, waits on Taylor's and the Android user's input.
+  reaching the model, verified on Mike's box 2026-11-02. Part 2, the to-do
+  store reminders hang off and the To-dos pane on both clients, merged
+  2026-11-04 and live on Mike's box. Part 3 (Trello backing) is direction only.
 - **`whats-new.md`** (2026-10-23): the "Marlow was updated" card and
   Settings' What's new, from a repo-root `changes.json`; built on both
   clients, merged 2026-10-23; seen on Mike's iPhone, Android not yet. Next
   entry id is 7. Its policy (what gets
   an entry) is now a working rule in `CLAUDE.md`.
 - **`ios-image-input.md`** (2026-10-23): camera shipped on both clients. Multi-image messages (up to 6, Mike's picks) shipped on both clients 2026-10-24, device-checked on the iPhone and the Android emulator's PWA. Follow-ups specced, not started: `image-viewer.md`, `message-retention-setting.md`, `share-and-files.md`.
-- **`weather-mcp.md`**: merged 2026-10-13, live. Still open: read
-  `weather.log` after a few days (two outages already, 10-13 and 10-14).
+- **`weather-mcp.md`**: merged 2026-10-13, live. `weather.log` read
+  2026-11-04: 27 fallbacks, all 10-13 to 10-17, none since. Ready to close
+  with Mike's OK.
 - **`bare-default-risk.md`** (2026-10-19): watching, nothing to build. The
   docs say `--bare` will become the default for `-p`. It skips OAuth,
   connectors, hooks and CLAUDE.md, and there's no opt-out yet. Read the CLI

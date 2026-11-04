@@ -1,5 +1,5 @@
 {
-  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 15.",
+  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 18.",
   "entries": [
     {
       "id": 1,
@@ -91,6 +91,27 @@
       "part": "server",
       "category": "fix",
       "text": "You can now reply to a reminder. Before, Marlow had no idea which reminder you were answering, because it doesn't run when one goes out. Now it sees any it sent since you last talked, so \"remind me again Friday\" works."
+    },
+    {
+      "id": 15,
+      "date": "2026-11-04",
+      "part": "server",
+      "category": "feature",
+      "text": "Marlow now keeps a proper to-do list. Tap the checklist next to the lightbulb to see it: tick things done, snooze them, drop them, or tap one to talk about it. Ask Marlow to add anything, with a time if you want a reminder."
+    },
+    {
+      "id": 16,
+      "date": "2026-11-04",
+      "part": "server",
+      "category": "unattended",
+      "text": "When a to-do with a time comes due, Marlow reminds you in the chat, and if you don't act on it, again a day later until it's done, dropped or snoozed. Turn the repeat off in Settings, under Remind me again daily, or just ask. After this update Marlow also moves your existing to-dos onto the list once, and tells you what it moved."
+    },
+    {
+      "id": 17,
+      "date": "2026-11-04",
+      "part": "server",
+      "category": "personality",
+      "text": "Marlow may suggest to-dos it notices, from your email for example. They show under Marlow suggested and never remind you until you accept them. Marlow asks about the important ones, and once more if one is still waiting two days later."
     }
   ]
 }

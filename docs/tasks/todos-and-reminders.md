@@ -9,7 +9,11 @@ The fail-on-main control was not run. Other boxes get it on their next
 `update.sh`. Part 2 (a
 first-class to-do store that reminders hang off): all three installs
 inventoried and all three users answered, 2026-11-04. The sketch is revised and
-Mike settled its six decisions the same day; next is building it.
+Mike settled its six decisions the same day, and it was built the same day,
+not yet merged or on any box: the server half (store, tools, reminders,
+briefing context, migration 0008, identity) and both clients' panes, iOS and
+web, on their own branches. Nothing has run on a device or a box. See
+"Part 2: as built" below.
 Part 3 (Trello as an optional backing store, for shared lists and maybe
 projects) is direction only, Mike 2026-11-02; part 2 keeps it possible but
 doesn't bend for it (Mike, 2026-11-04).
@@ -320,6 +324,45 @@ list has one, and she didn't ask for it), shared lists (part 3).
    user (or Mike, on his and Taylor's instances) can eyeball.
 6. **No calendar mirroring.** A user keeping both for the same thing is
    acceptable, not a feature.
+
+## Part 2: as built (2026-11-04)
+
+Where each decided piece lives, and the calls the design left open.
+
+- **Store:** `server/todos.py`, the single writer. Items in
+  `todos/todos.json` in the identity tree (committed and backed up with it,
+  Edit-denied: `boundaries.SERVER_OWNED_PATHS`); reminder bookkeeping in
+  data_dir `todo_reminders.json`, which the agent can't see. Ids are `t<N>`
+  and never reused. A due is a date or an instant; a local time is pinned to
+  the user's zone when written, and a past one is refused. Duplicate active
+  titles are refused, and so is an inferred re-add of a dropped title.
+  Done items are kept 30 days, dropped 180 (so "not gonna happen" sticks).
+- **Tools:** `server/todos_mcp.py`, a stdio relay that `invoke.py` adds to
+  every call, posts each call to `/internal/todos/tool`; `server/todo_tools.py`
+  answers it. A refusal is a tool error with the reason. All eight tools are
+  vetted pathless tools, so a cron turn (a reminder) can use them.
+- **Reminders:** `server/todo_reminders.py`, a once-a-minute loop in the
+  server, not crontab lines: the state is all the server's, and it keeps
+  due items out of the schedule store's caps. Items due together share one
+  cron-source turn in the conversation. When it ends, the queue asks the
+  store which items still need the plain-title notice: none if the reply was
+  delivered, else every item the turn didn't change. A reminder queued when
+  the server stopped fires again on start. Re-nudge is 24 h after firing,
+  per `preferences.renudge`.
+- **Proposals:** a proposal two days old is named in the turn context of the
+  next chat turn only, once; an unattended turn would spend the one ask unseen.
+- **Briefings:** the `morning` and `week-ahead` jobs (by job name, never an
+  entry id) get a `[To-do list …]` block in front of their prompt, open items
+  with due and overdue, then proposals.
+- **API:** `GET /v1/todos` (open and proposed, plus done in the last 7 days;
+  dropped never listed), taps `done`, `drop`, `accept`, `snooze` (an instant
+  with offset, at most a year out), `todo_id` on `/v1/message` with a ☑️
+  quote, `renudge` in `/v1/preferences`.
+- **Migration:** `deploy/migrations/0008-todos.py` adds a one-off `at` job
+  ten minutes out, on a paired box with the split identity; the shipped
+  `cron/todo-migration.md` does the move and writes
+  `todo-migration-report.md` beside `USER.md`, then a short summary in chat.
+  It never touches a routine.
 
 ## Part 3: Trello as an optional backing store (direction only)
 

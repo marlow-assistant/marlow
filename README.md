@@ -1,5 +1,8 @@
 # Marlow
 
+[![ci](https://github.com/marlow-assistant/marlow/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/marlow-assistant/marlow/actions/workflows/ci.yml)
+[![ios](https://github.com/marlow-assistant/marlow/actions/workflows/ios.yml/badge.svg?branch=main)](https://github.com/marlow-assistant/marlow/actions/workflows/ios.yml)
+
 <img src="docs/images/marlow-portrait-400.jpg" alt="Marlow's portrait: a man in a dark Victorian coat with a glowing monocle, Big Ben behind him" width="200" align="right">
 
 Marlow is a personal assistant that runs on a machine you control and can examine, and talks to
@@ -16,6 +19,11 @@ What it does:
 - **Runs scheduled jobs you configure:** a morning briefing from your email
   and calendar (through Claude's Gmail and Calendar connectors), reminders,
   any recurring task you describe to it.
+- **Keeps your to-do list.** Tick, snooze or drop items from the app, or
+  ask Marlow to add one. A to-do with a time gets a reminder in the chat,
+  and another a day later if you haven't dealt with it. Marlow can also
+  suggest to-dos it spots in your email, which stay suggestions until you
+  accept them.
 - **Weather and route planning:** forecasts for where you are, and the
   weather at each stop along a drive.
 - **Works with the web:** searches and reads pages for you.

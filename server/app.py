@@ -24,7 +24,8 @@ import os
 import stat
 import uuid
 from contextlib import asynccontextmanager
-from typing import Any, Literal
+from datetime import datetime
+from typing import Any, Callable, Literal
 
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
@@ -38,6 +39,7 @@ from server.request_deadline import RequestDeadlineProtocol
 from server.attachments import cleanup_attachment, write_attachments
 from server.config import settings
 from server.identity import build_identity_context
+from server.todos import TODO_QUOTE_EMOJI, TodoError, TodoNotFound, todo_context, todo_store
 from server.idle_compaction import SOURCE as COMPACTION_SOURCE
 from server.idle_compaction import idle_compaction_watcher
 from server.location import Location, location_store
@@ -211,6 +213,9 @@ class MessageRequest(BaseModel):
     # (docs/tasks/ideas-panel.md). Warn-and-drop like `timezone`: an idea that
     # is no longer open must not cost Mike the message.
     idea_id: str | None = None
+    # Set when the message is about an item on the to-do list, tapped from the
+    # pane (docs/tasks/todos-and-reminders.md). Warn-and-drop like `idea_id`.
+    todo_id: str | None = None
     # True when the user spoke this in voice mode and will hear the reply read
     # aloud (docs/tasks/voice-mode-hands-free.md). A property of this message,
     # not of the device: a spoken and a typed message can share the queue.
@@ -447,12 +452,22 @@ async def post_message(
     # the prompt carries the idea line; the row keeps the text Mike typed or
     # tapped, plus the quote.
     idea = await asyncio.to_thread(_open_idea, body.idea_id) if body.idea_id else None
-    row_turn_id = await asyncio.to_thread(
-        _record_user_message, body, new_turn_id, attachment_paths, idea
+    # An idea tap wins if a client ever sends both: it records an acceptance.
+    todo = (
+        await asyncio.to_thread(_tapped_todo, body.todo_id) if body.todo_id and idea is None else None
     )
+    row_turn_id = await asyncio.to_thread(
+        _record_user_message, body, new_turn_id, attachment_paths, idea, todo
+    )
+    if idea is not None:
+        prompt = f"{ideas.accepted_context(idea)}\n\n{body.text}"
+    elif todo is not None:
+        prompt = f"{todo_context(todo)}\n\n{body.text}"
+    else:
+        prompt = body.text
 
     turn_id = work_queue.enqueue(
-        f"{ideas.accepted_context(idea)}\n\n{body.text}" if idea else body.text,
+        prompt,
         in_conversation=True,
         source="chat",
         client_msg_id=body.client_msg_id,
@@ -485,8 +500,22 @@ def _open_idea(idea_id: str) -> ideas.Idea | None:
     return idea
 
 
+def _tapped_todo(todo_id: str) -> dict[str, Any] | None:
+    """The to-do a "talk about it" tap names, or None. Any state: talking
+    about something done last week is a fair thing to tap."""
+    try:
+        return todo_store.get(todo_id)
+    except TodoError:
+        logger.warning("ignoring a message about a to-do that isn't on the list (%.60r)", todo_id)
+        return None
+
+
 def _record_user_message(
-    body: MessageRequest, turn_id: str, attachment_paths: tuple[str, ...], idea: ideas.Idea | None = None
+    body: MessageRequest,
+    turn_id: str,
+    attachment_paths: tuple[str, ...],
+    idea: ideas.Idea | None = None,
+    todo: dict[str, Any] | None = None,
 ) -> str | None:
     """Write the transcript's user row, and copy the image beside it. Runs in a
     worker thread: it is SQLite and file I/O. Returns the turn_id the row
@@ -503,7 +532,11 @@ def _record_user_message(
         source="chat",
         client_msg_id=body.client_msg_id,
         attachments=[(path, _ALLOWED_IMAGE_MIME) for path in attachment_paths],
-        quote={"idea_id": idea.id, "emoji": idea.emoji, "title": idea.title} if idea else None,
+        quote=(
+            {"idea_id": idea.id, "emoji": idea.emoji, "title": idea.title} if idea
+            else {"todo_id": todo["id"], "emoji": TODO_QUOTE_EMOJI, "title": todo["title"]} if todo
+            else None
+        ),
     )
     return row["turn_id"] if row else None
 
@@ -590,6 +623,67 @@ def dismiss_idea(
     return {"ok": True}
 
 
+@public_app.get("/v1/todos")
+def get_todos(token: str = Depends(require_device_token)) -> dict[str, Any]:
+    """Open and proposed items, plus done this week (server/todos.py). Flat,
+    in list order: the clients group and sort (facts on the server, wording
+    on the phone)."""
+    return {"todos": [_client_todo(item) for item in todo_store.client_items()]}
+
+
+_CLIENT_TODO_KEYS = ("id", "title", "notes", "due", "state", "source", "created", "closed", "snoozed_until")
+
+
+def _client_todo(item: dict[str, Any]) -> dict[str, Any]:
+    return {key: item.get(key) for key in _CLIENT_TODO_KEYS}
+
+
+def _todo_tap(action: Callable[[], dict[str, Any]]) -> dict[str, Any]:
+    try:
+        return {"todo": _client_todo(action())}
+    except TodoNotFound as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except TodoError as e:
+        # The item exists but can't take this tap (already dropped, not a
+        # proposal, a time already past): the client refreshes and shows it.
+        raise HTTPException(status_code=409, detail=str(e)) from e
+
+
+@public_app.post("/v1/todos/{todo_id}/done")
+def todo_done(todo_id: str, token: str = Depends(require_device_token)) -> dict[str, Any]:
+    return _todo_tap(lambda: todo_store.done(todo_id))
+
+
+@public_app.post("/v1/todos/{todo_id}/drop")
+def todo_drop(todo_id: str, token: str = Depends(require_device_token)) -> dict[str, Any]:
+    return _todo_tap(lambda: todo_store.drop(todo_id))
+
+
+@public_app.post("/v1/todos/{todo_id}/accept")
+def todo_accept(todo_id: str, token: str = Depends(require_device_token)) -> dict[str, Any]:
+    return _todo_tap(lambda: todo_store.accept(todo_id))
+
+
+class SnoozeTodoRequest(BaseModel):
+    # An instant with its offset: the phone resolves "tomorrow morning" in
+    # its own zone, so the server never guesses which one it meant.
+    until: str = Field(..., max_length=40)
+
+
+@public_app.post("/v1/todos/{todo_id}/snooze")
+def todo_snooze(
+    todo_id: str, body: SnoozeTodoRequest, token: str = Depends(require_device_token)
+) -> dict[str, Any]:
+    until = body.until.strip()
+    try:
+        parsed = datetime.fromisoformat(until)
+    except ValueError:
+        parsed = None
+    if parsed is None or parsed.tzinfo is None:
+        raise HTTPException(status_code=422, detail="until must be an ISO 8601 instant with an offset")
+    return _todo_tap(lambda: todo_store.snooze(todo_id, until))
+
+
 def _preferences() -> dict[str, Any]:
     day_start, day_end = preferences_store.day()
     return {
@@ -601,6 +695,9 @@ def _preferences() -> dict[str, Any]:
         "day_end": day_end,
         # 0 is off. Never null, for the reason the day isn't.
         "checkin_every_hours": preferences_store.checkin_every_hours(),
+        # Daily re-reminders for to-dos (docs/tasks/todos-and-reminders.md).
+        # Never null: on unless turned off.
+        "renudge": preferences_store.renudge(),
     }
 
 
@@ -622,6 +719,7 @@ class PreferencesRequest(BaseModel):
     day_start: str | None = Field(None, max_length=5)
     day_end: str | None = Field(None, max_length=5)
     checkin_every_hours: int | None = Field(None, ge=0, le=MAX_CHECKIN_EVERY_HOURS, strict=True)
+    renudge: bool | None = Field(None, strict=True)
 
 
 @public_app.post("/v1/preferences")
@@ -629,6 +727,7 @@ def set_preferences(body: PreferencesRequest, token: str = Depends(require_devic
     if (
         body.face is None and body.effort is None and body.day_start is None
         and body.day_end is None and body.checkin_every_hours is None
+        and body.renudge is None
     ):
         # A client bug to surface, not a no-op to accept.
         raise HTTPException(status_code=422, detail="nothing to set")
@@ -640,6 +739,7 @@ def set_preferences(body: PreferencesRequest, token: str = Depends(require_devic
             day_start=body.day_start,
             day_end=body.day_end,
             checkin_every_hours=body.checkin_every_hours,
+            renudge=body.renudge,
         )
     except DayError as e:
         # A code, not a sentence: the clients word it.

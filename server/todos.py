@@ -78,6 +78,15 @@ class TodoError(ValueError):
     """A refusal, worded for whoever made the call to act on."""
 
 
+class TodoNotFound(TodoError):
+    """No item with that id (or not an id at all)."""
+
+
+# The bubble's quote when a message is about a to-do; the clients render the
+# same {emoji, title} shape an idea's quote has.
+TODO_QUOTE_EMOJI = "☑️"
+
+
 def user_zone() -> ZoneInfo:
     """The zone a bare local time means: the phone's, else the schedule
     store's, else the server's. Never raises."""
@@ -143,6 +152,28 @@ def _clean_notes(raw: Any) -> str | None:
 
 def _same_title(a: str, b: str) -> bool:
     return " ".join(a.casefold().split()) == " ".join(b.casefold().split())
+
+
+def todo_context(item: dict[str, Any]) -> str:
+    """The line that tells a turn which to-do the user tapped to talk about.
+
+    Title and notes are the model's own earlier words, but they may have been
+    written from mail, so they are framed as what is on the list, flattened
+    to one line, and kept from closing the block; the user's only instruction
+    is their message."""
+    def flat(text: str) -> str:
+        return " ".join(re.sub(r"[\x00-\x1f\x7f-\x9f\[\]]", " ", text).split())
+
+    facts = [item["state"]]
+    if item.get("due"):
+        facts.append(f"due {item['due']}")
+    text = (
+        f"[To-do: the user tapped `{item['id']}` on their to-do list,"
+        f" \"{flat(item['title'])}\" ({', '.join(facts)})."
+    )
+    if item.get("notes"):
+        text += f" Its notes: {flat(item['notes'])}"
+    return text + " Their message is about it; change it only through the to-do tools.]"
 
 
 class TodoStore:
@@ -289,11 +320,11 @@ class TodoStore:
     @staticmethod
     def _find(data: dict[str, Any], item_id: Any) -> dict[str, Any]:
         if not isinstance(item_id, str) or not _ID_RE.fullmatch(item_id):
-            raise TodoError(f"{item_id!r} is not a to-do id (they look like t12)")
+            raise TodoNotFound(f"{item_id!r} is not a to-do id (they look like t12)")
         for item in data["items"]:
             if item["id"] == item_id:
                 return item
-        raise TodoError(f"there is no to-do {item_id} (it may have aged off the list)")
+        raise TodoNotFound(f"there is no to-do {item_id} (it may have aged off the list)")
 
     def _with_state(self, item: dict[str, Any], state: dict[str, dict[str, Any]]) -> dict[str, Any]:
         out = dict(item)

@@ -155,3 +155,52 @@ describe("Settings › Your day", () => {
     expect(setDayTimes).not.toHaveBeenCalled();
   });
 });
+
+describe("Settings › Remind me again daily", () => {
+  const WITH = { ...DAY, renudge: true };
+  const toggle = () => screen.getByLabelText("Remind me again daily") as HTMLInputElement;
+
+  it("shows the box's setting and the footnote", async () => {
+    open({ dayTimes: vi.fn().mockResolvedValue(WITH) });
+    await waitFor(() => expect(toggle().checked).toBe(true));
+    expect(
+      screen.getByText("If you don't act on a reminder, it comes back a day later until it's done, dropped or snoozed."),
+    ).toBeTruthy();
+  });
+
+  it("turning it off posts only renudge and shows what the box answers", async () => {
+    const setDayTimes = vi.fn().mockResolvedValue({ ...WITH, renudge: false });
+    open({ dayTimes: vi.fn().mockResolvedValue(WITH), setDayTimes });
+    await waitFor(() => expect(toggle().checked).toBe(true));
+    fireEvent.click(toggle());
+    expect(setDayTimes.mock.calls[0][0]).toEqual({ renudge: false });
+    await waitFor(() => expect(toggle().checked).toBe(false));
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("an off box turns on with {renudge: true}", async () => {
+    const setDayTimes = vi.fn().mockResolvedValue(WITH);
+    open({ dayTimes: vi.fn().mockResolvedValue({ ...WITH, renudge: false }), setDayTimes });
+    await waitFor(() => expect(toggle().checked).toBe(false));
+    fireEvent.click(toggle());
+    expect(setDayTimes.mock.calls[0][0]).toEqual({ renudge: true });
+    await waitFor(() => expect(toggle().checked).toBe(true));
+  });
+
+  it("a failed save reverts and says so", async () => {
+    open({
+      dayTimes: vi.fn().mockResolvedValue(WITH),
+      setDayTimes: vi.fn().mockRejectedValue(new TransportError("offline")),
+    });
+    await waitFor(() => expect(toggle().checked).toBe(true));
+    fireEvent.click(toggle());
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toBe("Couldn't save. Check your connection."));
+    expect(toggle().checked).toBe(true);
+  });
+
+  it("a box that predates it has no toggle, and the day rows stay", async () => {
+    open({ dayTimes: vi.fn().mockResolvedValue({ ...DAY, renudge: null }) });
+    await waitFor(() => expect(starts().value).toBe("08:00"));
+    expect(screen.queryByLabelText("Remind me again daily")).toBeNull();
+  });
+});

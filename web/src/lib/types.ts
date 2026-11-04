@@ -11,13 +11,22 @@ export type Role = "user" | "assistant";
  * and a reload resumes it (SND-7). An unknown status decodes as `error`. */
 export type MessageStatus = "sending" | "running" | "stalled" | "done" | "error";
 
-/** The idea a "Do it" message answers, shown as a quote above the text. The
- * bubble says "Do it"; the quote says what. Wire shape of a transcript row's
- * `quote` (docs/tasks/ideas-panel.md). */
-export interface IdeaQuote {
-  idea_id: string;
-  emoji: string;
-  title: string;
+/** What a message answers, shown as a quote above the text: the idea a "Do it"
+ * is about (docs/tasks/ideas-panel.md), or the to-do a "Talk about it" is
+ * about (docs/tasks/todos-and-reminders.md). The bubble says "Do it"; the
+ * quote says what. Wire shape of a transcript row's `quote`. Exactly one of
+ * the ids, and a message saved before to-dos has only `idea_id`. */
+export type Quote = { emoji: string; title: string } & (
+  | { idea_id: string; todo_id?: undefined }
+  | { todo_id: string; idea_id?: undefined }
+);
+
+/** The id the send body carries for a quote: `idea_id` or `todo_id`. */
+export type QuoteRef = { idea_id: string } | { todo_id: string };
+
+export function quoteRef(q: Quote | undefined): QuoteRef | undefined {
+  if (!q) return undefined;
+  return q.idea_id !== undefined ? { idea_id: q.idea_id } : { todo_id: q.todo_id };
 }
 
 export interface ChatMessage {
@@ -50,7 +59,7 @@ export interface ChatMessage {
   /** A user message sent by "Do it" on an idea. Set at once from the idea
    * the tap came from, and kept so a retry or an outbox resume sends the same
    * `idea_id` again. A server row's own quote fills it only when absent. */
-  quote?: IdeaQuote;
+  quote?: Quote;
   /** Assistant rows: the user-row turn ids this reply resolves. */
   answers?: string[];
 }
@@ -90,7 +99,7 @@ export interface TranscriptRow {
   answers: string[];
   attachments: TranscriptAttachment[];
   /** Null from an older server, or when the message is not a "Do it". */
-  quote?: IdeaQuote | null;
+  quote?: Quote | null;
 }
 
 export interface TranscriptPage {
@@ -177,11 +186,13 @@ function strArray(v: unknown): string[] {
 }
 
 /** An absent, null or malformed quote is no quote. */
-export function decodeQuote(raw: unknown): IdeaQuote | null {
+export function decodeQuote(raw: unknown): Quote | null {
   if (!raw || typeof raw !== "object") return null;
   const q = raw as Record<string, unknown>;
-  if (typeof q.idea_id !== "string" || q.idea_id === "" || typeof q.title !== "string" || q.title === "") return null;
-  return { idea_id: q.idea_id, emoji: str(q.emoji), title: q.title };
+  if (typeof q.title !== "string" || q.title === "") return null;
+  if (typeof q.idea_id === "string" && q.idea_id !== "") return { idea_id: q.idea_id, emoji: str(q.emoji), title: q.title };
+  if (typeof q.todo_id === "string" && q.todo_id !== "") return { todo_id: q.todo_id, emoji: str(q.emoji), title: q.title };
+  return null;
 }
 
 /** Lenient row decode. Returns null only when the row has no usable `seq`,

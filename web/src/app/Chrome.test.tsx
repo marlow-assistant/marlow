@@ -20,9 +20,11 @@ function header(over: Partial<Parameters<typeof PresenceHeader>[0]> = {}) {
     presence: IDLE,
     face: DEFAULT_FACE,
     ideasDot: false,
+    todosBadge: 0,
     onSettings: vi.fn(),
     onAvatar: vi.fn(),
     onIdeas: vi.fn(),
+    onTodos: vi.fn(),
     ...over,
   };
   return { ...render(<PresenceHeader {...props} />), props };
@@ -76,6 +78,30 @@ describe("presence header", () => {
     rerender(<PresenceHeader {...props} ideasDot />);
     expect(screen.getByTestId("ideas-dot")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Ideas" })).toBeTruthy();
+  });
+});
+
+describe("the to-dos icon", () => {
+  it("sits beside the lightbulb, on the gear's far side, and calls back", () => {
+    const { props } = header();
+    const todos = screen.getByRole("button", { name: "To-dos" });
+    const bulb = screen.getByRole("button", { name: "Ideas" });
+    expect(bulb.compareDocumentPosition(todos) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(todos.compareDocumentPosition(screen.getByRole("button", { name: "Settings" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(todos.parentElement).toBe(bulb.parentElement);
+    fireEvent.click(todos);
+    expect(props.onTodos).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the count only above zero, and says it to a screen reader once", () => {
+    const { props, rerender } = header();
+    expect(screen.queryByTestId("todos-badge")).toBeNull();
+    rerender(<PresenceHeader {...props} todosBadge={3} />);
+    expect(screen.getByTestId("todos-badge").textContent).toBe("3");
+    expect(screen.getByTestId("todos-badge").getAttribute("aria-hidden")).toBe("true");
+    expect(screen.getByRole("button", { name: "To-dos, 3 need attention" })).toBeTruthy();
+    rerender(<PresenceHeader {...props} todosBadge={120} />);
+    expect(screen.getByTestId("todos-badge").textContent).toBe("99+");
   });
 });
 

@@ -24,17 +24,22 @@ export function PresenceHeader({
   presence,
   face,
   ideasDot,
+  todosBadge,
   onSettings,
   onAvatar,
   onIdeas,
+  onTodos,
 }: {
   presence: ChatPresence;
   face: Face;
   /** A spotlight is open, or an idea is new since the panel was last opened. */
   ideasDot: boolean;
+  /** Overdue to-dos plus Marlow's suggestions; no badge at 0. */
+  todosBadge: number;
   onSettings: () => void;
   onAvatar: () => void;
   onIdeas: () => void;
+  onTodos: () => void;
 }) {
   const busy = presence.kind === "active";
   return (
@@ -59,15 +64,34 @@ export function PresenceHeader({
         </div>
       </div>
       <div className="presence-side">
-        {/* The lightbulb balances the gear on the other side, at the gear's
-            size. The dot is decoration inside the button, so a screen reader
-            hears "Ideas" and nothing else. */}
-        <button type="button" className="bulb" aria-label="Ideas" onClick={onIdeas}>
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M9 18h6M10 21.5h4M12 2.5a6.5 6.5 0 0 0-3.9 11.7c.7.6 1.2 1.3 1.3 2.3h5.2c.1-1 .6-1.7 1.3-2.3A6.5 6.5 0 0 0 12 2.5z" />
-          </svg>
-          {ideasDot && <span className="bulb-dot" data-testid="ideas-dot" aria-hidden="true" />}
-        </button>
+        <div className="presence-left">
+          {/* The lightbulb balances the gear on the other side, at the gear's
+              size. The dot is decoration inside the button, so a screen reader
+              hears "Ideas" and nothing else. */}
+          <button type="button" className="bulb" aria-label="Ideas" onClick={onIdeas}>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 18h6M10 21.5h4M12 2.5a6.5 6.5 0 0 0-3.9 11.7c.7.6 1.2 1.3 1.3 2.3h5.2c.1-1 .6-1.7 1.3-2.3A6.5 6.5 0 0 0 12 2.5z" />
+            </svg>
+            {ideasDot && <span className="bulb-dot" data-testid="ideas-dot" aria-hidden="true" />}
+          </button>
+          {/* The to-dos checklist sits beside the bulb. Its count is
+              decoration inside the button; the label carries it once. */}
+          <button
+            type="button"
+            className="bulb"
+            aria-label={todosBadge > 0 ? `To-dos, ${todosBadge} need attention` : "To-dos"}
+            onClick={onTodos}
+          >
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 6.5l1.5 1.5 2.5-3M4 12.5l1.5 1.5 2.5-3M4 18.5l1.5 1.5 2.5-3M11 6.5h9M11 12.5h9M11 18.5h9" />
+            </svg>
+            {todosBadge > 0 && (
+              <span className="todo-badge" data-testid="todos-badge" aria-hidden="true">
+                {todosBadge > 99 ? "99+" : todosBadge}
+              </span>
+            )}
+          </button>
+        </div>
         <button type="button" className="gear" aria-label="Settings" onClick={onSettings}>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             {/* A gear: eight flat-topped teeth and a hub. The first version was a

@@ -1,0 +1,116 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { HttpError, type Api } from "../lib/api";
+import type { Todo } from "../lib/apiModels";
+import { badgeCount } from "../lib/todoFormat";
+
+export type TodosApi = Pick<Api, "todos" | "doneTodo" | "dropTodo" | "acceptTodo" | "snoozeTodo">;
+
+export type TodoTap = { kind: "done" } | { kind: "drop" } | { kind: "accept" } | { kind: "snooze"; until: string };
+
+/** The box says why in a sentence meant for logs; the screen says this. */
+export const TODO_CHANGED_NOTICE = "That to-do changed; here's the latest.";
+export const TODO_NOT_SAVED_NOTICE = "Couldn't save that. Check your connection.";
+
+export interface TodosModel {
+  /** The last good list, with each tap's answer put in place of its item. A
+   * dropped item stays in it as `dropped`; the panel lists none. */
+  todos: Todo[];
+  /** Overdue open items plus proposed ones: the icon's count. */
+  badge: number;
+  /** Ids with a tap in flight. */
+  busy: ReadonlySet<string>;
+  /** After a tap that did not go through; null otherwise. */
+  notice: string | null;
+  /** Fetch now. Quiet on failure: the last good list stays. */
+  refresh: () => void;
+  clearNotice: () => void;
+  /** One tap on one to-do: the item is replaced by the box's answer. A 404 or
+   * 409 means it changed under us, so the list is fetched again and the notice
+   * says so. */
+  tap: (todo: Todo, tap: TodoTap) => void;
+}
+
+/** The to-dos the chat screen shows from: the icon's badge and the panel's
+ * list. Fetched on mount (the badge must be right before anyone opens the
+ * panel), whenever the page becomes visible again, and by `refresh()` when the
+ * panel opens. A failed fetch says nothing anywhere: no error in the chat, and
+ * the last good list stays. */
+export function useTodos(api: TodosApi, now: Date): TodosModel {
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+  const [notice, setNotice] = useState<string | null>(null);
+  const seq = useRef(0);
+
+  const refresh = useCallback(() => {
+    const mine = ++seq.current;
+    // Inside the try, so an api that cannot answer at all is as quiet as one
+    // that fails.
+    void (async () => {
+      try {
+        const fresh = await api.todos();
+        // A slower, older answer must not overwrite a newer one.
+        if (mine === seq.current) setTodos(fresh);
+      } catch {
+        // Keep the last good list.
+      }
+    })();
+  }, [api]);
+
+  useEffect(() => {
+    refresh();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refresh]);
+
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+
+  const tap = useCallback(
+    (todo: Todo, t: TodoTap) => {
+      if (busyRef.current.has(todo.id)) return;
+      const mark = (on: boolean) =>
+        setBusy((s) => {
+          const next = new Set(s);
+          if (on) next.add(todo.id);
+          else next.delete(todo.id);
+          return next;
+        });
+      busyRef.current = new Set(busyRef.current).add(todo.id);
+      mark(true);
+      void (async () => {
+        try {
+          const answer =
+            t.kind === "done"
+              ? await api.doneTodo(todo.id)
+              : t.kind === "drop"
+                ? await api.dropTodo(todo.id)
+                : t.kind === "accept"
+                  ? await api.acceptTodo(todo.id)
+                  : await api.snoozeTodo(todo.id, t.until);
+          // Newer than any fetch still in flight.
+          seq.current += 1;
+          setTodos((prev) => prev.map((x) => (x.id === answer.id ? answer : x)));
+          setNotice(null);
+        } catch (e) {
+          if (e instanceof HttpError && (e.status === 404 || e.status === 409)) {
+            setNotice(TODO_CHANGED_NOTICE);
+            refresh();
+          } else {
+            setNotice(TODO_NOT_SAVED_NOTICE);
+          }
+        } finally {
+          mark(false);
+        }
+      })();
+    },
+    [api, refresh],
+  );
+
+  const clearNotice = useCallback(() => setNotice(null), []);
+  const badge = useMemo(() => badgeCount(todos, now), [todos, now]);
+
+  return { todos, badge, busy, notice, refresh, clearNotice, tap };
+}

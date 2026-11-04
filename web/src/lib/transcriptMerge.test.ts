@@ -563,6 +563,22 @@ describe("quote on a Do it row", () => {
     ]);
   });
 
+  test("a to-do quote decodes with todo_id, and one carrying neither id is no quote", () => {
+    const T = { todo_id: "t3", emoji: "☑️", title: "Book the dentist" };
+    const rows = decodePage({
+      rows: [
+        wire({ seq: 1, quote: T }),
+        wire({ seq: 2, quote: { emoji: "☑️", title: "No id" } }),
+        wire({ seq: 3, quote: { todo_id: "", emoji: "☑️", title: "Empty id" } }),
+        wire({ seq: 4, quote: { todo_id: "t3", title: "No emoji" } }),
+      ],
+      latest_seq: 4,
+      has_more: false,
+    }).rows;
+    expect(rows.map((r) => r.quote)).toEqual([T, null, null, { todo_id: "t3", emoji: "", title: "No emoji" }]);
+    expect(rows[0].quote).not.toHaveProperty("idea_id");
+  });
+
   test("the server row keeps the quote the optimistic bubble already had", () => {
     const user: ChatMessage = { ...localUser("Do it"), quote: Q };
     const pending = placeholder("t1", { pairedWith: user });

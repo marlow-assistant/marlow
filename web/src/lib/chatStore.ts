@@ -26,13 +26,14 @@ import type { ChatPersistence, CursorRecord } from "./storage";
 import type {
   ChatMessage,
   HealthResponse,
-  IdeaQuote,
+  Quote,
+  QuoteRef,
   MessageStatus,
   PermissionDecision,
   PermissionRequestInfo,
   TranscriptRow,
 } from "./types";
-import { attachmentIdsOf, imageKeysOf, ownImageKey, sameId } from "./types";
+import { attachmentIdsOf, imageKeysOf, ownImageKey, quoteRef, sameId } from "./types";
 
 export interface PollingPolicy {
   burstInterval: number;
@@ -411,7 +412,7 @@ export class ChatStore {
 
   /** CMP-1/CMP-2/SND-1. `images` are already-downscaled JPEGs. Returns false
    * when there is nothing to send, so the composer can put its draft back. */
-  async send(text: string, images: Blob[] = [], quote?: IdeaQuote): Promise<boolean> {
+  async send(text: string, images: Blob[] = [], quote?: Quote): Promise<boolean> {
     if (this.stopped) return false;
     const trimmed = text.trim();
     if (!trimmed && images.length === 0) return false;
@@ -464,7 +465,7 @@ export class ChatStore {
     userId: string,
     imageKeys: string[] | undefined,
     images: Blob[],
-    quote: IdeaQuote | undefined,
+    quote: Quote | undefined,
     spoken: boolean,
   ): string {
     const now = this.clock.now();
@@ -483,7 +484,7 @@ export class ChatStore {
     this.emit({ kind: "sent", userId, placeholderId: placeholder.id });
     this.setMessages([...this.state.messages, user, placeholder]);
     this.persist();
-    this.startSubmit(trimmed, userId, placeholder.id, images, quote?.idea_id, spoken);
+    this.startSubmit(trimmed, userId, placeholder.id, images, quoteRef(quote), spoken);
     return placeholder.id;
   }
 
@@ -504,12 +505,12 @@ export class ChatStore {
       answers: undefined,
     }));
     this.persist();
-    this.startSubmit(r.text, r.clientMsgId, placeholderId, { keys: r.imageKeys }, r.quote?.idea_id);
+    this.startSubmit(r.text, r.clientMsgId, placeholderId, { keys: r.imageKeys }, quoteRef(r.quote));
   }
 
   private resendable(
     m: ChatMessage,
-  ): { clientMsgId: string; text: string; imageKeys: string[]; quote?: IdeaQuote } | null {
+  ): { clientMsgId: string; text: string; imageKeys: string[]; quote?: Quote } | null {
     if (!m.clientMsgId) return null;
     const user = this.state.messages.find((u) => u.role === "user" && sameId(u.id, m.clientMsgId));
     if (!user) return null;
@@ -521,7 +522,7 @@ export class ChatStore {
     clientMsgId: string,
     placeholderId: string,
     images: Blob[] | { keys: string[] },
-    ideaId?: string,
+    ref?: QuoteRef,
     spoken = false,
   ): void {
     this.runTask(placeholderId, async (signal) => {
@@ -543,7 +544,7 @@ export class ChatStore {
           this.showNotice(TEXT.photoMissing);
         }
       }
-      await this.submit(text, clientMsgId, placeholderId, blobs, signal, ideaId, spoken);
+      await this.submit(text, clientMsgId, placeholderId, blobs, signal, ref, spoken);
     });
   }
 
@@ -556,7 +557,7 @@ export class ChatStore {
     placeholderId: string,
     images: Blob[],
     signal: AbortSignal,
-    ideaId?: string,
+    ref?: QuoteRef,
     spoken = false,
   ): Promise<void> {
     // Encoded once, before the loop (CMP-3).
@@ -579,7 +580,7 @@ export class ChatStore {
             effort: this.state.effort,
             ...(location ? { location } : {}),
             ...(imagesB64.length > 0 ? { images: imagesB64.map((b64) => ({ b64, mime: "image/jpeg" as const })) } : {}),
-            ...(ideaId ? { idea_id: ideaId } : {}),
+            ...(ref ?? {}),
             ...(spoken ? { spoken: true } : {}),
           },
           signal,
@@ -786,7 +787,7 @@ export class ChatStore {
             continue;
           }
           this.update(m.id, (x) => ({ ...x, seq: undefined, answers: undefined }));
-          this.startSubmit(r.text, r.clientMsgId, m.id, { keys: r.imageKeys }, r.quote?.idea_id);
+          this.startSubmit(r.text, r.clientMsgId, m.id, { keys: r.imageKeys }, quoteRef(r.quote));
           break;
         }
         default:

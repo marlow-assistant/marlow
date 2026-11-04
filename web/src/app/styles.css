@@ -2051,17 +2051,20 @@ button {
 }
 
 /* The row's ⋯ sits at its right edge, in the accent, as on iOS (Mike,
-   2026-11-04: under the title it read as text, not a button). Out of flow, so
-   the actions it opens still expand beneath the title. */
+   2026-11-04: under the title it read as text, not a button). Its menu is a
+   popover anchored under it, not buttons in the row. */
 .todo-has-menu {
   position: relative;
   padding-right: 56px;
 }
 
-.todo-more {
+.todo-menu {
   position: absolute;
   top: 4px;
   right: 4px;
+}
+
+.todo-more {
   width: 48px;
   height: 48px;
   display: flex;
@@ -2071,6 +2074,37 @@ button {
   border: 0;
   background: none;
   color: var(--accent);
+}
+
+.todo-popover {
+  position: absolute;
+  top: calc(100% + 2px);
+  right: 4px;
+  z-index: 5;
+  min-width: 200px;
+}
+
+.todo-popover button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.todo-snooze-items {
+  margin: 0 0 4px 12px;
+  padding-left: 4px;
+  border-left: 1px solid var(--bg-2);
+}
+
+.todo-popover .todo-pick {
+  padding: 4px 6px 6px;
+}
+
+.todo-popover .todo-pick button {
+  width: auto;
+}
+
+.todo-popover .todo-menu-destructive {
+  color: var(--red);
 }
 
 .todo-actions,

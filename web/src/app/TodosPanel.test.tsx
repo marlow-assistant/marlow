@@ -158,13 +158,30 @@ describe("to-dos panel", () => {
     const r = row("Title a");
     expect(within(r).queryByRole("button", { name: "Drop" })).toBeNull();
     fireEvent.click(within(r).getByRole("button", { name: "More for Title a" }));
-    fireEvent.click(within(r).getByRole("button", { name: "Talk about it" }));
+    fireEvent.click(within(r).getByRole("menuitem", { name: "Talk about it" }));
     expect(props.onTalk).toHaveBeenCalledWith(a);
     // Choosing closes the menu.
-    expect(within(r).queryByRole("button", { name: "Drop" })).toBeNull();
+    expect(within(r).queryByRole("menu")).toBeNull();
     fireEvent.click(within(r).getByRole("button", { name: "More for Title a" }));
-    fireEvent.click(within(r).getByRole("button", { name: "Drop" }));
+    fireEvent.click(within(r).getByRole("menuitem", { name: "Drop" }));
     expect(props.onDrop).toHaveBeenCalledWith(a);
+  });
+
+  // Mike, 2026-11-04: inline buttons under the title didn't read as the
+  // row's menu. A popover by the ⋯, as on iOS, that Escape or a tap away closes.
+  it("the ⋯ opens a menu beside it, and Escape or a tap elsewhere closes it", () => {
+    panel({ todos: [todo("a")] });
+    const r = row("Title a");
+    const more = within(r).getByRole("button", { name: "More for Title a" });
+    fireEvent.click(more);
+    const menu = within(r).getByRole("menu", { name: "Actions for Title a" });
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    expect(menu.closest(".todo-menu")).toBe(more.closest(".todo-menu"));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(within(r).queryByRole("menu")).toBeNull();
+    fireEvent.click(more);
+    fireEvent.pointerDown(document.body);
+    expect(within(r).queryByRole("menu")).toBeNull();
   });
 
   it("Snooze offers the presets, and a tap hands over the ISO instant", () => {
@@ -172,14 +189,14 @@ describe("to-dos panel", () => {
     const { props } = panel({ todos: [a] });
     const r = row("Title a");
     fireEvent.click(within(r).getByRole("button", { name: "More for Title a" }));
-    fireEvent.click(within(r).getByRole("button", { name: "Snooze" }));
-    expect(within(r).getAllByRole("button", { name: /^(In 2 hours|This evening 18:00|Tomorrow 09:00|Pick a time…)$/ }).map((b) => b.textContent)).toEqual([
+    fireEvent.click(within(r).getByRole("menuitem", { name: "Snooze" }));
+    expect(within(r).getAllByRole("menuitem", { name: /^(In 2 hours|This evening 18:00|Tomorrow 09:00|Pick a time…)$/ }).map((b) => b.textContent)).toEqual([
       "In 2 hours",
       "This evening 18:00",
       "Tomorrow 09:00",
       "Pick a time…",
     ]);
-    fireEvent.click(within(r).getByRole("button", { name: "Tomorrow 09:00" }));
+    fireEvent.click(within(r).getByRole("menuitem", { name: "Tomorrow 09:00" }));
     expect(props.onSnooze).toHaveBeenCalledWith(a, iso(2026, 11, 5, 9));
   });
 
@@ -187,8 +204,8 @@ describe("to-dos panel", () => {
     panel({ todos: [todo("a")], now: new Date(2026, 10, 4, 17, 30) });
     const r = row("Title a");
     fireEvent.click(within(r).getByRole("button", { name: "More for Title a" }));
-    fireEvent.click(within(r).getByRole("button", { name: "Snooze" }));
-    expect(within(r).queryByRole("button", { name: /This evening/ })).toBeNull();
+    fireEvent.click(within(r).getByRole("menuitem", { name: "Snooze" }));
+    expect(within(r).queryByRole("menuitem", { name: /This evening/ })).toBeNull();
   });
 
   it("Pick a time takes a date and time, and only a future one can be confirmed", () => {
@@ -196,8 +213,8 @@ describe("to-dos panel", () => {
     const { props } = panel({ todos: [a] });
     const r = row("Title a");
     fireEvent.click(within(r).getByRole("button", { name: "More for Title a" }));
-    fireEvent.click(within(r).getByRole("button", { name: "Snooze" }));
-    fireEvent.click(within(r).getByRole("button", { name: "Pick a time…" }));
+    fireEvent.click(within(r).getByRole("menuitem", { name: "Snooze" }));
+    fireEvent.click(within(r).getByRole("menuitem", { name: "Pick a time…" }));
     const input = within(r).getByLabelText("Snooze until") as HTMLInputElement;
     expect(input.type).toBe("datetime-local");
     const confirm = within(r).getByRole("button", { name: "Snooze until picked time" }) as HTMLButtonElement;
@@ -441,7 +458,7 @@ describe("Chat and the to-dos panel", () => {
     const dialog = await openPanel();
     const r = await within(dialog).findByRole("listitem", { name: "Title a" });
     fireEvent.click(within(r).getByRole("button", { name: "More for Title a" }));
-    fireEvent.click(within(r).getByRole("button", { name: "Drop" }));
+    fireEvent.click(within(r).getByRole("menuitem", { name: "Drop" }));
     expect(api.dropTodo).toHaveBeenCalledWith("a");
     await waitFor(() => expect(within(dialog).queryByRole("listitem", { name: "Title a" })).toBeNull());
     expect(within(dialog).getByRole("listitem", { name: "Title b" })).toBeTruthy();
@@ -464,8 +481,8 @@ describe("Chat and the to-dos panel", () => {
     const dialog = await openPanel();
     const r = await within(dialog).findByRole("listitem", { name: "Title a" });
     fireEvent.click(within(r).getByRole("button", { name: "More for Title a" }));
-    fireEvent.click(within(r).getByRole("button", { name: "Snooze" }));
-    fireEvent.click(within(r).getByRole("button", { name: "Tomorrow 09:00" }));
+    fireEvent.click(within(r).getByRole("menuitem", { name: "Snooze" }));
+    fireEvent.click(within(r).getByRole("menuitem", { name: "Tomorrow 09:00" }));
     expect(api.snoozeTodo).toHaveBeenCalledTimes(1);
     const [id, until] = api.snoozeTodo.mock.calls[0];
     expect(id).toBe("a");
@@ -510,7 +527,7 @@ describe("Chat and the to-dos panel", () => {
     const r = await within(dialog).findByRole("listitem", { name: title });
     const more = within(r).queryByRole("button", { name: `More for ${title}` });
     if (more) fireEvent.click(more);
-    fireEvent.click(within(r).getByRole("button", { name: "Talk about it" }));
+    fireEvent.click(within(r).getByRole(more ? "menuitem" : "button", { name: "Talk about it" }));
     return store;
   }
 

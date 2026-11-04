@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { useMenuDismiss } from "./CopyMenu";
 import type { Todo } from "../lib/apiModels";
 import type { Quote } from "../lib/types";
 import { dueLine, isOverdue, localInputToIso, sectionsOf, snoozedLine, snoozePresets } from "../lib/todoFormat";
@@ -168,24 +169,15 @@ function OpenMenu({
   onTalk: (todo: Todo) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [snoozing, setSnoozing] = useState(false);
-  const [picking, setPicking] = useState(false);
-  const [picked, setPicked] = useState("");
-  const pickedIso = localInputToIso(picked, now);
-
-  const snooze = (until: string) => {
-    setOpen(false);
-    setSnoozing(false);
-    setPicking(false);
-    onSnooze(todo, until);
-  };
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   return (
-    <div className="todo-menu">
+    <div className="todo-menu" ref={wrapRef}>
       <button
         type="button"
         className="todo-more"
         aria-label={`More for ${todo.title}`}
+        aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
@@ -198,71 +190,124 @@ function OpenMenu({
         </svg>
       </button>
       {open && (
-        <div className="todo-actions" role="group" aria-label={`Actions for ${todo.title}`}>
-          <button
-            type="button"
-            className="idea-secondary"
-            aria-expanded={snoozing}
-            disabled={waiting}
-            onClick={() => setSnoozing((s) => !s)}
-          >
-            Snooze
+        <RowMenu
+          todo={todo}
+          now={now}
+          waiting={waiting}
+          wrapRef={wrapRef}
+          onClose={() => setOpen(false)}
+          onDrop={onDrop}
+          onSnooze={onSnooze}
+          onTalk={onTalk}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The ⋯'s popover, anchored under it at the row's right edge, as iOS's
+ * context menu is (Mike, 2026-11-04: inline buttons under the title didn't
+ * read as the row's menu). Snooze opens its presets in place, as iOS's
+ * nested menu does. Escape or a tap away closes it (`useMenuDismiss`). */
+function RowMenu({
+  todo,
+  now,
+  waiting,
+  wrapRef,
+  onClose,
+  onDrop,
+  onSnooze,
+  onTalk,
+}: {
+  todo: Todo;
+  now: Date;
+  waiting: boolean;
+  wrapRef: RefObject<HTMLDivElement | null>;
+  onClose: () => void;
+  onDrop: (todo: Todo) => void;
+  onSnooze: (todo: Todo, until: string) => void;
+  onTalk: (todo: Todo) => void;
+}) {
+  const [snoozing, setSnoozing] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState("");
+  const pickedIso = localInputToIso(picked, now);
+  // Dismissal watches the wrapper, so a tap on the ⋯ itself toggles it shut.
+  useMenuDismiss(wrapRef, onClose, { anchored: true });
+  // On the last rows it opens past the bottom of the sheet: bring it in.
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => menuRef.current?.scrollIntoView?.({ block: "nearest" }), [snoozing, picking]);
+
+  const snooze = (until: string) => {
+    onClose();
+    onSnooze(todo, until);
+  };
+
+  return (
+    <div ref={menuRef} className="copy-menu todo-popover" role="menu" aria-label={`Actions for ${todo.title}`}>
+      <button
+        type="button"
+        role="menuitem"
+        aria-expanded={snoozing}
+        disabled={waiting}
+        onClick={() => setSnoozing((x) => !x)}
+      >
+        Snooze <span aria-hidden="true">{snoozing ? "▾" : "▸"}</span>
+      </button>
+      {snoozing && (
+        <div className="todo-snooze-items">
+          {snoozePresets(now).map((p) => (
+            <button key={p.id} type="button" role="menuitem" onClick={() => snooze(p.until)}>
+              {p.label}
+            </button>
+          ))}
+          <button type="button" role="menuitem" aria-expanded={picking} onClick={() => setPicking((x) => !x)}>
+            Pick a time…
           </button>
-          {snoozing && (
-            <div className="todo-snooze">
-              {snoozePresets(now).map((p) => (
-                <button key={p.id} type="button" className="idea-secondary" onClick={() => snooze(p.until)}>
-                  {p.label}
-                </button>
-              ))}
-              <button type="button" className="idea-secondary" aria-expanded={picking} onClick={() => setPicking((x) => !x)}>
-                Pick a time…
+          {picking && (
+            <div className="todo-pick">
+              <input
+                type="datetime-local"
+                aria-label="Snooze until"
+                value={picked}
+                onChange={(e) => setPicked(e.target.value)}
+              />
+              <button
+                type="button"
+                className="primary"
+                aria-label="Snooze until picked time"
+                disabled={!pickedIso}
+                onClick={() => pickedIso && snooze(pickedIso)}
+              >
+                Snooze
               </button>
-              {picking && (
-                <div className="todo-pick">
-                  <input
-                    type="datetime-local"
-                    aria-label="Snooze until"
-                    value={picked}
-                    onChange={(e) => setPicked(e.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className="primary"
-                    aria-label="Snooze until picked time"
-                    disabled={!pickedIso}
-                    onClick={() => pickedIso && snooze(pickedIso)}
-                  >
-                    Snooze
-                  </button>
-                </div>
-              )}
             </div>
           )}
-          <button
-            type="button"
-            className="idea-secondary"
-            disabled={waiting}
-            onClick={() => {
-              setOpen(false);
-              onTalk(todo);
-            }}
-          >
-            Talk about it
-          </button>
-          <button
-            type="button"
-            className="idea-secondary"
-            disabled={waiting}
-            onClick={() => {
-              setOpen(false);
-              onDrop(todo);
-            }}
-          >
-            Drop
-          </button>
         </div>
       )}
+      <button
+        type="button"
+        role="menuitem"
+        disabled={waiting}
+        onClick={() => {
+          onClose();
+          onTalk(todo);
+        }}
+      >
+        Talk about it
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        className="todo-menu-destructive"
+        disabled={waiting}
+        onClick={() => {
+          onClose();
+          onDrop(todo);
+        }}
+      >
+        Drop
+      </button>
     </div>
   );
 }

@@ -225,6 +225,10 @@ final class APIClient {
         try await todoTap(id, "done", body: [:], deviceToken: deviceToken)
     }
 
+    func reopenTodo(id: String, deviceToken: String) async throws -> Todo {
+        try await todoTap(id, "reopen", body: [:], deviceToken: deviceToken)
+    }
+
     func dropTodo(id: String, deviceToken: String) async throws -> Todo {
         try await todoTap(id, "drop", body: [:], deviceToken: deviceToken)
     }

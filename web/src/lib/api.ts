@@ -421,6 +421,11 @@ export class Api {
     return this.todoTap(id, "done", undefined, signal);
   }
 
+  /** Undoes a done (the untick). */
+  async reopenTodo(id: string, signal?: AbortSignal): Promise<Todo> {
+    return this.todoTap(id, "reopen", undefined, signal);
+  }
+
   async dropTodo(id: string, signal?: AbortSignal): Promise<Todo> {
     return this.todoTap(id, "drop", undefined, signal);
   }

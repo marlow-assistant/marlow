@@ -541,6 +541,7 @@ export function Chat({
           notice={todos.notice}
           busy={todos.busy}
           onDone={(t) => todos.tap(t, { kind: "done" })}
+          onReopen={(t) => todos.tap(t, { kind: "reopen" })}
           onDrop={(t) => todos.tap(t, { kind: "drop" })}
           onAccept={(t) => todos.tap(t, { kind: "accept" })}
           onSnooze={(t, until) => todos.tap(t, { kind: "snooze", until })}

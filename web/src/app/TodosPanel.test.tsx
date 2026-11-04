@@ -62,6 +62,7 @@ function panel(over: Partial<TodosPanelProps> = {}) {
     notice: null,
     busy: new Set(),
     onDone: vi.fn(),
+    onReopen: vi.fn(),
     onDrop: vi.fn(),
     onAccept: vi.fn(),
     onSnooze: vi.fn(),
@@ -132,12 +133,16 @@ describe("to-dos panel", () => {
     expect(row("Title n").querySelector(".todo-notes")).toBeNull();
   });
 
-  it("done rows are struck through and offer no actions", () => {
-    panel({ todos: [todo("d", { state: "done", closed: iso(2026, 11, 3, 9) })] });
+  it("done rows are struck through, ticked, and the tick takes it back", () => {
+    const d = todo("d", { state: "done", closed: iso(2026, 11, 3, 9) });
+    const { props } = panel({ todos: [d] });
     const r = row("Title d");
     expect(r.className).toContain("todo-done");
     expect(within(r).queryAllByRole("button")).toHaveLength(0);
-    expect(within(r).queryByRole("checkbox")).toBeNull();
+    const box = within(r).getByRole("checkbox", { name: "Mark not done: Title d" }) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    expect(props.onReopen).toHaveBeenCalledWith(d);
   });
 
   it("the checkbox on an open row is Done", () => {
@@ -280,6 +285,7 @@ function fakeApi(initial: Todo[] | Error) {
     doneTodo: answer("done", { closed: iso(2026, 11, 4, 10) }),
     dropTodo: answer("dropped"),
     acceptTodo: answer("open"),
+    reopenTodo: answer("open", { closed: null }),
     snoozeTodo: vi.fn(async (id: string, until: string) => {
       const next = { ...list.find((t) => t.id === id)!, snoozedUntil: until };
       list = list.map((t) => (t.id === id ? next : t));
@@ -302,6 +308,7 @@ function fakeApi(initial: Todo[] | Error) {
     doneTodo: Fn;
     dropTodo: Fn;
     acceptTodo: Fn;
+    reopenTodo: Fn;
     snoozeTodo: Fn;
     serve: (t: Todo[]) => void;
   };
@@ -381,16 +388,38 @@ describe("Chat and the to-dos panel", () => {
     expect(within(dialog).getByText("Nothing on your list. Ask Marlow to add something.")).toBeTruthy();
   });
 
-  it("the checkbox posts done and the item moves to Done this week, struck through", async () => {
-    const api = fakeApi([todo("a", { due: FAR })]);
+  // Mike, 2026-11-04: a ticked item jumped to the bottom and couldn't be
+  // taken back. It stays put, struck through, until the pane is reopened.
+  it("the checkbox posts done and the item stays where it was, struck through", async () => {
+    const api = fakeApi([todo("a", { due: FAR }), todo("b")]);
     chat(api);
     const dialog = await openPanel();
     const r = await within(dialog).findByRole("listitem", { name: "Title a" });
     fireEvent.click(within(r).getByRole("checkbox"));
     expect(api.doneTodo).toHaveBeenCalledWith("a");
-    await waitFor(() => expect(within(dialog).getByRole("region", { name: "Done this week" })).toBeTruthy());
-    expect(within(dialog).queryByRole("region", { name: "To do" })).toBeNull();
-    expect(within(dialog).getByRole("listitem", { name: "Title a" }).className).toContain("todo-done");
+    await waitFor(() => expect(within(dialog).getByRole("listitem", { name: "Title a" }).className).toContain("todo-done"));
+    expect(within(dialog).queryByRole("region", { name: "Done this week" })).toBeNull();
+    const toDo = within(dialog).getByRole("region", { name: "To do" });
+    expect(within(toDo).getAllByRole("listitem").map((li) => li.getAttribute("aria-label"))).toEqual(["Title a", "Title b"]);
+  });
+
+  it("untick reopens it in place, and the next open sorts a done item to the bottom", async () => {
+    const api = fakeApi([todo("a", { due: FAR }), todo("b")]);
+    chat(api);
+    let dialog = await openPanel();
+    fireEvent.click(within(await within(dialog).findByRole("listitem", { name: "Title a" })).getByRole("checkbox"));
+    const box = await within(dialog).findByRole("checkbox", { name: "Mark not done: Title a" });
+    fireEvent.click(box);
+    expect(api.reopenTodo).toHaveBeenCalledWith("a");
+    await within(dialog).findByRole("checkbox", { name: "Mark done: Title a" });
+    expect(within(dialog).getByRole("listitem", { name: "Title a" }).className).not.toContain("todo-done");
+
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "Mark done: Title a" }));
+    await within(dialog).findByRole("checkbox", { name: "Mark not done: Title a" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
+    dialog = await openPanel();
+    const done = await within(dialog).findByRole("region", { name: "Done this week" });
+    expect(within(done).getByRole("listitem", { name: "Title a" })).toBeTruthy();
   });
 
   it("a second tap while the first is in flight posts nothing more", async () => {
@@ -401,8 +430,9 @@ describe("Chat and the to-dos panel", () => {
     const box = within(r).getByRole("checkbox");
     fireEvent.click(box);
     fireEvent.click(box);
-    await waitFor(() => expect(within(dialog).getByRole("region", { name: "Done this week" })).toBeTruthy());
+    await waitFor(() => expect(within(dialog).getByRole("listitem", { name: "Title a" }).className).toContain("todo-done"));
     expect(api.doneTodo).toHaveBeenCalledTimes(1);
+    expect(api.reopenTodo).not.toHaveBeenCalled();
   });
 
   it("Drop removes the item", async () => {

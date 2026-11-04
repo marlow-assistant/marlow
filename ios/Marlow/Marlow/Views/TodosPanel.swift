@@ -74,6 +74,7 @@ struct TodosPanel: View {
                                 presets: store.snoozePresets(),
                                 isBusy: store.busyIds.contains(todo.id),
                                 onDone: { Task { await store.done(todo) } },
+                                onReopen: { Task { await store.reopen(todo) } },
                                 onAccept: { Task { await store.accept(todo) } },
                                 onDrop: { Task { await store.drop(todo) } },
                                 onSnooze: { until in Task { await store.snooze(todo, until: until) } },
@@ -124,6 +125,7 @@ private struct TodoRow: View {
     let presets: [TodoFormat.SnoozePreset]
     let isBusy: Bool
     let onDone: () -> Void
+    let onReopen: () -> Void
     let onAccept: () -> Void
     let onDrop: () -> Void
     let onSnooze: (Date) -> Void
@@ -190,11 +192,17 @@ private struct TodoRow: View {
             .accessibilityLabel("Mark done")
             .accessibilityHint(todo.title)
         case .done:
-            Image(systemName: "checkmark.circle.fill")
-                .font(.title2)
-                .foregroundStyle(.secondary)
-                .frame(width: 32, height: 32)
-                .accessibilityHidden(true)
+            // Untick: a done item can be taken back (Mike, 2026-11-04).
+            Button(action: onReopen) {
+                Image(systemName: isBusy ? "circle" : "checkmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(isBusy ? Color.secondary : Color.accentColor)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Mark not done")
+            .accessibilityHint(todo.title)
         case .proposed, .dropped:
             Image(systemName: "sparkles")
                 .font(.title3)

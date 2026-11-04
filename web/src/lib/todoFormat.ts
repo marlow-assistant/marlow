@@ -65,8 +65,14 @@ function ms(iso: string | null): number {
  * suggested (newest first), Done this week (newest closed first). Empty
  * sections are left out, and a dropped item is in none. `sort` is stable, so
  * equal keys keep the box's list order. */
-export function sectionsOf(todos: Todo[]): TodoSection[] {
-  const open = todos
+/** `placedAs` puts an item where an earlier copy of it would go: the panel
+ * passes the items ticked or unticked since it opened, so they stay put and
+ * show their new state there (Mike, 2026-11-04). */
+export function sectionsOf(todos: Todo[], placedAs: ReadonlyMap<string, Todo> = new Map()): TodoSection[] {
+  const current = new Map(todos.map((t) => [t.id, t]));
+  const keys = todos.map((t) => placedAs.get(t.id) ?? t);
+  const show = (list: Todo[]) => list.map((k) => current.get(k.id) ?? k);
+  const open = keys
     .filter((t) => t.state === "open")
     .sort((a, b) => {
       const da = parseDue(a.due);
@@ -76,12 +82,12 @@ export function sectionsOf(todos: Todo[]): TodoSection[] {
       if (db) return 1;
       return ms(a.created) - ms(b.created);
     });
-  const suggested = todos.filter((t) => t.state === "proposed").sort((a, b) => ms(b.created) - ms(a.created));
-  const done = todos.filter((t) => t.state === "done").sort((a, b) => ms(b.closed) - ms(a.closed));
+  const suggested = keys.filter((t) => t.state === "proposed").sort((a, b) => ms(b.created) - ms(a.created));
+  const done = keys.filter((t) => t.state === "done").sort((a, b) => ms(b.closed) - ms(a.closed));
   const sections: TodoSection[] = [
-    { id: "todo", title: "To do", todos: open },
-    { id: "suggested", title: "Marlow suggested", todos: suggested },
-    { id: "done", title: "Done this week", todos: done },
+    { id: "todo", title: "To do", todos: show(open) },
+    { id: "suggested", title: "Marlow suggested", todos: show(suggested) },
+    { id: "done", title: "Done this week", todos: show(done) },
   ];
   return sections.filter((s) => s.todos.length > 0);
 }

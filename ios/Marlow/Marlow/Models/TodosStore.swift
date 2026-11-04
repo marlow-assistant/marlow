@@ -5,6 +5,8 @@ import Foundation
 protocol TodosAPI {
     func todos(deviceToken: String) async throws -> [Todo]
     func doneTodo(id: String, deviceToken: String) async throws -> Todo
+    /// Undoes a done (the untick).
+    func reopenTodo(id: String, deviceToken: String) async throws -> Todo
     func dropTodo(id: String, deviceToken: String) async throws -> Todo
     func acceptTodo(id: String, deviceToken: String) async throws -> Todo
     /// `until` is an ISO instant with an offset (`TodoFormat.wireInstant`).
@@ -37,6 +39,11 @@ final class TodosStore: ObservableObject {
     @Published private(set) var notice: String?
     /// Ids with a tap on the wire.
     @Published private(set) var busyIds: Set<String> = []
+    /// Items ticked or unticked since the panel opened, as they were before
+    /// the first such tap. They keep that place, struck through or not, so a
+    /// tick can be seen and taken back (Mike, 2026-11-04: a ticked item jumped
+    /// to the bottom with no undo). The next open lets them sort.
+    private var held: [String: Todo] = [:]
 
     private let api: TodosAPI
     private let deviceToken: String
@@ -60,7 +67,7 @@ final class TodosStore: ObservableObject {
     // MARK: Derived
 
     var sections: [TodoFormat.Group] {
-        TodoFormat.sections(todos, now: now(), calendar: calendar)
+        TodoFormat.sections(todos, placedAs: held, now: now(), calendar: calendar)
     }
 
     /// The icon's badge. Read against the clock each time it is drawn, so an
@@ -109,13 +116,22 @@ final class TodosStore: ObservableObject {
     /// Opening the panel fetches fresh and clears the last tap's line.
     func panelOpened() async {
         notice = nil
+        held = [:]
         await refresh()
     }
 
     // MARK: Taps
 
     func done(_ todo: Todo) async {
-        await tap(todo) { [api, deviceToken] in try await api.doneTodo(id: todo.id, deviceToken: deviceToken) }
+        await tap(todo, holdsPlace: true) { [api, deviceToken] in
+            try await api.doneTodo(id: todo.id, deviceToken: deviceToken)
+        }
+    }
+
+    func reopen(_ todo: Todo) async {
+        await tap(todo, holdsPlace: true) { [api, deviceToken] in
+            try await api.reopenTodo(id: todo.id, deviceToken: deviceToken)
+        }
     }
 
     func drop(_ todo: Todo) async {
@@ -134,7 +150,7 @@ final class TodosStore: ObservableObject {
         }
     }
 
-    private func tap(_ todo: Todo, _ send: () async throws -> Todo) async {
+    private func tap(_ todo: Todo, holdsPlace: Bool = false, _ send: () async throws -> Todo) async {
         guard !busyIds.contains(todo.id) else { return }
         busyIds.insert(todo.id)
         defer { busyIds.remove(todo.id) }
@@ -142,6 +158,7 @@ final class TodosStore: ObservableObject {
             let answered = try await send()
             notice = nil
             generation += 1
+            if holdsPlace, held[todo.id] == nil { held[todo.id] = todo }
             // A drop answers with the item as dropped; it leaves the list.
             if answered.state == .dropped {
                 todos.removeAll { $0.id == answered.id }

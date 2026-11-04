@@ -257,6 +257,7 @@ enum UIFixture {
         }
 
         func doneTodo(id: String, deviceToken: String) async throws -> Todo { try await unchanged(id) }
+        func reopenTodo(id: String, deviceToken: String) async throws -> Todo { try await unchanged(id) }
         func dropTodo(id: String, deviceToken: String) async throws -> Todo { try await unchanged(id) }
         func acceptTodo(id: String, deviceToken: String) async throws -> Todo { try await unchanged(id) }
         func snoozeTodo(id: String, until: String, deviceToken: String) async throws -> Todo { try await unchanged(id) }

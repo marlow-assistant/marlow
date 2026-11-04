@@ -48,6 +48,7 @@ final class FakeTodosAPI: TodosAPI {
     func doneTodo(id: String, deviceToken: String) async throws -> Todo { try await tap("done", id) }
     func dropTodo(id: String, deviceToken: String) async throws -> Todo { try await tap("drop", id) }
     func acceptTodo(id: String, deviceToken: String) async throws -> Todo { try await tap("accept", id) }
+    func reopenTodo(id: String, deviceToken: String) async throws -> Todo { try await tap("reopen", id) }
     func snoozeTodo(id: String, until: String, deviceToken: String) async throws -> Todo { try await tap("snooze", id, until) }
 
     private func tap(_ action: String, _ id: String, _ until: String? = nil) async throws -> Todo {
@@ -101,8 +102,48 @@ struct TodosStoreTests {
         #expect(api.taps.map(\.action) == ["done"])
         #expect(api.taps.map(\.id) == ["a"])
         #expect(store.todos.map(\.state) == [.done, .open], "replaced in place")
-        #expect(store.sections.map(\.title) == ["To do", "Done this week"])
+        // It stays where it was, struck through, while the panel is open
+        // (Mike, 2026-11-04: an item that jumped away on a tick, with no undo).
+        #expect(store.sections.map(\.title) == ["To do"])
+        #expect(store.sections[0].todos.map(\.id) == ["a", "b"])
+        #expect(store.sections[0].todos[0].state == .done)
         #expect(store.notice == nil)
+    }
+
+    @Test func reopenUndoesATickInPlaceAndTheNextOpenSortsDoneToTheBottom() async {
+        let api = FakeTodosAPI()
+        api.list = .success([todo("a"), todo("b")])
+        let store = makeStore(api)
+        await store.panelOpened()
+        api.tapResult = .success(todo("a", state: .done, closed: now))
+        await store.done(store.todos[0])
+
+        api.tapResult = .success(todo("a"))
+        await store.reopen(store.todos[0])
+        #expect(api.taps.map(\.action) == ["done", "reopen"])
+        #expect(store.sections[0].todos.map(\.id) == ["a", "b"])
+        #expect(store.sections[0].todos[0].state == .open)
+
+        api.tapResult = .success(todo("a", state: .done, closed: now))
+        await store.done(store.todos[0])
+        api.list = .success([todo("a", state: .done, closed: now), todo("b")])
+        await store.panelOpened()
+        #expect(store.sections.map(\.title) == ["To do", "Done this week"])
+        #expect(store.sections[0].todos.map(\.id) == ["b"])
+    }
+
+    @Test func reopeningAnItemFromDoneThisWeekKeepsItThereUntilTheNextOpen() async {
+        let api = FakeTodosAPI()
+        api.list = .success([todo("a"), todo("b", state: .done, closed: at(11, 3))])
+        let store = makeStore(api)
+        await store.panelOpened()
+        api.tapResult = .success(todo("b"))
+
+        await store.reopen(store.todos[1])
+
+        #expect(store.sections.map(\.title) == ["To do", "Done this week"])
+        #expect(store.sections[1].todos.map(\.id) == ["b"])
+        #expect(store.sections[1].todos[0].state == .open)
     }
 
     @Test func acceptMovesASuggestionToTheList() async {

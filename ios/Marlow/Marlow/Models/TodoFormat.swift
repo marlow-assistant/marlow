@@ -134,11 +134,20 @@ enum TodoFormat {
 
     /// Fixed section order, empty sections omitted. Dropped items are never
     /// shown (the list does not carry them; a drop's answer does).
-    static func sections(_ todos: [Todo], now: Date, calendar: Calendar) -> [Group] {
-        Section.allCases.compactMap { section in
-            let members = todos.filter { $0.state == section.state }
+    ///
+    /// `placedAs` puts an item where an earlier copy of it would go: the store
+    /// passes the items ticked or unticked since the panel opened, so they stay
+    /// put and show their new state there.
+    static func sections(
+        _ todos: [Todo], placedAs: [String: Todo] = [:], now: Date, calendar: Calendar
+    ) -> [Group] {
+        let current = Dictionary(todos.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        let keys = todos.map { placedAs[$0.id] ?? $0 }
+        return Section.allCases.compactMap { section in
+            let members = keys.filter { $0.state == section.state }
             guard !members.isEmpty else { return nil }
-            return Group(section: section, todos: sorted(members, section: section, calendar: calendar))
+            let ordered = sorted(members, section: section, calendar: calendar).map { current[$0.id] ?? $0 }
+            return Group(section: section, todos: ordered)
         }
     }
 

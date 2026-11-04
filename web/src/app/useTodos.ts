@@ -3,9 +3,9 @@ import { HttpError, type Api } from "../lib/api";
 import type { Todo } from "../lib/apiModels";
 import { badgeCount } from "../lib/todoFormat";
 
-export type TodosApi = Pick<Api, "todos" | "doneTodo" | "dropTodo" | "acceptTodo" | "snoozeTodo">;
+export type TodosApi = Pick<Api, "todos" | "doneTodo" | "reopenTodo" | "dropTodo" | "acceptTodo" | "snoozeTodo">;
 
-export type TodoTap = { kind: "done" } | { kind: "drop" } | { kind: "accept" } | { kind: "snooze"; until: string };
+export type TodoTap = { kind: "done" } | { kind: "reopen" } | { kind: "drop" } | { kind: "accept" } | { kind: "snooze"; until: string };
 
 /** The box says why in a sentence meant for logs; the screen says this. */
 export const TODO_CHANGED_NOTICE = "That to-do changed; here's the latest.";
@@ -85,11 +85,13 @@ export function useTodos(api: TodosApi, now: Date): TodosModel {
           const answer =
             t.kind === "done"
               ? await api.doneTodo(todo.id)
-              : t.kind === "drop"
-                ? await api.dropTodo(todo.id)
-                : t.kind === "accept"
-                  ? await api.acceptTodo(todo.id)
-                  : await api.snoozeTodo(todo.id, t.until);
+              : t.kind === "reopen"
+                ? await api.reopenTodo(todo.id)
+                : t.kind === "drop"
+                  ? await api.dropTodo(todo.id)
+                  : t.kind === "accept"
+                    ? await api.acceptTodo(todo.id)
+                    : await api.snoozeTodo(todo.id, t.until);
           // Newer than any fetch still in flight.
           seq.current += 1;
           setTodos((prev) => prev.map((x) => (x.id === answer.id ? answer : x)));

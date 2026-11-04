@@ -26,6 +26,8 @@ export interface TodosPanelProps {
   /** Ids with a tap in flight: their controls wait. */
   busy: ReadonlySet<string>;
   onDone: (todo: Todo) => void;
+  /** The untick: undoes a done. */
+  onReopen: (todo: Todo) => void;
   onDrop: (todo: Todo) => void;
   onAccept: (todo: Todo) => void;
   onSnooze: (todo: Todo, until: string) => void;
@@ -37,8 +39,24 @@ export interface TodosPanelProps {
  * To do, Marlow suggested, Done this week, each hidden when empty. Every tap
  * goes through the caller, which replaces the item with the box's answer. */
 export function TodosPanel(props: TodosPanelProps) {
-  const { todos, notice, onClose } = props;
-  const sections = sectionsOf(todos);
+  const { todos, notice, onClose, onDone, onReopen } = props;
+  // Items ticked or unticked since the panel opened, as they were before the
+  // first such tap: they keep that place so a tick can be seen and taken back
+  // (Mike, 2026-11-04). The panel mounts on open, so the next open sorts them.
+  const [held, setHeld] = useState<ReadonlyMap<string, Todo>>(new Map());
+  const hold = (todo: Todo) => setHeld((h) => (h.has(todo.id) ? h : new Map(h).set(todo.id, todo)));
+  const sections = sectionsOf(todos, held);
+  const rowProps = {
+    ...props,
+    onDone: (todo: Todo) => {
+      hold(todo);
+      onDone(todo);
+    },
+    onReopen: (todo: Todo) => {
+      hold(todo);
+      onReopen(todo);
+    },
+  };
 
   return (
     <div className="sheet" role="dialog" aria-label="To-dos">
@@ -60,7 +78,7 @@ export function TodosPanel(props: TodosPanelProps) {
             <h3 className="view-day">{section.title}</h3>
             <ul className="todo-list">
               {section.todos.map((todo) => (
-                <TodoRow key={todo.id} todo={todo} {...props} />
+                <TodoRow key={todo.id} todo={todo} {...rowProps} />
               ))}
             </ul>
             {section.id === "suggested" && (
@@ -75,7 +93,7 @@ export function TodosPanel(props: TodosPanelProps) {
 
 type RowProps = TodosPanelProps & { todo: Todo };
 
-function TodoRow({ todo, now, busy, onDone, onDrop, onAccept, onSnooze, onTalk }: RowProps) {
+function TodoRow({ todo, now, busy, onDone, onReopen, onDrop, onAccept, onSnooze, onTalk }: RowProps) {
   const [notesOpen, setNotesOpen] = useState(false);
   const waiting = busy.has(todo.id);
   const done = todo.state === "done";
@@ -84,14 +102,14 @@ function TodoRow({ todo, now, busy, onDone, onDrop, onAccept, onSnooze, onTalk }
 
   return (
     <li className={done ? "todo-row todo-done" : "todo-row"} aria-label={todo.title}>
-      {todo.state === "open" && (
+      {(todo.state === "open" || done) && (
         <input
           type="checkbox"
           className="todo-check"
-          checked={false}
+          checked={done}
           disabled={waiting}
-          aria-label={`Mark done: ${todo.title}`}
-          onChange={() => onDone(todo)}
+          aria-label={done ? `Mark not done: ${todo.title}` : `Mark done: ${todo.title}`}
+          onChange={() => (done ? onReopen(todo) : onDone(todo))}
         />
       )}
       <div className="todo-main">

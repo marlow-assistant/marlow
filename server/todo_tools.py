@@ -24,6 +24,7 @@ ARGUMENTS: dict[str, dict[str, bool]] = {
     "todo_update": {"id": True, "title": False, "notes": False, "due": False},
     "todo_done": {"id": True},
     "todo_drop": {"id": True},
+    "todo_reopen": {"id": True},
     "todo_accept": {"id": True},
     "todo_snooze": {"id": True, "until": True},
     "todo_list": {"state": False},
@@ -84,6 +85,10 @@ def _drop(a: dict[str, Any]) -> str:
     return "Dropped (kept, so it isn't proposed again): " + line(todo_store.drop(a["id"]))
 
 
+def _reopen(a: dict[str, Any]) -> str:
+    return "Reopened, open again: " + line(todo_store.reopen(a["id"]))
+
+
 def _accept(a: dict[str, Any]) -> str:
     return "Accepted, now open: " + line(todo_store.accept(a["id"]))
 
@@ -120,6 +125,7 @@ HANDLERS: dict[str, Callable[[dict[str, Any]], str]] = {
     "todo_update": _update,
     "todo_done": _done,
     "todo_drop": _drop,
+    "todo_reopen": _reopen,
     "todo_accept": _accept,
     "todo_snooze": _snooze,
     "todo_list": _list,

@@ -663,6 +663,11 @@ def todo_drop(todo_id: str, token: str = Depends(require_device_token)) -> dict[
     return _todo_tap(lambda: todo_store.drop(todo_id))
 
 
+@public_app.post("/v1/todos/{todo_id}/reopen")
+def todo_reopen(todo_id: str, token: str = Depends(require_device_token)) -> dict[str, Any]:
+    return _todo_tap(lambda: todo_store.reopen(todo_id))
+
+
 @public_app.post("/v1/todos/{todo_id}/accept")
 def todo_accept(todo_id: str, token: str = Depends(require_device_token)) -> dict[str, Any]:
     return _todo_tap(lambda: todo_store.accept(todo_id))

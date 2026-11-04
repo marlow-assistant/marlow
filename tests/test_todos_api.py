@@ -63,6 +63,17 @@ def test_a_tap_changes_the_state_and_returns_the_item(headers, action, state) ->
     assert todo_store.get("t1")["state"] == state
 
 
+def test_reopen_takes_a_done_item_back_to_open(headers) -> None:
+    todo_store.add("x", source="user")
+    todo_store.done("t1")
+    with TestClient(public_app) as client:
+        reply = client.post("/v1/todos/t1/reopen", headers=headers)
+        assert client.post("/v1/todos/t1/reopen").status_code == 401
+    assert reply.status_code == 200
+    assert reply.json()["todo"]["state"] == "open"
+    assert todo_store.get("t1")["closed"] is None
+
+
 def test_an_unknown_id_is_404_and_a_wrong_state_409(headers) -> None:
     todo_store.add("x", source="user")
     with TestClient(public_app) as client:

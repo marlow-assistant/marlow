@@ -98,7 +98,7 @@ _PRODUCT_OWNED_REASON = (
 _SERVER_OWNED_REASON = (
     "Not approved: the to-do list (todos/) is kept by the Marlow server, so "
     "it can't be edited as a file. Use the to-do tools instead -- todo_add, "
-    "todo_update, todo_done, todo_drop, todo_accept, todo_snooze, todo_list."
+    "todo_update, todo_done, todo_reopen, todo_drop, todo_accept, todo_snooze, todo_list."
 )
 
 

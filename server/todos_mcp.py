@@ -88,6 +88,13 @@ TOOLS: list[dict] = [
         {"id": _ID},
         ["id"],
     ),
+    _tool(
+        "todo_reopen",
+        "Undo a done: the user hasn't actually finished it (\"I didn't do that yet\"). "
+        "Only a done item; a dropped one is re-added with todo_add.",
+        {"id": _ID},
+        ["id"],
+    ),
     _tool("todo_accept", "The user confirmed a proposed to-do: make it open.", {"id": _ID}, ["id"]),
     _tool(
         "todo_snooze",

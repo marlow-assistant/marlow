@@ -209,6 +209,18 @@ class TodoStore:
         """The zone this store reads a bare local time in."""
         return self._zone()
 
+    def is_overdue(self, item: dict[str, Any]) -> bool:
+        """An open item past its due: a time before now, or a date before
+        today in the user's zone. The phone applies the same rule for its
+        badge, in its own zone."""
+        due = item.get("due")
+        if item.get("state") != "open" or not due:
+            return False
+        if _DATE_RE.fullmatch(due):
+            return due < self._now().astimezone(self.zone()).date().isoformat()
+        at = due_instant(due)
+        return at is not None and at < self._now()
+
     # --- files -------------------------------------------------------------
 
     def _read(self) -> dict[str, Any]:

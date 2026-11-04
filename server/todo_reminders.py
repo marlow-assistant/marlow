@@ -60,12 +60,7 @@ def reminder_prompt(items: list[dict[str, Any]]) -> str:
             facts.append(f"due {format_when(item['due'])}")
         if item.get("reminded_before"):
             facts.append("reminded before, not yet acted on")
-        text = f"- `{item['id']}` \"{_flat(item['title'])}\""
-        if facts:
-            text += f" ({'; '.join(facts)})"
-        if item.get("notes"):
-            text += f". Notes: {_flat(item['notes'])}"
-        lines.append(text)
+        lines.append(_item_line(item, facts))
     one = len(items) == 1
     return (
         f"[To-do reminder: {'this item' if one else 'these items'} on the user's list "
@@ -74,6 +69,68 @@ def reminder_prompt(items: list[dict[str, Any]]) -> str:
         + "\nRemind them in a line or two, with anything you know that bears on it. "
         "If you know one is already done, mark it with todo_done. Replying [silent] without "
         "changing an item on the list makes the server send them its title anyway.]"
+    )
+
+
+def _item_line(item: dict[str, Any], facts: list[str]) -> str:
+    text = f"- `{item['id']}` \"{_flat(item['title'])}\""
+    if facts:
+        text += f" ({'; '.join(facts)})"
+    if item.get("notes"):
+        text += f". Notes: {_flat(item['notes'])}"
+    return text
+
+
+# The jobs that read the list (docs/tasks/todos-and-reminders.md: "briefings
+# read the store, not prose"). Shipped job names only: an entry's id is
+# model-chosen, so app.py applies this to `job` dispatches, never `entry`.
+BRIEFING_JOBS: frozenset[str] = frozenset({"morning", "week-ahead"})
+
+
+def briefing_block() -> str:
+    """The open and proposed items, for a briefing job's prompt. The server
+    fixes which items the brief works from; what it says about them stays
+    Marlow's judgement. Says so when the list is empty, so the brief doesn't
+    go looking for to-dos in memory prose instead."""
+    from server.todo_tools import format_when
+
+    active = [i for i in todo_store.client_items() if i["state"] in ("open", "proposed")]
+    if not active:
+        return "[To-do list: the user's to-do list is empty.]"
+    lines = []
+    for item in (i for i in active if i["state"] == "open"):
+        facts = [f"due {format_when(item['due'])}"] if item.get("due") else []
+        if todo_store.is_overdue(item):
+            facts.append("overdue")
+        if item.get("snoozed_until"):
+            facts.append(f"snoozed until {format_when(item['snoozed_until'])}")
+        lines.append(_item_line(item, facts))
+    proposed = [_item_line(i, []) for i in active if i["state"] == "proposed"]
+    if proposed:
+        lines.append("Proposed by you, not yet accepted (they don't remind):")
+        lines.extend(proposed)
+    return (
+        "[To-do list, from the store (the server's copy is the list; memory notes "
+        "about to-dos may be stale):\n" + "\n".join(lines) + "]"
+    )
+
+
+def stale_proposals_sentence() -> str:
+    """For a chat turn: proposals unconfirmed for two days, each raised once
+    more (Mike, 2026-11-04). Consumes them, so the caller only calls it on
+    a turn the user is present for. Never raises."""
+    try:
+        items = todo_store.take_stale_proposals()
+    except Exception:
+        logger.exception("could not read stale to-do proposals")
+        return ""
+    if not items:
+        return ""
+    named = ", ".join(f"`{i['id']}` \"{_flat(i['title'])}\"" for i in items)
+    return (
+        f" You proposed these to-dos two or more days ago and they're still unconfirmed: {named}."
+        " If it fits this conversation, ask once whether to keep them (todo_accept) or drop them"
+        " (todo_drop); after this they stay on the list without being raised again."
     )
 
 

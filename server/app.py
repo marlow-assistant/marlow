@@ -42,6 +42,7 @@ from server.identity import build_identity_context
 from server.todos import TODO_QUOTE_EMOJI, TodoError, TodoNotFound, todo_context, todo_store
 from server.idle_compaction import SOURCE as COMPACTION_SOURCE
 from server.idle_compaction import idle_compaction_watcher
+from server import todo_reminders
 from server.todo_reminders import reminder_watcher
 from server.location import Location, location_store
 from server.location import validate as validate_location
@@ -1434,8 +1435,13 @@ async def cron_message(body: CronMessageBody) -> dict[str, str]:
             return {"status": "skipped", "reason": "no conversation session"}
         resume = True
     logger.info("cron job %r enqueuing a turn", body.job)
+    text = body.text
+    if body.job in todo_reminders.BRIEFING_JOBS:
+        # The list the brief works from, fixed by the server
+        # (docs/tasks/todos-and-reminders.md). A file read, in a thread.
+        text = f"{await asyncio.to_thread(todo_reminders.briefing_block)}\n\n{text}"
     turn_id = work_queue.enqueue(
-        body.text,
+        text,
         source="cron",
         client_msg_id=body.client_msg_id,
         session_id=session_id,

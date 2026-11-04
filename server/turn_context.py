@@ -518,6 +518,12 @@ def _day_sentence() -> str:
     return f" Their day in Settings: {start}-{end}; check-ins {checkins}."
 
 
+def _stale_proposals_sentence() -> str:
+    from server.todo_reminders import stale_proposals_sentence
+
+    return stale_proposals_sentence()
+
+
 def build_turn_context(
     *,
     resume: bool,
@@ -572,6 +578,10 @@ def build_turn_context(
         # Same placement rule as drift: before the gap is consumed, because
         # it reads a file and a read that raises must not swallow the gap.
         rejected = _rejection_sentence() + _ideas_rejection_sentence()
+        # A chat turn only: it marks the proposals raised, and a question on
+        # a turn nobody is present for would be the one chance spent unseen.
+        # Never raises.
+        proposals = _stale_proposals_sentence() if source in active_turn.ATTENDED_SOURCES else ""
         where = _location_sentence(time.time() if now is None else now.timestamp()) + _day_sentence()
         # Last of the reads and just before the gap, for the gap's reason: it
         # moves a cursor, so nothing that can still fail and drop the block
@@ -585,12 +595,12 @@ def build_turn_context(
             return (
                 f"[Context: the user's timezone is {zone} — their local time is "
                 f"{local.strftime(_FORMAT)}. Any date given elsewhere in this "
-                f"prompt is the server's; this one is theirs.{where}{drift}{rejected}{notices}{gap}]"
+                f"prompt is the server's; this one is theirs.{where}{drift}{rejected}{proposals}{notices}{gap}]"
             )
 
         return (
             f"[Context: server local time is {moment.strftime(_FORMAT)}. The user's "
-            f"phone has not reported a timezone, so assume they are in this one.{where}{rejected}{notices}{gap}]"
+            f"phone has not reported a timezone, so assume they are in this one.{where}{rejected}{proposals}{notices}{gap}]"
         )
     except Exception:
         logger.exception("could not build turn context; continuing without it")

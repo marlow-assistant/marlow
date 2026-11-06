@@ -19,11 +19,19 @@ struct CopyableRow: View {
                 copied = false
             }
         } label: {
-            LabeledContent(label) {
+            // Not LabeledContent: a size up from the default text size it
+            // drops a long value under the label, whatever the line limit
+            // (Mike's phone, 2026-11-06).
+            HStack {
+                Text(label)
+                    .layoutPriority(1)
+                Spacer()
                 Text(copied ? "Copied" : value)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                    .foregroundStyle(.secondary)
             }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityHint("Copies the value")
@@ -119,7 +127,15 @@ struct OpenSourceNoticesView: View {
             NavigationLink {
                 OpenSourceNoticeView(notice: notice)
             } label: {
-                LabeledContent(notice.name, value: notice.license)
+                // Two lines on every row: side by side, the rows that didn't
+                // fit wrapped and the rest didn't, at a text size a size up
+                // from the default (Mike, 2026-11-06).
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(notice.name)
+                    Text(notice.license)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .navigationTitle("Open-source notices")

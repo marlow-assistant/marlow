@@ -21,6 +21,13 @@ struct QuarterHourPicker: UIViewRepresentable {
         if picker.date != date { picker.date = date }
     }
 
+    /// Left to SwiftUI, the chit kept its default-text-size height, so above
+    /// that size the time was cut off along the bottom and sat off centre
+    /// (Mike's phone, 2026-11-06).
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIDatePicker, context: Context) -> CGSize? {
+        uiView.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
     final class Coordinator: NSObject {

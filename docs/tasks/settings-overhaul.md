@@ -13,48 +13,43 @@ drifted (Reminders is its own section on web only; "Voice" against "Voice
 mode"). Mike wanted few settings, but there are this many, so the job is to
 organise them (Mike, 2026-11-06).
 
-## The design: a main pane and two below it
+## The design: today's screen, with two rows moved down
 
-The test for the main pane: would someone change this in normal use? Anything
-that describes the install rather than how Marlow behaves moves down a level.
+An earlier three-pane draft moved too much (Mike, 2026-11-06: "too much of a
+change from today"). The screen stays as it is, in one order on both clients,
+except that server and build detail go behind two rows at the bottom.
 
-**Settings** (the main pane, same order on both clients):
+**Settings:**
 
-1. **Look and sound:** Appearance, Text size (web only), Voice. Each is a row
-   showing the current choice, opening its picker one level down.
-2. **Intelligence:** Thinking, Model. Model stays read-only, next to Thinking,
-   so the two can be read together.
-3. **Location:** the sharing level.
-4. **Your day:** Starts, Ends, Check-ins, Remind me again daily. Web's separate
-   Reminders section folds in here, as on iOS.
-5. **Notifications** (web only): iOS gets this from the OS.
-6. Two rows with no heading: **What's new** and **About**.
+1. **Appearance and voice:** three rows with a leading icon, each showing the
+   current choice and opening its picker: Avatar (the round face, replacing
+   the heading "Marlow"), Text size (web only; iOS follows Dynamic Type, Mike,
+   2026-11-06), Voice.
+2. **Intelligence:** Low / Med / High and Model, as today. New footer: "Higher
+   effort gives better answers, but can be slower to respond."
+3. **Location:** as today.
+4. **Your day:** as today. Web's separate Reminders section folds in here, as
+   on iOS.
+5. **Notifications** (web only), and only while it needs something. Hidden
+   when push is on, since the row can do nothing then. Blocked or failed
+   still shows, because that message is the only explanation.
+6. **Updates:** as today.
+7. Two rows with no heading: **Server connection** and **About**.
 
-**About:**
+**Server connection:** Server, Connection, Device, then Unpair, with its
+confirmation as now.
 
-- **Connection:** Server, Status, Device.
-- **Build:** App, Server, kept adjacent because the question is whether they
-  agree.
-- **Acknowledgements**, one level further down.
-- **Unpair**, last, with its confirmation as now.
-
-**What's new:** "Show after updates" at the top, then the list. Its own pane
-rather than a section of About: it is written for the user and the update card
-points at it. Web's in-place expanding list goes.
-
-Rejected: Updates inside About (it would bury the one thing here meant for
-everyone, under server detail). Tabs or a search box: too much for about
-fifteen controls.
+**About:** Build (App and Server, kept adjacent because the question is whether
+they agree), then the open-source notices.
 
 ## Details
 
-- **Words stay valid.** "Settings, under What's new", "under Your day", "Remind
-  me again daily" and "Check-ins" all appear in `identity/`, `changes.json` and
-  the What's New card, so these names and their top-level place must not
-  change. Nothing there mentions Status, Build or Unpair.
-- **Connection problems don't hide in About.** The chat already shows a banner
-  for needing reauthorization or being paused, so Status can move down. Confirm
-  both clients' banners cover every state the Status row shows.
+- **Words stay valid.** "Settings, under What's new", "under Your day" and
+  "Check-ins" appear in `identity/`, `changes.json` and the What's New card, and
+  all stay. Nothing there mentions Status, Build or Unpair.
+- **Connection problems don't hide.** The chat already shows a banner for
+  needing reauthorization or being paused, so the Connection row can move
+  down. Confirm both clients' banners cover every state it shows.
 - **Web needs a small pane stack.** The sheet has no navigation today: add a
   Back button, a heading for the pane, and focus moved to it on entry and back
   to the row on return. iOS already has `NavigationStack`.
@@ -64,17 +59,9 @@ fifteen controls.
 - **The icon footer moves into `FacePicker`,** where the choice is made. The
   note about tapping Done stays true.
 - **Same labels on both:** "Voice", not "Voice mode"; the same Location wording.
-
-## Footers
-
-One line at most; a permission problem still replaces the Location line.
-
-- Intelligence: "Higher is slower, not more expensive."
-- Location: "Sent with each message. Approximate shares your area, Precise your
-  exact position."
-- Your day: "Marlow checks your inbox during your day and tidies up after it."
-  and, with the switch, "Unfinished reminders come back a day later."
-- What's new, About: none.
+- **The "Remind me again daily" label** is under review (Mike, 2026-11-06). A
+  rename also changes `identity/CLAUDE.md` and the `changes.json` entry, which
+  quote it.
 
 ## Acknowledgements page
 

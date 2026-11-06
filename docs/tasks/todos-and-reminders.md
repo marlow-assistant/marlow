@@ -14,8 +14,8 @@ the same day: the server half (store, tools, reminders, briefing context,
 migration 0008, identity) and both clients' panes, iOS and web. Live on Mike's
 box (migration 0008 ran there 2026-11-04 and moved the old to-dos and
 one-off notifies into the store). See "Part 2: as built" below. Manual order
-(drag to reorder, on both clients, and `todo_move`): built 2026-11-06 on a
-branch, not yet tried on a device or merged. See "Manual order" below.
+(drag to reorder, on both clients, and `todo_move`): merged 2026-11-06, live on
+Mike's and Taylor's boxes. See "Manual order" below.
 Part 3 (Trello as an optional backing store, for shared lists and maybe
 projects) is direction only, Mike 2026-11-02; part 2 keeps it possible but
 doesn't bend for it (Mike, 2026-11-04).

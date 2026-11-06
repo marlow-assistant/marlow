@@ -59,9 +59,9 @@ they agree), then the open-source notices.
 - **The icon footer moves into `FacePicker`,** where the choice is made. The
   note about tapping Done stays true.
 - **Same labels on both:** "Voice", not "Voice mode"; the same Location wording.
-- **The "Remind me again daily" label** is under review (Mike, 2026-11-06). A
-  rename also changes `identity/CLAUDE.md` and the `changes.json` entry, which
-  quote it.
+- **"Remind me again daily" becomes "Repeat reminders daily"** on both clients
+  (Mike, 2026-11-06). Change `identity/CLAUDE.md` and the `changes.json` entry
+  that quote it in the same PR, and the tests that find the switch by label.
 
 ## Acknowledgements page
 

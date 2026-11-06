@@ -149,3 +149,33 @@ by the runner because the name isn't numbered.
 Not a framework: one directory, one loop, one record file, tests. Something that
 needs the user's judgement or consent can't be a migration; if one ever does, it
 queues a message from Marlow instead, and that path gets built then.
+
+## Parked: the rollback check doesn't understand a squash merge
+
+Mike, 2026-11-06: low value for now, but it would be nice if `update.sh` didn't
+complain when nothing is wrong. We keep squash merging: a PR is the unit of review
+and of history, and a slip in a working commit never reaches `main`.
+
+A branch runs on Mike's box before it merges, so every feature ends the same way:
+moving the box back to `main`, `rollback_reasons` finds the checked-out commit isn't
+an ancestor of the target, because the squash gave the same content a new hash. The
+deploy is refused and needs `--force`, which also skips the migration check, the one
+that guards against real damage. Until this is built, check that the difference
+outside `docs/` is empty before forcing.
+
+The fix is to ask about content as well as ancestry. Before reporting the commit as
+missing, trial-merge it into the target; if the result is the target's own tree, the
+branch adds nothing and the deploy goes forwards:
+
+    git merge-tree --write-tree "$target" "$head"   # compare with "$target^{tree}"
+
+Tried by hand on a real squash-merged branch (2026-11-06), the trees matched. An
+unmerged branch gives a different tree, or a conflict, and is refused as now. The
+migration check doesn't change. Worth knowing when building it:
+
+- `--write-tree` needs git 2.38; check what the boxes run. On an older git, or any
+  failure, keep refusing.
+- If `main` has since changed the lines the branch touched, the trees won't match:
+  a refusal to look at, which is the safe direction.
+- The check runs from the copy of the script already on the box, so the update that
+  ships it isn't helped by it.

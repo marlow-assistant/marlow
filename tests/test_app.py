@@ -92,6 +92,19 @@ def test_a_message_turn_is_attended(paired_device_token):
         assert not active_turn.is_unattended()
 
 
+def _eventually(condition, what: str, timeout: float = 5.0) -> None:
+    """Waits for what follows a turn's end. The queue sets `done` first, and only
+    then clears attachments and writes the transcript row, so a test that reads
+    either straight after seeing `done` can land in the gap. One did in CI, under
+    parallel load, on a PR that touched no server code (2026-11-06)."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if condition():
+            return
+        time.sleep(0.02)
+    raise AssertionError(f"timed out waiting for {what}")
+
+
 def test_full_pairing_and_message_round_trip():
     with TestClient(public_app) as client, TestClient(admin_app) as admin_client:
         invite_resp = admin_client.post("/internal/admin/invite", json={"device_name": "e2e-device"})
@@ -123,14 +136,16 @@ def test_full_pairing_and_message_round_trip():
         resend_resp = client.post("/v1/message", json={"text": "hello again", "client_msg_id": "e2e-1"}, headers=headers)
         assert resend_resp.json()["turn_id"] == turn_id
 
+        # Not the first-run greeting: this box is fresh, so pairing posted one.
+        def replies():
+            rows = client.get("/v1/transcript?after=0", headers=headers).json()["rows"]
+            return [r["turn_id"] for r in rows if r["role"] == "assistant" and r["source"] != "system"]
+
+        _eventually(replies, "the reply's transcript row")
         # The transcript holds the reply, and reading it consumes nothing: a
         # second client (or a second read) finds it again.
         for _ in range(2):
-            rows = client.get("/v1/transcript?after=0", headers=headers).json()["rows"]
-            # Not the first-run greeting: this box is fresh, so pairing posted one.
-            assert [
-                r["turn_id"] for r in rows if r["role"] == "assistant" and r["source"] != "system"
-            ] == [turn_id]
+            assert replies() == [turn_id]
 
 
 def test_wrong_invite_rejected_with_the_same_answer_as_a_used_one():
@@ -1302,7 +1317,7 @@ def test_message_with_image_round_trips_and_cleans_up_after(paired_device_token)
         assert turn_body["status"] == "done"
         assert turn_body["had_permission_denial"] is False
 
-        assert not os.path.exists(turn_attachment_dir(turn_id))
+        _eventually(lambda: not os.path.exists(turn_attachment_dir(turn_id)), "the attachment dir to go")
 
 
 def test_message_with_image_that_fails_to_write_is_a_clean_500(paired_device_token, monkeypatch):
@@ -1459,7 +1474,7 @@ def test_message_with_several_images_stores_them_in_order_and_records_them(paire
                 break
             time.sleep(0.05)
         assert body["status"] == "done"
-        assert not os.path.exists(real_dir(turn_id))
+        _eventually(lambda: not os.path.exists(real_dir(turn_id)), "the attachment dir to go")
         rows = client.get("/v1/transcript", headers=headers).json()["rows"]
         mine = [r for r in rows if r.get("client_msg_id") == "multi-1"][0]
         assert len(mine["attachments"]) == 3

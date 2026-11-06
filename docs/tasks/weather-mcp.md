@@ -1,9 +1,8 @@
 # Weather MCP server — dated forecasts, with national fallbacks
 
-**Status: merged 2026-10-13, live on Mike's box. Still open:
-`weather.log` after a few days (`RETRY ok` against `FALLBACK used`); then,
-with Mike's OK, the wishlist entry and the travel.md line (see "Done when").
-Routing is its own task: `route-planning.md`, merged 2026-10-14.**
+**Status: closed 2026-11-06. Merged 2026-10-13, live on every box. `weather.log` on Mike's box
+showed 27 fallbacks, all 2026-10-13 to 10-17, none since. Routing is its own
+task: `route-planning.md`, merged 2026-10-14.**
 Compressed 2026-10-26: the build plan, specs and test lists are cut; git history has the full version.
 
 Server-only: **neither client needs a UI change.** iOS and web/Android both
@@ -17,8 +16,7 @@ returned a July forecast for one town and 26°C for another in October. Search
 results are pages of unknown date, and the model cannot tell a stale page from
 a current one. **Stale or mixed-date data is the bug**, so the fix is a source
 that is current by construction and an output where every value carries its
-date. The wishlist entry is "Reliable weather retrieval (2026-10-11)" in the
-box's `memory/marlow-features.md`.
+date.
 
 ## Decided (Mike, 2026-10-13; don't re-open)
 
@@ -349,13 +347,6 @@ around. `identity/cron/email-flash.md` now says "weather tools, never search".
 a starter that becomes the user's**, so existing boxes get it from migration
 `0004-morning-weather`, which skips any brief that already mentions weather;
 that covers the Android user's box. Mike's was edited by hand on 2026-10-13, with his OK.
-
-## Done when (what remains)
-
-- On the box: after a few days, `weather.log` holds nothing unexpected.
-- **Then** (Marlow's files, so ask Mike first): remove the wishlist entry
-  from `marlow-features.md`, and the line in `memory/travel.md` that calls
-  weather lookups unreliable.
 
 ## Parked
 

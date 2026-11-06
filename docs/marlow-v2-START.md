@@ -80,9 +80,6 @@ you finish something, mark it done there as well as here.
   entry id is 7. Its policy (what gets
   an entry) is now a working rule in `CLAUDE.md`.
 - **`ios-image-input.md`** (2026-10-23): camera shipped on both clients. Multi-image messages (up to 6, Mike's picks) shipped on both clients 2026-10-24, device-checked on the iPhone and the Android emulator's PWA. Follow-ups specced, not started: `image-viewer.md`, `message-retention-setting.md`, `share-and-files.md`.
-- **`weather-mcp.md`**: merged 2026-10-13, live. `weather.log` read
-  2026-11-04: 27 fallbacks, all 10-13 to 10-17, none since. Ready to close
-  with Mike's OK.
 - **`bare-default-risk.md`** (2026-10-19): watching, nothing to build. The
   docs say `--bare` will become the default for `-p`. It skips OAuth,
   connectors, hooks and CLAUDE.md, and there's no opt-out yet. Read the CLI

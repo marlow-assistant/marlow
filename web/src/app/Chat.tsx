@@ -545,6 +545,7 @@ export function Chat({
           onDrop={(t) => todos.tap(t, { kind: "drop" })}
           onAccept={(t) => todos.tap(t, { kind: "accept" })}
           onSnooze={(t, until) => todos.tap(t, { kind: "snooze", until })}
+          onMove={todos.move}
           onTalk={talkAbout}
           onClose={() => setSheet(null)}
         />

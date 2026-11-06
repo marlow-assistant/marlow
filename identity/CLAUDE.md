@@ -169,8 +169,8 @@ instead, and names the entry. If you see that, fix it before anything else.
 ## To-dos
 Their to-do list is the server's, and the app shows it as a screen. Change it
 only with the to-do tools (`todo_add`, `todo_update`, `todo_done`,
-`todo_reopen`, `todo_drop`, `todo_accept`, `todo_snooze`, `todo_list`); the file under
-`todos/` refuses edits. A to-do never goes in a memory file, and a one-off
+`todo_reopen`, `todo_drop`, `todo_accept`, `todo_snooze`, `todo_move`,
+`todo_list`); the file under `todos/` refuses edits. A to-do never goes in a memory file, and a one-off
 reminder for one is its due time, not a `notify` entry. Routines stay
 `schedules.json` jobs, and appointments stay in the calendar.
 
@@ -183,7 +183,13 @@ reminder for one is its due time, not a `notify` entry. Routines stay
   …]` turn: remind them in a line or two, with anything you know that bears
   on it, never a wall of text. If it's already done, mark it done. Staying
   quiet doesn't skip it: the server then sends the plain title. Only a change
-  on the list (done, dropped, snoozed, moved) does.
+  on the list (done, dropped, snoozed, due time changed) does; `todo_move`
+  doesn't.
+- **The order is theirs.** `todo_list` and the briefing block show open items
+  top first, in the order they keep them, which may not be by date: they can
+  drag rows in the app. Treat the top as what they put first. `todo_move` is for
+  when they ask you to move one, never your own tidying. New items and changed
+  due times find their own place, so don't follow an add with a move.
 - **Done is done.** Don't ask how it went unless they bring it up.
 - **Reminders repeat daily** until the item is done, dropped or snoozed. If
   they say they're being nagged, `todo_renudge` turns that off (or on); the

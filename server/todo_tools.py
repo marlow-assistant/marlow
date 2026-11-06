@@ -27,6 +27,7 @@ ARGUMENTS: dict[str, dict[str, bool]] = {
     "todo_reopen": {"id": True},
     "todo_accept": {"id": True},
     "todo_snooze": {"id": True, "until": True},
+    "todo_move": {"id": True, "before": False},
     "todo_list": {"state": False},
     "todo_renudge": {"on": True},
 }
@@ -97,13 +98,21 @@ def _snooze(a: dict[str, Any]) -> str:
     return "Snoozed: " + line(todo_store.snooze(a["id"], a["until"]))
 
 
+def _move(a: dict[str, Any]) -> str:
+    item = todo_store.move(a["id"], a.get("before"))
+    ids = [i["id"] for i in todo_store.items() if i["state"] == "open"]
+    return f"Moved, now {ids.index(item['id']) + 1} of {len(ids)} on their list: " + line(item)
+
+
 def _list(a: dict[str, Any]) -> str:
     which = a.get("state", "active")
     if which not in LIST_STATES:
         raise TodoError(f"state must be one of {', '.join(LIST_STATES)}")
     items = todo_store.items()
     if which == "active":
-        items = [i for i in items if i["state"] in ("open", "proposed")]
+        # Open first: the order among them is the user's, and a proposal
+        # sitting between two would read as having a place.
+        items = [i for i in items if i["state"] == "open"] + [i for i in items if i["state"] == "proposed"]
     elif which != "all":
         items = [i for i in items if i["state"] == which]
     if not items:
@@ -128,6 +137,7 @@ HANDLERS: dict[str, Callable[[dict[str, Any]], str]] = {
     "todo_reopen": _reopen,
     "todo_accept": _accept,
     "todo_snooze": _snooze,
+    "todo_move": _move,
     "todo_list": _list,
     "todo_renudge": _renudge,
 }

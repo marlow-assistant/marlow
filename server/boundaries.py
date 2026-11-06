@@ -861,6 +861,7 @@ VETTED_PATHLESS_TOOLS: frozenset[str] = frozenset({
     "mcp__todos__todo_reopen",
     "mcp__todos__todo_accept",
     "mcp__todos__todo_snooze",
+    "mcp__todos__todo_move",
     "mcp__todos__todo_list",
     "mcp__todos__todo_renudge",
 })

@@ -37,6 +37,10 @@ final class FakeTodosAPI: TodosAPI {
     var duringFetch: (() async -> Void)?
     /// Runs inside a tap, before it answers.
     var duringTap: (() async -> Void)?
+    var moveResult: Result<[Todo], Error> = .failure(URLError(.badServerResponse))
+    private(set) var moves: [(id: String, before: String?)] = []
+    /// Runs inside a move, before it answers.
+    var duringMove: (() async -> Void)?
 
     func todos(deviceToken: String) async throws -> [Todo] {
         fetchCount += 1
@@ -50,6 +54,12 @@ final class FakeTodosAPI: TodosAPI {
     func acceptTodo(id: String, deviceToken: String) async throws -> Todo { try await tap("accept", id) }
     func reopenTodo(id: String, deviceToken: String) async throws -> Todo { try await tap("reopen", id) }
     func snoozeTodo(id: String, until: String, deviceToken: String) async throws -> Todo { try await tap("snooze", id, until) }
+
+    func moveTodo(id: String, before: String?, deviceToken: String) async throws -> [Todo] {
+        moves.append((id, before))
+        await duringMove?()
+        return try moveResult.get()
+    }
 
     private func tap(_ action: String, _ id: String, _ until: String? = nil) async throws -> Todo {
         taps.append((action, id, until))
@@ -263,6 +273,140 @@ struct TodosStoreTests {
         await store.refresh()
 
         #expect(store.todos.map(\.state) == [.done])
+    }
+
+    // MARK: Moving
+
+    private func ids(_ store: TodosStore) -> [String] { store.todos.map(\.id) }
+
+    @Test func aMoveShowsAtOnceAndEndsOnTheServersAnswer() async {
+        let api = FakeTodosAPI()
+        api.list = .success([todo("a"), todo("b")])
+        let store = makeStore(api)
+        await store.refresh()
+        // The answer has more in it: another device added an item.
+        api.moveResult = .success([todo("b"), todo("c"), todo("a")])
+        var shownWhileWaiting: [String] = []
+        api.duringMove = { shownWhileWaiting = store.todos.map(\.id) }
+
+        let task = store.move(store.todos[1], before: "a")
+        // Before any await: a drag's row can't wait in mid-air for the answer.
+        #expect(ids(store) == ["b", "a"])
+        await task.value
+
+        #expect(shownWhileWaiting == ["b", "a"])
+        #expect(api.moves.map(\.id) == ["b"])
+        #expect(api.moves.first?.before == "a")
+        #expect(ids(store) == ["b", "c", "a"])
+        #expect(store.notice == nil)
+    }
+
+    @Test func aBottomMoveSendsNoAnchor() async {
+        let api = FakeTodosAPI()
+        api.list = .success([todo("a"), todo("b")])
+        let store = makeStore(api)
+        await store.refresh()
+        api.moveResult = .success([todo("b"), todo("a")])
+
+        await store.move(store.todos[0], before: nil).value
+
+        #expect(api.moves.count == 1)
+        #expect(api.moves.first?.before == nil)
+        #expect(ids(store) == ["b", "a"])
+    }
+
+    @Test(arguments: [404, 409])
+    func aRefusedMovePutsTheRowBackRefetchesAndSaysSo(status: Int) async {
+        let api = FakeTodosAPI()
+        api.list = .success([todo("a"), todo("b")])
+        let store = makeStore(api)
+        await store.refresh()
+        api.moveResult = .failure(APIError.server(status: status, detail: "gone"))
+        api.list = .success([todo("a")]) // what really happened to b
+
+        await store.move(store.todos[1], before: "a").value
+
+        #expect(api.fetchCount == 2)
+        #expect(ids(store) == ["a"])
+        #expect(store.notice == TodoFormat.changedNotice)
+    }
+
+    @Test func aMoveThatNeverReachedTheBoxGoesBackAndSaysSo() async {
+        let api = FakeTodosAPI()
+        api.list = .success([todo("a"), todo("b")])
+        let store = makeStore(api)
+        await store.refresh()
+        api.moveResult = .failure(URLError(.notConnectedToInternet))
+
+        await store.move(store.todos[1], before: "a").value
+
+        #expect(ids(store) == ["a", "b"])
+        #expect(store.notice == TodoFormat.unreachableNotice)
+    }
+
+    @Test func aFailedMovePutsTheOrderBackAndKeepsWhatElseHappened() async {
+        let api = FakeTodosAPI()
+        api.list = .success([todo("a"), todo("b"), todo("c")])
+        let store = makeStore(api)
+        await store.refresh()
+        api.moveResult = .failure(URLError(.notConnectedToInternet))
+        api.tapResult = .success(todo("b", state: .done, closed: now))
+        api.duringMove = { await store.done(store.todos.first { $0.id == "b" }!) }
+
+        await store.move(store.todos[2], before: "a").value
+
+        #expect(ids(store) == ["a", "b", "c"])
+        #expect(store.todos.first { $0.id == "b" }?.state == .done)
+    }
+
+    @Test func aRowCanMoveOnlyWhenNothingIsInTheWay() async {
+        let api = FakeTodosAPI()
+        api.list = .success([todo("a"), todo("b")])
+        let store = makeStore(api)
+        await store.refresh()
+        api.moveResult = .success([todo("b"), todo("a")])
+        let row = store.todos[1]
+        #expect(store.canMove(row))
+        var whileMoving = true
+        api.duringMove = { whileMoving = store.canMove(row) }
+
+        await store.move(row, before: "a").value
+
+        #expect(!whileMoving)
+        #expect(store.canMove(row))
+    }
+
+    @Test func aSecondMoveWhileOneIsOnTheWireIsNotSent() async {
+        let api = FakeTodosAPI()
+        api.list = .success([todo("a"), todo("b"), todo("c")])
+        let store = makeStore(api)
+        await store.refresh()
+        api.moveResult = .success([todo("c"), todo("a"), todo("b")])
+
+        api.duringMove = { [unowned api] in
+            api.duringMove = nil
+            await store.move(store.todos[2], before: "a").value
+        }
+        await store.move(store.todos[2], before: "a").value
+
+        #expect(api.moves.count == 1)
+    }
+
+    @Test func aFetchThatStartedBeforeAMoveCantPutTheOldOrderBack() async {
+        let api = FakeTodosAPI()
+        api.list = .success([todo("a"), todo("b")])
+        let store = makeStore(api)
+        await store.refresh()
+        api.moveResult = .success([todo("b"), todo("a")])
+
+        api.duringFetch = { [unowned api] in
+            api.duringFetch = nil
+            await store.move(store.todos[1], before: "a").value
+            api.list = .success([todo("b"), todo("a")])
+        }
+        await store.refresh()
+
+        #expect(ids(store) == ["b", "a"])
     }
 
     @Test func aRowBusyWithATapIsNotTappedTwice() async {

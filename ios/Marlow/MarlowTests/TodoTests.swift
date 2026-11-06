@@ -118,30 +118,67 @@ struct TodoSectionTests {
         #expect(sections([]).isEmpty)
     }
 
-    @Test func openItemsAreDueAscendingWithADateAsTheStartOfItsDay() {
+    @Test func openItemsKeepTheServersOrderWhateverTheirDues() {
         let list = sections([
-            todo("late", due: "2026-11-09T09:00:00+00:00"),
+            todo("undated"),
+            todo("far", due: "2026-12-31"),
+            todo("soon", due: "2026-11-05"),
             todo("timed", due: "2026-11-06T09:00:00+00:00"),
-            todo("dated", due: "2026-11-06"),
         ])
-        #expect(list[0].todos.map(\.id) == ["dated", "timed", "late"])
+        #expect(list[0].todos.map(\.id) == ["undated", "far", "soon", "timed"])
     }
 
-    @Test func undatedOpenItemsFollowTheDatedOnesOldestFirst() {
-        let list = sections([
-            todo("new", created: at(11, 3)),
-            todo("dated", due: "2026-12-25"),
-            todo("old", created: at(11, 1)),
-        ])
-        #expect(list[0].todos.map(\.id) == ["dated", "old", "new"])
+    @Test func aTickedItemHoldsItsPlaceInThatOrder() {
+        let list = TodoFormat.sections(
+            [todo("a"), todo("b", state: .done, closed: at(11, 4)), todo("c")],
+            placedAs: ["b": todo("b")], now: now, calendar: utc
+        )
+        #expect(list[0].todos.map(\.id) == ["a", "b", "c"])
     }
 
-    @Test func aDueMomentIsComparedAcrossOffsets() {
-        let list = sections([
-            todo("b", due: "2026-11-06T09:00:00-05:00"), // 14:00 UTC
-            todo("a", due: "2026-11-06T12:00:00+00:00"),
-        ])
-        #expect(list[0].todos.map(\.id) == ["a", "b"])
+    // MARK: Moving
+
+    @Test func theAnchorIsWhatEndsUpJustBelowTheMovedItem() {
+        let ids = ["a", "b", "c", "d"]
+        #expect(TodoFormat.anchor(ids, moving: "d", to: 0) == "a")
+        #expect(TodoFormat.anchor(ids, moving: "a", to: 1) == "c")
+        #expect(TodoFormat.anchor(ids, moving: "b", to: 2) == "d")
+        #expect(TodoFormat.anchor(ids, moving: "a", to: 3) == nil)
+    }
+
+    @Test func reorderedAppliesTheMoveTheServerWill() {
+        let list = [todo("a"), todo("x", state: .done), todo("b"), todo("c")]
+        #expect(TodoFormat.reordered(list, moving: "c", before: "a").map(\.id) == ["c", "a", "x", "b"])
+        #expect(TodoFormat.reordered(list, moving: "c", before: "x").map(\.id) == ["a", "c", "x", "b"])
+        #expect(TodoFormat.reordered(list, moving: "a", before: nil).map(\.id) == ["x", "b", "c", "a"])
+    }
+
+    @Test func aBottomMoveLandsAfterTheLastOpenItem() {
+        let list = [todo("a"), todo("b"), todo("p", state: .proposed)]
+        #expect(TodoFormat.reordered(list, moving: "a", before: nil).map(\.id) == ["b", "a", "p"])
+    }
+
+    @Test func undoingAMoveKeepsTheNewRowsInTheOldOrder() {
+        let ticked = todo("b", state: .done)
+        let back = TodoFormat.inOrder([todo("c"), todo("n"), todo("a"), ticked], of: [todo("a"), todo("b"), todo("c")])
+        #expect(back.map(\.id) == ["a", "b", "c", "n"])
+        #expect(back[1].state == .done)
+        #expect(TodoFormat.inOrder([todo("b")], of: [todo("a"), todo("b")]).map(\.id) == ["b"])
+    }
+
+    @Test func theMenuOffersOnlyMovesThatDoSomethingDifferent() {
+        func titles(_ index: Int, _ count: Int) -> [String] {
+            TodoFormat.moveChoices(index: index, count: count).map { "\($0.title) \($0.to)" }
+        }
+        #expect(titles(0, 1).isEmpty)
+        #expect(titles(0, 2) == ["Move down 1"])
+        #expect(titles(1, 2) == ["Move up 0"])
+        #expect(titles(0, 4) == ["Move down 1", "Move to bottom 3"])
+        #expect(titles(2, 5) == ["Move to top 0", "Move up 1", "Move down 3", "Move to bottom 4"])
+    }
+
+    @Test func aMoveIsSpokenAsAPlaceInTheList() {
+        #expect(TodoFormat.movedLine("Call the garage", to: 0, of: 3) == "Call the garage moved to 1 of 3.")
     }
 
     @Test func suggestedAreNewestFirstAndDoneAreNewestClosedFirst() {

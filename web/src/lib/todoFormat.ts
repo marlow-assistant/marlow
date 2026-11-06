@@ -1,8 +1,9 @@
 // The to-dos pane's rules (docs/tasks/todos-and-reminders.md, part 2), pure so
 // they are tested without a screen. The box sends facts (a state, a due that is
-// a day or an instant); the sections, the order, "overdue", the badge and every
-// word are decided here, on the phone's own clock, which each function takes as
-// `now` so tests pin it.
+// a day or an instant); the sections, "overdue", the badge and every word are
+// decided here, on the phone's own clock, which each function takes as `now` so
+// tests pin it. To do's order is the exception: it's the user's, kept on the box
+// so every client shows the same one (server/todos.py).
 //
 // A due is `YYYY-MM-DD` (a day: due until that day ends) or an ISO instant with
 // an offset (a time). The phone's zone is the one that reads both.
@@ -61,10 +62,10 @@ function ms(iso: string | null): number {
   return Number.isNaN(t) ? 0 : t;
 }
 
-/** To do (by due, a day as its start, then the undated by created), Marlow
- * suggested (newest first), Done this week (newest closed first). Empty
- * sections are left out, and a dropped item is in none. `sort` is stable, so
- * equal keys keep the box's list order. */
+/** To do (the box's order, which is the user's), Marlow suggested (newest
+ * first), Done this week (newest closed first). Empty sections are left out,
+ * and a dropped item is in none. `sort` is stable, so equal keys keep the box's
+ * list order. */
 /** `placedAs` puts an item where an earlier copy of it would go: the panel
  * passes the items ticked or unticked since it opened, so they stay put and
  * show their new state there (Mike, 2026-11-04). */
@@ -72,16 +73,7 @@ export function sectionsOf(todos: Todo[], placedAs: ReadonlyMap<string, Todo> = 
   const current = new Map(todos.map((t) => [t.id, t]));
   const keys = todos.map((t) => placedAs.get(t.id) ?? t);
   const show = (list: Todo[]) => list.map((k) => current.get(k.id) ?? k);
-  const open = keys
-    .filter((t) => t.state === "open")
-    .sort((a, b) => {
-      const da = parseDue(a.due);
-      const db = parseDue(b.due);
-      if (da && db) return da.at.getTime() - db.at.getTime();
-      if (da) return -1;
-      if (db) return 1;
-      return ms(a.created) - ms(b.created);
-    });
+  const open = keys.filter((t) => t.state === "open");
   const suggested = keys.filter((t) => t.state === "proposed").sort((a, b) => ms(b.created) - ms(a.created));
   const done = keys.filter((t) => t.state === "done").sort((a, b) => ms(b.closed) - ms(a.closed));
   const sections: TodoSection[] = [
@@ -90,6 +82,61 @@ export function sectionsOf(todos: Todo[], placedAs: ReadonlyMap<string, Todo> = 
     { id: "done", title: "Done this week", todos: show(done) },
   ];
   return sections.filter((s) => s.todos.length > 0);
+}
+
+/** The anchor that lands `id` at index `to` of `ids`: whatever then sits just
+ * below it, null for the bottom. */
+export function anchorAt(ids: readonly string[], id: string, to: number): string | null {
+  return ids.filter((x) => x !== id)[to] ?? null;
+}
+
+/** The list as the box will have it after a move, for the moment before it
+ * answers. Same rule as `TodoStore.move`: above the anchor, or after the last
+ * open item for null. */
+export function reordered(todos: readonly Todo[], id: string, before: string | null): Todo[] {
+  const moved = todos.find((t) => t.id === id);
+  if (!moved) return [...todos];
+  const rest = todos.filter((t) => t.id !== id);
+  const at =
+    before === null ? rest.findLastIndex((t) => t.state === "open") + 1 : rest.findIndex((t) => t.id === before);
+  return at < 0 ? [...todos] : [...rest.slice(0, at), moved, ...rest.slice(at)];
+}
+
+/** `todos` in the order of `order`, for undoing a move without undoing whatever
+ * else changed since: rows `order` hadn't seen go last. */
+export function inOrderOf(todos: readonly Todo[], order: readonly Todo[]): Todo[] {
+  const current = new Map(todos.map((t) => [t.id, t]));
+  const known = new Set(order.map((t) => t.id));
+  return [...order.flatMap((t) => current.get(t.id) ?? []), ...todos.filter((t) => !known.has(t.id))];
+}
+
+export interface MoveChoice {
+  label: string;
+  to: number;
+}
+
+/** The menu's moves for the row at `index` of `count`, the way to reorder
+ * without a drag. Top and bottom only when they differ from up and down. */
+export function moveChoices(index: number, count: number): MoveChoice[] {
+  const choices: MoveChoice[] = [];
+  if (index > 1) choices.push({ label: "Move to top", to: 0 });
+  if (index > 0) choices.push({ label: "Move up", to: index - 1 });
+  if (index < count - 1) choices.push({ label: "Move down", to: index + 1 });
+  if (index < count - 2) choices.push({ label: "Move to bottom", to: count - 1 });
+  return choices;
+}
+
+export interface RowBox {
+  top: number;
+  height: number;
+}
+
+/** Where a dragged row would land: past every other row whose middle its own
+ * middle has crossed. `offset` is how far it has travelled from `from`. */
+export function dropIndex(rows: readonly RowBox[], from: number, offset: number): number {
+  const middle = (r: RowBox) => r.top + r.height / 2;
+  const at = middle(rows[from]) + offset;
+  return rows.filter((r, i) => i !== from && middle(r) < at).length;
 }
 
 const p2 = (n: number) => String(n).padStart(2, "0");

@@ -74,7 +74,8 @@ you finish something, mark it done there as well as here.
 - **`todos-and-reminders.md`** (2026-11-02): Part 1, fired `notify` text
   reaching the model, verified on Mike's box 2026-11-02. Part 2, the to-do
   store reminders hang off and the To-dos pane on both clients, merged
-  2026-11-04 and live on Mike's box. Part 3 (Trello backing) is direction only.
+  2026-11-04 and live on Mike's box. Manual order, the last gap, is on a
+  branch (2026-11-06). Part 3 (Trello backing) is direction only.
 - **`whats-new.md`** (2026-10-23): the "Marlow was updated" card and
   Settings' What's new, from a repo-root `changes.json`; built on both
   clients, merged 2026-10-23; seen on Mike's iPhone, Android not yet. Next

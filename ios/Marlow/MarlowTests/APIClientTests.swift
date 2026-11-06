@@ -567,6 +567,30 @@ struct APIClientTests {
         #expect(body["until"] as? String == "2026-11-05T09:00:00-05:00")
     }
 
+    @Test func moveSendsTheAnchorAndAnswersWithTheWholeList() async throws {
+        StubURLProtocol.respond(json: #"{"todos": [\#(todoJSON)]}"#)
+
+        let list = try await makeClient().moveTodo(id: "t3", before: "t1", deviceToken: "tok")
+
+        let request = try #require(StubURLProtocol.lastRequest)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/todos/t3/move")
+        let body = try #require(StubURLProtocol.lastBodyJSON)
+        #expect(body["before"] as? String == "t1")
+        #expect(list.map(\.id) == ["t3"])
+    }
+
+    @Test func aMoveToTheBottomSendsAnExplicitNull() async throws {
+        // The server refuses a missing `before`: no body is a bug, not a drag.
+        StubURLProtocol.respond(json: #"{"todos": []}"#)
+
+        _ = try await makeClient().moveTodo(id: "t3", before: nil, deviceToken: "tok")
+
+        let body = try #require(StubURLProtocol.lastBodyJSON)
+        #expect(body.keys.contains("before"))
+        #expect(body["before"] is NSNull)
+    }
+
     @Test(arguments: [404, 409])
     func aRefusedTapSurfacesTheStatusForTheStoreToJudge(status: Int) async throws {
         StubURLProtocol.respond(json: #"{"detail": "a sentence for the logs"}"#, status: status)

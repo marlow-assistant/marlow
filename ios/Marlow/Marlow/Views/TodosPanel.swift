@@ -10,6 +10,11 @@ import SwiftUI
 /// rather than sent from here: it closes the sheet and goes through the
 /// composer's own send path, so the bubble and the polling are exactly a typed
 /// message's.
+///
+/// A `List`, not a stack in a `ScrollView`, because `onMove` is the only
+/// reorder with the system's lift, auto-scroll and make-way behaviour, and it
+/// works by long press outside edit mode. VoiceOver can't reach that drag, so
+/// the row's menu has Move too.
 struct TodosPanel: View {
     @ObservedObject var store: TodosStore
     let onTalkAbout: (Todo) -> Void
@@ -54,46 +59,81 @@ struct TodosPanel: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    if let notice = store.notice { NoticeLine(text: notice).padding(.top, 8) }
-                    ForEach(groups) { group in
-                        Text(group.title)
-                            .font(.footnote.weight(.semibold))
-                            .textCase(.uppercase)
+            List {
+                if let notice = store.notice { NoticeLine(text: notice).todoListRow() }
+                ForEach(groups) { group in
+                    Text(group.title)
+                        .font(.footnote.weight(.semibold))
+                        .textCase(.uppercase)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 12)
+                        .padding(.leading, 4)
+                        .accessibilityAddTraits(.isHeader)
+                        .todoListRow()
+                    ForEach(group.todos) { todo in
+                        row(todo, in: group).todoListRow()
+                            .moveDisabled(group.section != .todo || todo.state != .open || group.todos.count < 2)
+                    }
+                    .onMove(perform: group.section == .todo ? { offsets, destination in
+                        dragged(group.todos, offsets: offsets, destination: destination)
+                    } : nil)
+                    if group.section == .suggested {
+                        Text(TodoFormat.suggestedFootnote)
+                            .font(.footnote)
                             .foregroundStyle(.secondary)
-                            .padding(.top, 12)
                             .padding(.leading, 4)
-                            .accessibilityAddTraits(.isHeader)
-                        ForEach(group.todos) { todo in
-                            TodoRow(
-                                todo: todo,
-                                isOverdue: store.isOverdue(todo),
-                                dueLine: store.dueLine(todo),
-                                snoozeLine: store.snoozeLine(todo),
-                                presets: store.snoozePresets(),
-                                isBusy: store.busyIds.contains(todo.id),
-                                onDone: { Task { await store.done(todo) } },
-                                onReopen: { Task { await store.reopen(todo) } },
-                                onAccept: { Task { await store.accept(todo) } },
-                                onDrop: { Task { await store.drop(todo) } },
-                                onSnooze: { until in Task { await store.snooze(todo, until: until) } },
-                                onPickTime: { picking = todo },
-                                onTalkAbout: { onTalkAbout(todo) }
-                            )
-                        }
-                        if group.section == .suggested {
-                            Text(TodoFormat.suggestedFootnote)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                                .padding(.leading, 4)
-                        }
+                            .todoListRow()
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 16)
             }
+            .listStyle(.plain)
         }
+    }
+
+    private func row(_ todo: Todo, in group: TodoFormat.Group) -> some View {
+        let index = group.todos.firstIndex(of: todo) ?? 0
+        return TodoRow(
+            todo: todo,
+            isOverdue: store.isOverdue(todo),
+            dueLine: store.dueLine(todo),
+            snoozeLine: store.snoozeLine(todo),
+            presets: store.snoozePresets(),
+            moves: group.section == .todo ? TodoFormat.moveChoices(index: index, count: group.todos.count) : [],
+            isBusy: store.busyIds.contains(todo.id),
+            onDone: { Task { await store.done(todo) } },
+            onReopen: { Task { await store.reopen(todo) } },
+            onAccept: { Task { await store.accept(todo) } },
+            onDrop: { Task { await store.drop(todo) } },
+            onSnooze: { until in Task { await store.snooze(todo, until: until) } },
+            onPickTime: { picking = todo },
+            onMove: { to in move(todo, to: to, in: group.todos) },
+            onTalkAbout: { onTalkAbout(todo) }
+        )
+    }
+
+    /// `onMove`'s offsets, as the index the row lands at.
+    private func dragged(_ todos: [Todo], offsets: IndexSet, destination: Int) {
+        guard let from = offsets.first else { return }
+        var ids = todos.map(\.id)
+        ids.move(fromOffsets: offsets, toOffset: destination)
+        guard let to = ids.firstIndex(of: todos[from].id), to != from else { return }
+        move(todos[from], to: to, in: todos)
+    }
+
+    private func move(_ todo: Todo, to index: Int, in todos: [Todo]) {
+        guard store.canMove(todo) else { return }
+        store.move(todo, before: TodoFormat.anchor(todos.map(\.id), moving: todo.id, to: index))
+        AccessibilityNotification.Announcement(TodoFormat.movedLine(todo.title, to: index, of: todos.count)).post()
+    }
+}
+
+private extension View {
+    /// A row of the panel's `List` that looks like a card on the sheet: no
+    /// separator or row background, spaced as the rows always were.
+    func todoListRow() -> some View {
+        listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
     }
 }
 
@@ -123,6 +163,8 @@ private struct TodoRow: View {
     let dueLine: String?
     let snoozeLine: String?
     let presets: [TodoFormat.SnoozePreset]
+    /// Empty when the row can't move (or it's the only one).
+    let moves: [TodoFormat.MoveChoice]
     let isBusy: Bool
     let onDone: () -> Void
     let onReopen: () -> Void
@@ -130,6 +172,7 @@ private struct TodoRow: View {
     let onDrop: () -> Void
     let onSnooze: (Date) -> Void
     let onPickTime: () -> Void
+    let onMove: (Int) -> Void
     let onTalkAbout: () -> Void
 
     /// Notes are one greyed line until the row is tapped.
@@ -212,8 +255,8 @@ private struct TodoRow: View {
         }
     }
 
-    /// Snooze, Talk about it and Drop behind one control: the checkbox is the
-    /// everyday tap, these are the occasional ones.
+    /// Snooze, Move, Talk about it and Drop behind one control: the checkbox
+    /// is the everyday tap, these are the occasional ones.
     private var menu: some View {
         Menu {
             Menu(TodoFormat.snooze, systemImage: "clock") {
@@ -221,6 +264,13 @@ private struct TodoRow: View {
                     Button(preset.title) { onSnooze(preset.until) }
                 }
                 Button(TodoFormat.pickATime, action: onPickTime)
+            }
+            if !moves.isEmpty {
+                Menu(TodoFormat.move, systemImage: "arrow.up.arrow.down") {
+                    ForEach(moves) { choice in
+                        Button(choice.title) { onMove(choice.to) }
+                    }
+                }
             }
             Button(TodoFormat.talkAbout, systemImage: "bubble.left", action: onTalkAbout)
             Button(TodoFormat.drop, systemImage: "xmark.circle", role: .destructive, action: onDrop)

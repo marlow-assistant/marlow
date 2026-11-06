@@ -673,6 +673,22 @@ def todo_accept(todo_id: str, token: str = Depends(require_device_token)) -> dic
     return _todo_tap(lambda: todo_store.accept(todo_id))
 
 
+class MoveTodoRequest(BaseModel):
+    # Required, null meaning the bottom: an empty body is a client bug, not a
+    # drag to the end of the list.
+    before: str | None = Field(..., max_length=20)
+
+
+@public_app.post("/v1/todos/{todo_id}/move")
+def todo_move(
+    todo_id: str, body: MoveTodoRequest, token: str = Depends(require_device_token)
+) -> dict[str, Any]:
+    """Answers with the whole list, not the item: a move changes the list, and
+    this way the client ends on the server's order whatever else changed."""
+    _todo_tap(lambda: todo_store.move(todo_id, body.before))
+    return {"todos": [_client_todo(item) for item in todo_store.client_items()]}
+
+
 class SnoozeTodoRequest(BaseModel):
     # An instant with its offset: the phone resolves "tomorrow morning" in
     # its own zone, so the server never guesses which one it meant.

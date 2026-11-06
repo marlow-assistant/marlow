@@ -104,8 +104,24 @@ TOOLS: list[dict] = [
         ["id", "until"],
     ),
     _tool(
+        "todo_move",
+        "Move an open to-do on the user's list, when they ask (\"put that at the top\"). The order is "
+        "theirs: never reorder it on your own initiative. New items and changed due times find "
+        "their own place.",
+        {
+            "id": _ID,
+            "before": {
+                "type": "string",
+                "description": "the id to put it just above (the first one in todo_list for the top); "
+                "leave out for the bottom",
+            },
+        },
+        ["id"],
+    ),
+    _tool(
         "todo_list",
-        "The to-do list. active (the default) is open and proposed, with notes.",
+        "The to-do list. active (the default) is the open items in the user's order, top first, then "
+        "the proposed ones, with notes.",
         {"state": {"type": "string", "enum": ["active", "done", "dropped", "all"]}},
         [],
     ),

@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { decodeTodo, decodeTodos, type Todo } from "./apiModels";
 import {
+  anchorAt,
+  inOrderOf,
   badgeCount,
+  dropIndex,
   dueLine,
   isOverdue,
   localInputToIso,
+  moveChoices,
+  reordered,
   sectionsOf,
   snoozeIso,
   snoozePresets,
@@ -110,18 +115,20 @@ describe("sections", () => {
     expect(sectionsOf([])).toEqual([]);
   });
 
-  it("sorts open items by due (a date as the start of its day), then the undated by created", () => {
+  it("keeps open items in the box's order: it owns that, drags included", () => {
     const open = [
-      todo("undated-late", { created: iso(2026, 11, 3, 8) }),
-      todo("day-6", { due: "2026-11-06" }),
-      todo("timed-6-09", { due: iso(2026, 11, 6, 9) }),
-      todo("undated-early", { created: iso(2026, 11, 1, 8) }),
-      todo("day-5", { due: "2026-11-05" }),
-      todo("timed-6-00", { due: iso(2026, 11, 6, 0) }),
+      todo("undated"),
+      todo("far", { due: "2026-12-31" }),
+      todo("soon", { due: "2026-11-05" }),
+      todo("timed", { due: iso(2026, 11, 6, 9) }),
     ];
-    const ids = sectionsOf(open)[0].todos.map((t) => t.id);
-    // 6 Nov 00:00 ties the date-only 6 Nov: the stable order of the list holds.
-    expect(ids).toEqual(["day-5", "day-6", "timed-6-00", "timed-6-09", "undated-early", "undated-late"]);
+    expect(sectionsOf(open)[0].todos.map((t) => t.id)).toEqual(["undated", "far", "soon", "timed"]);
+  });
+
+  it("a ticked item holds its place in that order", () => {
+    const list = [todo("a"), todo("b", { state: "done", closed: iso(2026, 11, 4, 9) }), todo("c")];
+    const held = new Map([["b", todo("b")]]);
+    expect(sectionsOf(list, held)[0].todos.map((t) => t.id)).toEqual(["a", "b", "c"]);
   });
 
   it("proposed newest first; done newest closed first", () => {
@@ -227,5 +234,85 @@ describe("snooze presets", () => {
     expect(localInputToIso("", NOW)).toBeNull();
     expect(localInputToIso("garbage", NOW)).toBeNull();
     expect(localInputToIso("2028-11-06T09:30", NOW)).toBeNull(); // over a year: the box refuses
+  });
+});
+
+describe("moving", () => {
+  const ids = ["a", "b", "c", "d"];
+
+  it("the anchor is what ends up just below the moved item, null at the bottom", () => {
+    expect(anchorAt(ids, "d", 0)).toBe("a");
+    expect(anchorAt(ids, "a", 1)).toBe("c");
+    expect(anchorAt(ids, "a", 3)).toBeNull();
+    expect(anchorAt(ids, "b", 2)).toBe("d");
+  });
+
+  it("reordered applies the same move the box will", () => {
+    const list = [todo("a"), todo("x", { state: "done" }), todo("b"), todo("c")];
+    const order = (before: string | null, id = "c") => reordered(list, id, before).map((t) => t.id);
+    expect(order("a")).toEqual(["c", "a", "x", "b"]);
+    expect(order("x")).toEqual(["a", "c", "x", "b"]);
+    expect(order(null, "a")).toEqual(["x", "b", "c", "a"]);
+  });
+
+  it("reordered puts a bottom move after the last open item, as the box does", () => {
+    const list = [todo("a"), todo("b"), todo("p", { state: "proposed" })];
+    expect(reordered(list, "a", null).map((t) => t.id)).toEqual(["b", "a", "p"]);
+  });
+
+  it("offers only the moves that do something different", () => {
+    const labels = (index: number, count: number) => moveChoices(index, count).map((c) => [c.label, c.to]);
+    expect(labels(0, 1)).toEqual([]);
+    expect(labels(0, 2)).toEqual([["Move down", 1]]);
+    expect(labels(1, 2)).toEqual([["Move up", 0]]);
+    expect(labels(0, 4)).toEqual([
+      ["Move down", 1],
+      ["Move to bottom", 3],
+    ]);
+    expect(labels(2, 5)).toEqual([
+      ["Move to top", 0],
+      ["Move up", 1],
+      ["Move down", 3],
+      ["Move to bottom", 4],
+    ]);
+  });
+
+  describe("dropIndex", () => {
+    // Four rows of 50 with a gap of 10.
+    const rows = [0, 60, 120, 180].map((top) => ({ top, height: 50 }));
+
+    it("stays put until the row's middle passes a neighbour's", () => {
+      expect(dropIndex(rows, 1, 0)).toBe(1);
+      expect(dropIndex(rows, 1, 59)).toBe(1);
+      expect(dropIndex(rows, 1, 61)).toBe(2);
+      expect(dropIndex(rows, 1, -61)).toBe(0);
+    });
+
+    it("clamps past either end", () => {
+      expect(dropIndex(rows, 1, 5000)).toBe(3);
+      expect(dropIndex(rows, 2, -5000)).toBe(0);
+    });
+
+    it("reads a tall row by its middle", () => {
+      const mixed = [
+        { top: 0, height: 200 },
+        { top: 210, height: 50 },
+      ];
+      expect(dropIndex(mixed, 1, -134)).toBe(1);
+      expect(dropIndex(mixed, 1, -136)).toBe(0);
+    });
+  });
+});
+
+describe("inOrderOf", () => {
+  it("takes the order from the old list and the rows from the new one", () => {
+    const [a, b, c, arrived] = [todo("a"), todo("b"), todo("c"), todo("n")];
+    const ticked = todo("b", { state: "done" });
+    expect(inOrderOf([c, arrived, a, ticked], [a, b, c])).toEqual([a, ticked, c, arrived]);
+  });
+
+  it("leaves out a row that has gone", () => {
+    const [a, b] = [todo("a"), todo("b")];
+    expect(inOrderOf([b], [a, b])).toEqual([b]);
   });
 });

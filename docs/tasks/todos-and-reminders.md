@@ -467,10 +467,22 @@ Seen in the simulator: the iOS drag up and down, the Move menu, and that a row
 let go over Suggested goes back where it started (the system cancels the drop),
 so it can't leave To do. Mike tried it on his phone against his box (2026-11-06):
 the long press and scroll feel as they do in other apps, and the order survives
-closing the pane. The web drag works by mouse in Chrome on a Mac. Not seen: a
-drag on a real Android phone (the Pixel 7 profile is emulation), on an iPhone's
-Safari or home-screen web app (the e2e runs Chromium only), and TalkBack and
-VoiceOver on the menu.
+closing the pane. The web drag works by mouse in Chrome on a Mac.
+
+Real Chrome on an Android emulator with OS-level touch (2026-11-06), and Mike
+tried it there too: a slow drag and a quick flick on the handle both move the
+row, a swipe on a row scrolls and moves nothing, a row held at the sheet's edge
+auto-scrolls and drops where it was let go, and Move to top works. The server's
+file matched the screen each time.
+
+Not seen: a drag on a physical Android phone, on an iPhone's Safari or
+home-screen web app (the e2e runs Chromium only), in an installed Android web
+app (the emulator run was a browser tab), and TalkBack and VoiceOver on the menu.
+
+Found on the way, not part of this work: in an Android Chrome tab, pulling down
+on a row at the top of the pane is Chrome's pull-to-refresh, which reloads the
+page and drops the user back in chat. `overscroll-behavior: none` is on `body`,
+which doesn't stop it. Set on `html` from DevTools, the same pull did nothing.
 
 ## Part 3: Trello as an optional backing store (direction only)
 

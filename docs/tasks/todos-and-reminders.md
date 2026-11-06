@@ -465,9 +465,12 @@ and the identity both say it is only for when they ask: the order is theirs.
 
 Seen in the simulator: the iOS drag up and down, the Move menu, and that a row
 let go over Suggested goes back where it started (the system cancels the drop),
-so it can't leave To do. Not seen on a device: all of it. In particular a drag
-on a real Android phone (the Pixel 7 profile is emulation), a long press against
-a real finger's scroll on iOS, and TalkBack and VoiceOver on the menu.
+so it can't leave To do. Mike tried it on his phone against his box (2026-11-06):
+the long press and scroll feel as they do in other apps, and the order survives
+closing the pane. The web drag works by mouse in Chrome on a Mac. Not seen: a
+drag on a real Android phone (the Pixel 7 profile is emulation), on an iPhone's
+Safari or home-screen web app (the e2e runs Chromium only), and TalkBack and
+VoiceOver on the menu.
 
 ## Part 3: Trello as an optional backing store (direction only)
 

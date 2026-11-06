@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { Api } from "../lib/api";
 import { BrowserSpeech } from "../lib/browserSpeech";
 import type { ChatStore } from "../lib/chatStore";
 import { VoiceDictation } from "../lib/dictation";
+import { MicIcon, SpeakerIcon } from "./Icons";
 import { Microphone } from "../lib/segmentRecorder";
 import { loadPhonon, PhononSpeech, usesPhonon } from "../lib/phononSpeech";
 import { isPhononKey, phononVoiceFor } from "../lib/phononVoices";
@@ -235,10 +236,10 @@ const LABEL: Record<VoicePhase, string> = {
   speaking: "Interrupt and talk",
 };
 
-const ICON: Record<VoicePhase, string> = {
-  idle: "🎙",
+const ICON: Record<VoicePhase, ReactNode> = {
+  idle: <MicIcon size="1em" />,
   recording: "↑",
   transcribing: "…",
   waiting: "…",
-  speaking: "🔊",
+  speaking: <SpeakerIcon size="1em" />,
 };

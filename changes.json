@@ -1,5 +1,5 @@
 {
-  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 21.",
+  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 22.",
   "entries": [
     {
       "id": 1,
@@ -133,6 +133,13 @@
       "part": "app",
       "category": "feature",
       "text": "Settings is tidier: your avatar and voice are at the top, and server details, Unpair and the app's build are now under Server connection and About at the bottom. About also lists the open-source software Marlow is built on."
+    },
+    {
+      "id": 21,
+      "date": "2026-11-06",
+      "part": "app",
+      "category": "fix",
+      "text": "On Android, the microphone and voice mode buttons have proper icons, and dictating shows a stop button to end it."
     }
   ]
 }

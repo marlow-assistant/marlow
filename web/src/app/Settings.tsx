@@ -32,6 +32,7 @@ import {
 import { KV_TEXT_SIZE, KV_VOICE, kvDelete, kvGet, kvSet } from "../lib/storage";
 import { applyTextSize, currentTextSize, TEXT_SIZES, type TextSize } from "../lib/textSize";
 import { FaceGrid, FaceImage } from "./Face";
+import { WaveformIcon } from "./Icons";
 import { enablePush, usePushState } from "./push";
 import type { WhatsNewModel } from "./useWhatsNew";
 import { ChangeRow } from "./WhatsNew";
@@ -265,9 +266,7 @@ export function Settings(p: SettingsProps) {
               <PaneRow
                 icon={
                   <span className="settings-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4" />
-                    </svg>
+                    <WaveformIcon size={18} />
                   </span>
                 }
                 label="Voice"

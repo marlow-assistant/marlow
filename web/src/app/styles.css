@@ -1148,6 +1148,12 @@ button {
   color: #fff;
 }
 
+.voice-open {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .mic {
   flex: none;
   width: 40px;
@@ -1155,16 +1161,17 @@ button {
   border-radius: 50%;
   border: 0;
   padding: 0;
-  font-size: 18px;
-  background: var(--bg-2);
+  background: none;
+  color: var(--text-2);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
+/* A stop, as on iOS: a mic that only changes colour read as "still listening,
+   tap to talk", and the way to end it went unfound (2026-10-17). */
 .mic-recording {
-  background: var(--red);
-  animation: mic-pulse 1.2s ease-in-out infinite;
+  color: var(--accent);
 }
 
 @keyframes mic-pulse {
@@ -1268,6 +1275,10 @@ button {
 
 .voice-recording {
   background: var(--red);
+}
+
+.voice-icon {
+  display: flex;
 }
 
 .voice-waiting .voice-icon,

@@ -7,7 +7,7 @@ export interface DayTimes {
   dayEnd: string;
   /** Hours between check-ins, 0 = off. Null from a box that predates it. */
   checkinEveryHours: number | null;
-  /** "Remind me again daily" for to-do reminders. Null from a box that
+  /** "Repeat reminders daily" for to-do reminders. Null from a box that
    * predates it. */
   renudge: boolean | null;
 }

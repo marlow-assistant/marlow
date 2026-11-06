@@ -87,6 +87,18 @@ describe("Settings › panes", () => {
     expect(body.scrollTop).toBe(640);
   });
 
+  /** Twelve faces are taller than a phone: a later one opened below the fold,
+   * showing no selection (Mike, 2026-10-16, on the Marlow sheet). */
+  it("the Avatar pane opens on the current face", () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    open();
+    fireEvent.click(row(/^Avatar/));
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    expect((scrollIntoView.mock.contexts[0] as Element).getAttribute("aria-checked")).toBe("true");
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
+
   it("goes more than one level: About, the list, a notice, and back up", async () => {
     open();
     fireEvent.click(row("About"));
@@ -107,6 +119,12 @@ describe("Settings › copyable rows", () => {
     fireEvent.click(row("About"));
     const value = row("worktree-settings-panes@abc1234");
     expect(value.lastElementChild?.textContent).toBe("@abc1234");
+  });
+
+  it("has nothing to copy while the server hasn't said its build", () => {
+    open(null);
+    fireEvent.click(row("About"));
+    expect(screen.getByText("—").closest("button")).toBeNull();
   });
 
   it("a tap copies the full value and says so", async () => {

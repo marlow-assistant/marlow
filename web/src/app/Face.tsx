@@ -20,11 +20,9 @@ export function FaceImage({ face, size, crop }: { face: Face; size: number; crop
   );
 }
 
-/** Every face, large, as a radio group (iOS `FacePicker`). Settings shows it
- * inline; the Marlow sheet opens it from the face at its top, and asks for
- * `scrollToCurrent`: a later face sat below the fold, so the picker opened
- * showing no selection (Mike, 2026-10-16). Settings doesn't, since there the
- * grid is one section of many. */
+/** Every face, large, as a radio group (iOS `FacePicker`). Settings' Avatar
+ * pane and the Marlow sheet both ask for `scrollToCurrent`: a later face sat
+ * below the fold, so the picker opened showing no selection (Mike, 2026-10-16). */
 export function FaceGrid({ face, onFace, scrollToCurrent = false }: { face: Face; onFace: (f: Face) => void; scrollToCurrent?: boolean }) {
   const current = useRef<HTMLButtonElement>(null);
   useEffect(() => {

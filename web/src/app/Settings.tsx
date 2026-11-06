@@ -186,7 +186,7 @@ export function Settings(p: SettingsProps) {
               <h3 className="view-day">Build</h3>
               <dl className="settings-group">
                 <CopyRow label="App" value={p.webBuild ?? __WEB_BUILD__} />
-                <CopyRow label="Server" value={p.serverBuild ?? "—"} />
+                {p.serverBuild ? <CopyRow label="Server" value={p.serverBuild} /> : <Row label="Server" value="—" />}
               </dl>
             </section>
             <section className="settings-section">
@@ -200,17 +200,16 @@ export function Settings(p: SettingsProps) {
         return (
           <div className="settings-group">
             {NOTICES.map((n) => (
-              <button
+              <PaneRow
                 key={n.name}
-                type="button"
-                className="settings-disclosure"
-                onClick={(e) => open({ id: "notice", notice: n }, e)}
-              >
-                <span className="notice-row">
-                  <span>{n.name}</span>
-                  <span className="notice-row-license">{n.license}</span>
-                </span>
-              </button>
+                label={
+                  <span className="notice-row">
+                    <span>{n.name}</span>
+                    <span className="notice-row-license">{n.license}</span>
+                  </span>
+                }
+                onOpen={(e) => open({ id: "notice", notice: n }, e)}
+              />
             ))}
           </div>
         );
@@ -281,8 +280,8 @@ export function Settings(p: SettingsProps) {
 
         {/* Effort is a LATENCY dial on this workload, not a cost one: measured
             at ~2,900 thinking tokens against 5.8M cache reads in a day
-            (docs/tasks/model-and-effort-config.md). The footer talks about
-            speed only, so the control doesn't imply savings. */}
+            (docs/tasks/model-and-effort-config.md). The footer says nothing
+            about cost, so the control doesn't imply savings. */}
         <section className="settings-section" aria-label="Intelligence">
           <h3 className="view-day">Intelligence</h3>
           <div className="settings-group">
@@ -382,7 +381,7 @@ export function Settings(p: SettingsProps) {
 /** A row naming the current choice that opens its picker one level down, as
  * iOS does. Inline, the face grid and the voice list each took a screen of
  * scrolling (Mike, 2026-10-28). */
-function PaneRow(p: { icon?: ReactNode; label: string; value?: string; onOpen: (e: MouseEvent<HTMLElement>) => void }) {
+function PaneRow(p: { icon?: ReactNode; label: ReactNode; value?: string; onOpen: (e: MouseEvent<HTMLElement>) => void }) {
   return (
     <button type="button" className="settings-disclosure" onClick={p.onOpen}>
       {p.icon}
@@ -399,7 +398,7 @@ function PaneRow(p: { icon?: ReactNode; label: string; value?: string; onOpen: (
 function AvatarPicker({ face, onFace }: { face: Face; onFace: (f: Face) => void }) {
   return (
     <div className="settings-group">
-      <FaceGrid face={face} onFace={onFace} />
+      <FaceGrid face={face} onFace={onFace} scrollToCurrent />
     </div>
   );
 }

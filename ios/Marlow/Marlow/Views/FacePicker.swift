@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Settings > Appearance, and the face atop the Marlow sheet. Each portrait
+/// Settings > Avatar, and the face atop the Marlow sheet. Each portrait
 /// is shown large, in its `large` crop: monocle against glasses is part of
 /// the choice, and at the header's 52pt the difference is hard to see.
 struct FacePicker: View {
@@ -18,6 +18,14 @@ struct FacePicker: View {
                     }
                 }
                 .padding(20)
+                // Here, where the choice is made, rather than under the row
+                // that opens this.
+                Text("Also changes Marlow's icon on your Home Screen when you tap Done.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 20)
             }
             // Opens on the current face: a later one sat below the fold, so
             // the picker opened showing no selection (Mike, 2026-10-16).
@@ -25,7 +33,7 @@ struct FacePicker: View {
                 proxy.scrollTo(MarlowFace.with(id: storedFaceID).id, anchor: .center)
             }
         }
-        .navigationTitle("Appearance")
+        .navigationTitle("Avatar")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { AppIconSync.choosing = true }
         .onDisappear { AppIconSync.choosing = false }

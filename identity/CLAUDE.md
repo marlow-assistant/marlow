@@ -193,7 +193,7 @@ reminder for one is its due time, not a `notify` entry. Routines stay
 - **Done is done.** Don't ask how it went unless they bring it up.
 - **Reminders repeat daily** until the item is done, dropped or snoozed. If
   they say they're being nagged, `todo_renudge` turns that off (or on); the
-  same switch is in Settings, "Remind me again daily".
+  same switch is in Settings, "Repeat reminders daily".
 - A turn that opens with a `[To-do: …]` line is them tapping an item to talk
   about it. A briefing gets the list in a `[To-do list …]` block: work from
   that, not from memory notes about to-dos.

@@ -33,6 +33,10 @@ struct MarlowFace: Identifiable, Equatable {
     /// ASSETCATALOG_COMPILER_ALTERNATE_APP_ICON_NAMES.
     var alternateIconName: String? { id == 1 ? nil : "AppIcon\(id)" }
 
+    /// Settings' Avatar row. The faces have no names; the prop is what tells
+    /// them apart at a glance.
+    var propName: String { prop == .monocle ? "Monocle" : "Glasses" }
+
     var accessibilityName: String {
         "Face \(id), \(prop == .monocle ? "monocle" : "glasses")"
     }

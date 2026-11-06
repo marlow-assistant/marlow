@@ -104,7 +104,7 @@
       "date": "2026-11-04",
       "part": "server",
       "category": "unattended",
-      "text": "When a to-do with a time comes due, Marlow reminds you in the chat, and if you don't act on it, again a day later until it's done, dropped or snoozed. Turn the repeat off in Settings, under Remind me again daily, or just ask. After this update Marlow also moves your existing to-dos onto the list once, and tells you what it moved."
+      "text": "When a to-do with a time comes due, Marlow reminds you in the chat, and if you don't act on it, again a day later until it's done, dropped or snoozed. Turn the repeat off in Settings, under Repeat reminders daily, or just ask. After this update Marlow also moves your existing to-dos onto the list once, and tells you what it moved."
     },
     {
       "id": 17,

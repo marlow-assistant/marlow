@@ -1,7 +1,7 @@
 import AVFoundation
 import SwiftUI
 
-/// Settings → Voice mode: Phonon's voice, its download, and a sample to hear
+/// Settings → Voice: Phonon's voice, its download, and a sample to hear
 /// it before a drive (docs/tasks/voice-mode-tts-engines.md).
 struct VoiceSettingsSection: View {
     @ObservedObject var models: VoiceModelStore = .shared
@@ -17,8 +17,6 @@ struct VoiceSettingsSection: View {
                 }
             }
             downloadRow
-        } header: {
-            Text("Voice mode")
         } footer: {
             // Apache-2.0 asks for no credit line here; the link is where the
             // model, its makers and its licence are (Mike, 2026-10-21).

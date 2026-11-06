@@ -1,0 +1,45 @@
+[
+  {
+    "name": "FluidAudio",
+    "license": "Apache-2.0",
+    "url": "https://github.com/FluidInference/FluidAudio",
+    "file": "notice-apache-2.0",
+    "package": "fluidaudio"
+  },
+  {
+    "name": "NeMo Text Processing",
+    "license": "Apache-2.0, MIT",
+    "url": "https://github.com/FluidInference/text-processing-rs",
+    "file": "notice-nemo-text-processing"
+  },
+  {
+    "name": "fastcluster",
+    "license": "BSD-2-Clause",
+    "url": "https://danifold.net/fastcluster.html",
+    "file": "notice-fastcluster"
+  },
+  {
+    "name": "VBx",
+    "license": "Apache-2.0",
+    "url": "https://github.com/BUTSpeechFIT/VBx",
+    "file": "notice-vbx"
+  },
+  {
+    "name": "Japanese text frontend",
+    "license": "Apache-2.0, MIT, BSD",
+    "url": "https://github.com/hexgrad/misaki",
+    "file": "notice-japanese-frontend"
+  },
+  {
+    "name": "Spanish and French text frontends",
+    "license": "MIT",
+    "url": "https://github.com/open-dict-data/ipa-dict",
+    "file": "notice-spanish-french-frontends"
+  },
+  {
+    "name": "Phonon 31m by Gradium",
+    "license": "Apache-2.0",
+    "url": "https://huggingface.co/gradium/phonon-31m-en",
+    "file": "notice-apache-2.0"
+  }
+]

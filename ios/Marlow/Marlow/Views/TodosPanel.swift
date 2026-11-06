@@ -121,6 +121,7 @@ struct TodosPanel: View {
     }
 
     private func move(_ todo: Todo, to index: Int, in todos: [Todo]) {
+        guard store.canMove(todo) else { return }
         store.move(todo, before: TodoFormat.anchor(todos.map(\.id), moving: todo.id, to: index))
         AccessibilityNotification.Announcement(TodoFormat.movedLine(todo.title, to: index, of: todos.count)).post()
     }

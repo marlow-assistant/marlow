@@ -43,8 +43,9 @@ export interface TodosPanelProps {
   onDrop: (todo: Todo) => void;
   onAccept: (todo: Todo) => void;
   onSnooze: (todo: Todo, until: string) => void;
-  /** Put an open item just above `before`, or at the bottom for null. */
-  onMove: (todo: Todo, before: string | null) => void;
+  /** Put an open item just above `before`, or at the bottom for null. False
+   * when the move was ignored. */
+  onMove: (todo: Todo, before: string | null) => boolean;
   onTalk: (todo: Todo) => void;
   onClose: () => void;
 }
@@ -74,8 +75,9 @@ export function TodosPanel(props: TodosPanelProps) {
     },
   };
   const moveTo = (ordered: Todo[], todo: Todo, to: number) => {
-    onMove(todo, anchorAt(ordered.map((t) => t.id), todo.id, to));
-    setMoved(`${todo.title} moved to ${to + 1} of ${ordered.length}.`);
+    if (onMove(todo, anchorAt(ordered.map((t) => t.id), todo.id, to))) {
+      setMoved(`${todo.title} moved to ${to + 1} of ${ordered.length}.`);
+    }
   };
 
   return (
@@ -130,10 +132,13 @@ function OrderedRows({
   rowProps: TodosPanelProps;
   moveTo: (ordered: Todo[], todo: Todo, to: number) => void;
 }) {
-  const drag = useRowDrag((id, to) => {
-    const todo = ordered.find((t) => t.id === id);
-    if (todo) moveTo(ordered, todo, to);
-  });
+  const drag = useRowDrag(
+    (id, to) => {
+      const todo = ordered.find((t) => t.id === id);
+      if (todo) moveTo(ordered, todo, to);
+    },
+    ordered.map((t) => t.id).join(),
+  );
   const sortable = ordered.length > 1;
   return (
     <ul ref={drag.listRef} className={drag.dragging ? "todo-list todo-sorting" : "todo-list"}>

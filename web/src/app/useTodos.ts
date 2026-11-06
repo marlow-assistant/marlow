@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { HttpError, type Api } from "../lib/api";
 import type { Todo } from "../lib/apiModels";
-import { badgeCount, reordered } from "../lib/todoFormat";
+import { badgeCount, inOrderOf, reordered } from "../lib/todoFormat";
 
 export type TodosApi = Pick<Api, "todos" | "doneTodo" | "reopenTodo" | "dropTodo" | "acceptTodo" | "snoozeTodo" | "moveTodo">;
 
@@ -30,8 +30,9 @@ export interface TodosModel {
   tap: (todo: Todo, tap: TodoTap) => void;
   /** Put an open item just above `before`, or at the bottom for null. Shown
    * at once, unlike a tap: a dragged row can't wait in mid-air for the answer.
-   * The box's list then replaces it, and a failure puts the old order back. */
-  move: (todo: Todo, before: string | null) => void;
+   * The box's list then replaces it, and a failure puts the old order back.
+   * False when it was ignored: another move is on the wire or the row is busy. */
+  move: (todo: Todo, before: string | null) => boolean;
 }
 
 /** The to-dos the chat screen shows from: the icon's badge and the panel's
@@ -124,7 +125,7 @@ export function useTodos(api: TodosApi, now: Date): TodosModel {
 
   const move = useCallback(
     (todo: Todo, before: string | null) => {
-      if (moving.current || busyRef.current.has(todo.id)) return;
+      if (moving.current || busyRef.current.has(todo.id)) return false;
       moving.current = true;
       const shown = todosRef.current;
       setTodos(reordered(shown, todo.id, before));
@@ -136,7 +137,8 @@ export function useTodos(api: TodosApi, now: Date): TodosModel {
           setTodos(fresh);
           setNotice(null);
         } catch (e) {
-          setTodos(shown);
+          // Just this move undone: a tap may have landed while it was out.
+          setTodos((list) => inOrderOf(list, shown));
           if (e instanceof HttpError && (e.status === 404 || e.status === 409)) {
             setNotice(TODO_CHANGED_NOTICE);
             refresh();
@@ -147,6 +149,7 @@ export function useTodos(api: TodosApi, now: Date): TodosModel {
           moving.current = false;
         }
       })();
+      return true;
     },
     [api, refresh],
   );

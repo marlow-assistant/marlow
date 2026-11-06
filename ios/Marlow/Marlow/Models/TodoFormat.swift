@@ -200,6 +200,14 @@ enum TodoFormat {
         return rest
     }
 
+    /// `todos` in the order of `order`, for undoing a move without undoing
+    /// whatever else changed since: rows `order` hadn't seen go last.
+    static func inOrder(_ todos: [Todo], of order: [Todo]) -> [Todo] {
+        let known = Set(order.map(\.id))
+        let kept = order.compactMap { old in todos.first { $0.id == old.id } }
+        return kept + todos.filter { !known.contains($0.id) }
+    }
+
     struct MoveChoice: Equatable, Identifiable {
         let title: String
         let to: Int

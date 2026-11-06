@@ -158,6 +158,14 @@ struct TodoSectionTests {
         #expect(TodoFormat.reordered(list, moving: "a", before: nil).map(\.id) == ["b", "a", "p"])
     }
 
+    @Test func undoingAMoveKeepsTheNewRowsInTheOldOrder() {
+        let ticked = todo("b", state: .done)
+        let back = TodoFormat.inOrder([todo("c"), todo("n"), todo("a"), ticked], of: [todo("a"), todo("b"), todo("c")])
+        #expect(back.map(\.id) == ["a", "b", "c", "n"])
+        #expect(back[1].state == .done)
+        #expect(TodoFormat.inOrder([todo("b")], of: [todo("a"), todo("b")]).map(\.id) == ["b"])
+    }
+
     @Test func theMenuOffersOnlyMovesThatDoSomethingDifferent() {
         func titles(_ index: Int, _ count: Int) -> [String] {
             TodoFormat.moveChoices(index: index, count: count).map { "\($0.title) \($0.to)" }

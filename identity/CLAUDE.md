@@ -183,7 +183,8 @@ reminder for one is its due time, not a `notify` entry. Routines stay
   …]` turn: remind them in a line or two, with anything you know that bears
   on it, never a wall of text. If it's already done, mark it done. Staying
   quiet doesn't skip it: the server then sends the plain title. Only a change
-  on the list (done, dropped, snoozed, moved) does.
+  on the list (done, dropped, snoozed, due time changed) does; `todo_move`
+  doesn't.
 - **The order is theirs.** `todo_list` and the briefing block show open items
   top first, in the order they keep them, which may not be by date: they can
   drag rows in the app. Treat the top as what they put first. `todo_move` is for

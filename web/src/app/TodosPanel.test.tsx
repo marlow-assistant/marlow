@@ -66,7 +66,7 @@ function panel(over: Partial<TodosPanelProps> = {}) {
     onDrop: vi.fn(),
     onAccept: vi.fn(),
     onSnooze: vi.fn(),
-    onMove: vi.fn(),
+    onMove: vi.fn(() => true),
     onTalk: vi.fn(),
     onClose: vi.fn(),
     ...over,
@@ -316,6 +316,13 @@ describe("moving with the menu (what TalkBack and a keyboard reach)", () => {
     expect(screen.getByText("Title c moved to 1 of 3.")).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "More for Title c" }));
   });
+
+  it("says nothing when the move was ignored", () => {
+    panel({ todos: ABC, onMove: vi.fn(() => false) });
+    openMove("Title c");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Move to top" }));
+    expect(screen.queryByText(/moved to/)).toBeNull();
+  });
 });
 
 describe("dragging", () => {
@@ -376,6 +383,28 @@ describe("dragging", () => {
     expect(props.onMove).not.toHaveBeenCalled();
     expect(row("Title a").className).not.toContain("todo-dragging");
     expect(row("Title a").style.transform).toBe("");
+  });
+
+  it("a list that changes under a drag ends it: the row gone leaves nothing stuck", () => {
+    layOut();
+    const { props, rerender } = panel({ todos: ABC });
+    fireEvent.pointerDown(grip("Title a"), { pointerId: 1, button: 0, clientY: 100 });
+    // No pointerup ever reaches a handle that has left the page.
+    rerender(<TodosPanel {...props} todos={ABC.slice(1)} />);
+    expect(row("Title b").style.transform).toBe("");
+    drag("Title b", ROW + 5);
+    expect(props.onMove).toHaveBeenCalledWith(expect.objectContaining({ id: "b" }), null);
+  });
+
+  it("a row arriving under a drag ends it, rather than dropping by old indexes", () => {
+    layOut();
+    const { props, rerender } = panel({ todos: ABC });
+    const handle = grip("Title a");
+    fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientY: 100 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 100 + ROW + 5 });
+    rerender(<TodosPanel {...props} todos={[todo("x"), ...ABC]} />);
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 100 + ROW + 5 });
+    expect(props.onMove).not.toHaveBeenCalled();
   });
 
   it("the row follows the finger, and the rows it passes make way", () => {

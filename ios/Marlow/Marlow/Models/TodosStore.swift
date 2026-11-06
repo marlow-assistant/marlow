@@ -161,12 +161,18 @@ final class TodosStore: ObservableObject {
         }
     }
 
+    /// False while another move is on the wire or the row is busy, when `move`
+    /// would ignore it.
+    func canMove(_ todo: Todo) -> Bool {
+        !isMoving && !busyIds.contains(todo.id)
+    }
+
     /// The list changes before this returns, not in the task: `List.onMove`
     /// needs its data moved when the closure ends, or the row jumps back for a
     /// frame. The task is the wire, for tests to wait on.
     @discardableResult
     func move(_ todo: Todo, before: String?) -> Task<Void, Never> {
-        guard !isMoving, !busyIds.contains(todo.id) else { return Task {} }
+        guard canMove(todo) else { return Task {} }
         isMoving = true
         let shown = todos
         todos = TodoFormat.reordered(todos, moving: todo.id, before: before)
@@ -179,12 +185,12 @@ final class TodosStore: ObservableObject {
                 generation += 1
                 todos = fresh.filter { $0.state != .dropped }
             } catch APIError.server(let status, _) where status == 404 || status == 409 {
-                todos = shown
+                todos = TodoFormat.inOrder(todos, of: shown)
                 notice = TodoFormat.changedNotice
                 generation += 1
                 await refresh()
             } catch {
-                todos = shown
+                todos = TodoFormat.inOrder(todos, of: shown)
                 notice = TodoFormat.unreachableNotice
             }
         }

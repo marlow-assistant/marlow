@@ -52,8 +52,12 @@ export interface RowDrag {
  * Nothing moves in the DOM during a drag, only transforms; the list changes
  * once, at the drop, through `onDrop`. Rows are measured when it starts and a
  * scroll is added back on, so a row growing mid-drag is the one thing it
- * would misread. */
-export function useRowDrag(onDrop: (id: string, to: number) => void): RowDrag {
+ * would misread.
+ *
+ * `rowKey` names the rows in order. When it changes under a drag (the fetch on
+ * opening the pane landing late) the drag ends: its indexes are stale, and if
+ * the held row left the page no pointerup will ever reach its handle. */
+export function useRowDrag(onDrop: (id: string, to: number) => void, rowKey: string): RowDrag {
   const listRef = useRef<HTMLUListElement>(null);
   const live = useRef<Live | null>(null);
   const frame = useRef(0);
@@ -83,12 +87,20 @@ export function useRowDrag(onDrop: (id: string, to: number) => void): RowDrag {
 
   useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
-  const finish = (commit: boolean) => {
-    const d = live.current;
-    if (!d) return;
+  const letGo = useCallback(() => {
     live.current = null;
     cancelAnimationFrame(frame.current);
     setView(null);
+  }, []);
+
+  useEffect(() => {
+    if (live.current) letGo();
+  }, [rowKey, letGo]);
+
+  const finish = (commit: boolean) => {
+    const d = live.current;
+    if (!d) return;
+    letGo();
     if (!commit) return;
     const to = dropIndex(d.rows, d.from, offsetOf(d));
     if (to !== d.from) onDrop(d.id, to);

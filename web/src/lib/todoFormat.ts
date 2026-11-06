@@ -102,6 +102,14 @@ export function reordered(todos: readonly Todo[], id: string, before: string | n
   return at < 0 ? [...todos] : [...rest.slice(0, at), moved, ...rest.slice(at)];
 }
 
+/** `todos` in the order of `order`, for undoing a move without undoing whatever
+ * else changed since: rows `order` hadn't seen go last. */
+export function inOrderOf(todos: readonly Todo[], order: readonly Todo[]): Todo[] {
+  const current = new Map(todos.map((t) => [t.id, t]));
+  const known = new Set(order.map((t) => t.id));
+  return [...order.flatMap((t) => current.get(t.id) ?? []), ...todos.filter((t) => !known.has(t.id))];
+}
+
 export interface MoveChoice {
   label: string;
   to: number;

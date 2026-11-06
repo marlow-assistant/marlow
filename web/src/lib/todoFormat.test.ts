@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { decodeTodo, decodeTodos, type Todo } from "./apiModels";
 import {
   anchorAt,
+  inOrderOf,
   badgeCount,
   dropIndex,
   dueLine,
@@ -300,5 +301,18 @@ describe("moving", () => {
       expect(dropIndex(mixed, 1, -134)).toBe(1);
       expect(dropIndex(mixed, 1, -136)).toBe(0);
     });
+  });
+});
+
+describe("inOrderOf", () => {
+  it("takes the order from the old list and the rows from the new one", () => {
+    const [a, b, c, arrived] = [todo("a"), todo("b"), todo("c"), todo("n")];
+    const ticked = todo("b", { state: "done" });
+    expect(inOrderOf([c, arrived, a, ticked], [a, b, c])).toEqual([a, ticked, c, arrived]);
+  });
+
+  it("leaves out a row that has gone", () => {
+    const [a, b] = [todo("a"), todo("b")];
+    expect(inOrderOf([b], [a, b])).toEqual([b]);
   });
 });

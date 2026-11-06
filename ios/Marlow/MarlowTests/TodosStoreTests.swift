@@ -344,6 +344,38 @@ struct TodosStoreTests {
         #expect(store.notice == TodoFormat.unreachableNotice)
     }
 
+    @Test func aFailedMovePutsTheOrderBackAndKeepsWhatElseHappened() async {
+        let api = FakeTodosAPI()
+        api.list = .success([todo("a"), todo("b"), todo("c")])
+        let store = makeStore(api)
+        await store.refresh()
+        api.moveResult = .failure(URLError(.notConnectedToInternet))
+        api.tapResult = .success(todo("b", state: .done, closed: now))
+        api.duringMove = { await store.done(store.todos.first { $0.id == "b" }!) }
+
+        await store.move(store.todos[2], before: "a").value
+
+        #expect(ids(store) == ["a", "b", "c"])
+        #expect(store.todos.first { $0.id == "b" }?.state == .done)
+    }
+
+    @Test func aRowCanMoveOnlyWhenNothingIsInTheWay() async {
+        let api = FakeTodosAPI()
+        api.list = .success([todo("a"), todo("b")])
+        let store = makeStore(api)
+        await store.refresh()
+        api.moveResult = .success([todo("b"), todo("a")])
+        let row = store.todos[1]
+        #expect(store.canMove(row))
+        var whileMoving = true
+        api.duringMove = { whileMoving = store.canMove(row) }
+
+        await store.move(row, before: "a").value
+
+        #expect(!whileMoving)
+        #expect(store.canMove(row))
+    }
+
     @Test func aSecondMoveWhileOneIsOnTheWireIsNotSent() async {
         let api = FakeTodosAPI()
         api.list = .success([todo("a"), todo("b"), todo("c")])

@@ -43,6 +43,12 @@ body,
   margin: 0;
 }
 
+/* On html, not just body: Chrome takes the page's overscroll from here, and on
+   body alone a pull at the top of a sheet was pull-to-refresh on Android. */
+html {
+  overscroll-behavior: none;
+}
+
 body {
   background: var(--bg);
   color: var(--text);

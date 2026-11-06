@@ -104,3 +104,12 @@ test("the What's new sheet: the face is clipped to a 44px circle beside the titl
   const title = await rectOf(card.getByRole("heading", { name: "Marlow was updated" }));
   expect(title.left, "the title starts after the face").toBeGreaterThanOrEqual(clip.right);
 });
+
+// Chrome reads overscroll-behavior for the page from html, not body. On body
+// alone, a pull at the top of a sheet in an Android tab was pull-to-refresh: the
+// page reloaded and the sheet was gone (seen on an emulator, 2026-11-06). The
+// gesture needs a real touch screen, so this pins the style that stops it.
+test("a pull can't refresh the page: html turns overscroll off", async ({ page }) => {
+  const y = await page.evaluate(() => getComputedStyle(document.documentElement).overscrollBehaviorY);
+  expect(y).toBe("none");
+});

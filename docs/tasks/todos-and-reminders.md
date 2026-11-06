@@ -479,10 +479,11 @@ Not seen: a drag on a physical Android phone, on an iPhone's Safari or
 home-screen web app (the e2e runs Chromium only), in an installed Android web
 app (the emulator run was a browser tab), and TalkBack and VoiceOver on the menu.
 
-Found on the way, not part of this work: in an Android Chrome tab, pulling down
-on a row at the top of the pane is Chrome's pull-to-refresh, which reloads the
-page and drops the user back in chat. `overscroll-behavior: none` is on `body`,
-which doesn't stop it. Set on `html` from DevTools, the same pull did nothing.
+Found on the way and fixed: in an Android Chrome tab, pulling down on a row at
+the top of the pane was Chrome's pull-to-refresh, which reloaded the page and
+dropped the user back in chat. `overscroll-behavior: none` was only on `body`.
+With it on `html` too, the same pull on the emulator leaves the page and the pane
+alone, and the list still scrolls.
 
 ## Part 3: Trello as an optional backing store (direction only)
 

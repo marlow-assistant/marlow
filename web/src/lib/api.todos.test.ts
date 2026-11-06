@@ -56,6 +56,24 @@ describe("Api › to-dos", () => {
     expect(todo.snoozedUntil).toBe(until);
   });
 
+  it("move posts the anchor and answers with the whole list", async () => {
+    const { api, calls } = harness(() => ({ body: { todos: [WIRE, { ...WIRE, id: "t2" }] } }));
+    const list = await api.moveTodo("t2", "t1");
+    expect(calls[0]).toMatchObject({ path: "/v1/todos/t2/move", method: "POST", body: { before: "t1" } });
+    expect(list.map((t) => t.id)).toEqual(["t1", "t2"]);
+  });
+
+  it("move sends an explicit null for the bottom: the box refuses a missing one", async () => {
+    const { api, calls } = harness(() => ({ body: { todos: [] } }));
+    await api.moveTodo("t2", null);
+    expect(calls[0].body).toEqual({ before: null });
+  });
+
+  it("a move answered with something that is not a list is a DecodeError", async () => {
+    const { api } = harness(() => ({ body: { ok: true } }));
+    await expect(api.moveTodo("t1", null)).rejects.toBeInstanceOf(DecodeError);
+  });
+
   it("encodes the id in the path", async () => {
     const { api, calls } = harness(() => ({ body: { todo: WIRE } }));
     await api.doneTodo("a/b");

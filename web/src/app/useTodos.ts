@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { HttpError, type Api } from "../lib/api";
 import type { Todo } from "../lib/apiModels";
-import { badgeCount } from "../lib/todoFormat";
+import { badgeCount, reordered } from "../lib/todoFormat";
 
-export type TodosApi = Pick<Api, "todos" | "doneTodo" | "reopenTodo" | "dropTodo" | "acceptTodo" | "snoozeTodo">;
+export type TodosApi = Pick<Api, "todos" | "doneTodo" | "reopenTodo" | "dropTodo" | "acceptTodo" | "snoozeTodo" | "moveTodo">;
 
 export type TodoTap = { kind: "done" } | { kind: "reopen" } | { kind: "drop" } | { kind: "accept" } | { kind: "snooze"; until: string };
 
@@ -28,6 +28,10 @@ export interface TodosModel {
    * 409 means it changed under us, so the list is fetched again and the notice
    * says so. */
   tap: (todo: Todo, tap: TodoTap) => void;
+  /** Put an open item just above `before`, or at the bottom for null. Shown
+   * at once, unlike a tap: a dragged row can't wait in mid-air for the answer.
+   * The box's list then replaces it, and a failure puts the old order back. */
+  move: (todo: Todo, before: string | null) => void;
 }
 
 /** The to-dos the chat screen shows from: the icon's badge and the panel's
@@ -111,8 +115,44 @@ export function useTodos(api: TodosApi, now: Date): TodosModel {
     [api, refresh],
   );
 
+  const todosRef = useRef(todos);
+  todosRef.current = todos;
+  // One at a time: each answer is the whole list, and a later move restoring
+  // an earlier snapshot could lose the first. A second drag in that moment
+  // snaps back, which beats a list that lands in an order nobody chose.
+  const moving = useRef(false);
+
+  const move = useCallback(
+    (todo: Todo, before: string | null) => {
+      if (moving.current || busyRef.current.has(todo.id)) return;
+      moving.current = true;
+      const shown = todosRef.current;
+      setTodos(reordered(shown, todo.id, before));
+      seq.current += 1; // a fetch in the air carries the old order
+      void (async () => {
+        try {
+          const fresh = await api.moveTodo(todo.id, before);
+          seq.current += 1;
+          setTodos(fresh);
+          setNotice(null);
+        } catch (e) {
+          setTodos(shown);
+          if (e instanceof HttpError && (e.status === 404 || e.status === 409)) {
+            setNotice(TODO_CHANGED_NOTICE);
+            refresh();
+          } else {
+            setNotice(TODO_NOT_SAVED_NOTICE);
+          }
+        } finally {
+          moving.current = false;
+        }
+      })();
+    },
+    [api, refresh],
+  );
+
   const clearNotice = useCallback(() => setNotice(null), []);
   const badge = useMemo(() => badgeCount(todos, now), [todos, now]);
 
-  return { todos, badge, busy, notice, refresh, clearNotice, tap };
+  return { todos, badge, busy, notice, refresh, clearNotice, tap, move };
 }

@@ -13,7 +13,9 @@ Mike settled its six decisions the same day, and it was built and merged
 the same day: the server half (store, tools, reminders, briefing context,
 migration 0008, identity) and both clients' panes, iOS and web. Live on Mike's
 box (migration 0008 ran there 2026-11-04 and moved the old to-dos and
-one-off notifies into the store). See "Part 2: as built" below.
+one-off notifies into the store). See "Part 2: as built" below. Manual order
+(drag to reorder, on both clients, and `todo_move`): built 2026-11-06 on a
+branch, not yet tried on a device or merged. See "Manual order" below.
 Part 3 (Trello as an optional backing store, for shared lists and maybe
 projects) is direction only, Mike 2026-11-02; part 2 keeps it possible but
 doesn't bend for it (Mike, 2026-11-04).
@@ -304,8 +306,9 @@ bend the local design, the local design wins (Mike, 2026-11-04).
   (a new tool surface and a server-owned writer in the identity tree).
 
 Deliberately out: per-item nag policy, lock-screen notification actions,
-recurring to-dos (they are routines), priority ordering (only Taylor's
-list has one, and she didn't ask for it), shared lists (part 3).
+recurring to-dos (they are routines), priority as a field (only Taylor's
+list has one, and she didn't ask for it; a manual order came later, see
+"Manual order"), shared lists (part 3).
 
 ## Part 2: decisions (Mike, 2026-11-04)
 
@@ -339,7 +342,7 @@ Where each decided piece lives, and the calls the design left open.
   Done items are kept 30 days, dropped 180 (so "not gonna happen" sticks).
 - **Tools:** `server/todos_mcp.py`, a stdio relay that `invoke.py` adds to
   every call, posts each call to `/internal/todos/tool`; `server/todo_tools.py`
-  answers it. A refusal is a tool error with the reason. All nine tools are
+  answers it. A refusal is a tool error with the reason. All the tools are
   vetted pathless tools, so a cron turn (a reminder) can use them.
 - **Reminders:** `server/todo_reminders.py`, a once-a-minute loop in the
   server, not crontab lines: the state is all the server's, and it keeps
@@ -392,6 +395,79 @@ Build one when its symptom is felt.
 
 Not seen on a device: accepting a proposal (Mike's trial had only one, and
 he dismissed it), and the re-nudge a day after a reminder.
+
+## Manual order (2026-11-06)
+
+The last gap Mike wanted closed before drawing a line under the feature: the
+list could only ever be in due order.
+
+**The order is the position in `todos.json`'s `items`, top first.** The server
+owns it and every client shows it as sent, so the due sort left both clients.
+This overrides "facts on the server, sorting on the phone" on purpose: a sort
+is presentation, but a hand-made order is data, and it has to be the same on
+every device and to Marlow. No `position` field: the array already is one, it
+can't hold two items in one place, and it needs no renumbering.
+
+**One order, not a due sort with overrides.** The alternatives were a mode
+("manual" or "by date", which someone has to switch) and pinning dragged items
+over a live due sort (a pinned item and a sorted one have no defined order
+between them). Instead an item is slotted by its due at the moments its due
+matters, and otherwise stays put:
+
+- A new open item, an accepted proposal, and an open item whose due changes are
+  placed by `_place`: undated to the bottom, dated just after the last open item
+  due no later than it. So **a list nobody has dragged is in due order for
+  good**, exactly as before, and nobody has to know this feature exists.
+- It looks for the last earlier item, not the first later one. The first later
+  one may be a far-off item dragged to the top, and every new item would pile up
+  above it.
+- A dragged item stays until its own due changes. Time passing moves nothing:
+  an overdue item at the bottom stays there, in red, and in the badge.
+- Done and dropped items keep their place in the file, so a tick taken back
+  returns to where it was, and a move can anchor on a ticked row still on screen.
+  The cost: a reopened item in a due-sorted list may have been passed by an item
+  added while it was closed. Drag it.
+- Suggestions stay newest first and Done newest closed first. Only To do has an
+  order to keep, and only an open item moves.
+
+**Existing lists** are upgraded by the store, not a deploy migration: this is
+the one writer, and a script on the box would race it. A file with no `version`
+reads as sorted by due (a day from its start in the user's zone, then the
+undated, oldest first), which is what the clients showed. The next write stores
+that with `version: 2`, and after that nothing sorts it again. An old iOS build
+against a new server still sorts by due and can't drag. A new iOS build against
+an old server shows creation order and a drag gets a 404: update the box first.
+
+**API:** `POST /v1/todos/{id}/move` with `{"before": id | null}`, answering with
+the whole list. An anchor, not an index, so a change elsewhere can't shift where
+the drop lands; null is the bottom and is required, so an empty body from a
+client bug is a 422 and not a drag to the end.
+
+**Clients.** A move shows at once, unlike a tap: a dragged row can't wait in
+mid-air. The server's list then replaces it, and a failure puts the old order
+back. One move at a time; a second in that moment snaps back.
+
+- Web: a handle per row, on Pointer Events (`useRowDrag`), not the row itself:
+  the handle's `touch-action: none` is what stops Android Chrome taking the
+  finger for a scroll, and the rest of the row must still scroll the sheet. Held
+  at the sheet's edge it scrolls. `e2e/todos.spec.ts` drives it with real touch
+  input on the Pixel 7 profile.
+- iOS: `List` with `onMove`, by long press, for the system's lift and
+  auto-scroll. The pane was a stack in a `ScrollView` before, and `onMove` needs
+  a `List`.
+- Neither drag is reachable by TalkBack or VoiceOver, so the ⋯ menu has Move on
+  both (to top, up, down, to bottom, as they apply). The result is spoken, and on
+  web focus returns to the ⋯ for the next step.
+
+**Marlow** sees the order in `todo_list` (open items in order, then proposals)
+and the briefing block, and has `todo_move` for "put that at the top". The tool
+and the identity both say it is only for when they ask: the order is theirs.
+
+Seen in the simulator: the iOS drag up and down, the Move menu, and that a row
+let go over Suggested goes back where it started (the system cancels the drop),
+so it can't leave To do. Not seen on a device: all of it. In particular a drag
+on a real Android phone (the Pixel 7 profile is emulation), a long press against
+a real finger's scroll on iOS, and TalkBack and VoiceOver on the menu.
 
 ## Part 3: Trello as an optional backing store (direction only)
 

@@ -66,6 +66,7 @@ function panel(over: Partial<TodosPanelProps> = {}) {
     onDrop: vi.fn(),
     onAccept: vi.fn(),
     onSnooze: vi.fn(),
+    onMove: vi.fn(),
     onTalk: vi.fn(),
     onClose: vi.fn(),
     ...over,
@@ -275,6 +276,162 @@ describe("to-dos panel", () => {
   });
 });
 
+// --- Moving ---------------------------------------------------------------------
+
+const ABC = [todo("a"), todo("b"), todo("c")];
+
+function openMove(title: string) {
+  fireEvent.click(screen.getByRole("button", { name: `More for ${title}` }));
+  fireEvent.click(screen.getByRole("menuitem", { name: /^Move/ }));
+}
+
+describe("moving with the menu (what TalkBack and a keyboard reach)", () => {
+  it("Move offers what applies to the row, and a tap hands over the anchor", () => {
+    const { props } = panel({ todos: ABC });
+    openMove("Title b");
+    expect(screen.queryByRole("menuitem", { name: "Move to top" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Move to bottom" })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Move up" }));
+    expect(props.onMove).toHaveBeenCalledWith(ABC[1], "a");
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("moving to the bottom hands over a null anchor", () => {
+    const { props } = panel({ todos: ABC });
+    openMove("Title a");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Move to bottom" }));
+    expect(props.onMove).toHaveBeenCalledWith(ABC[0], null);
+  });
+
+  it("a lone item has nothing to offer", () => {
+    panel({ todos: [todo("a"), todo("p", { state: "proposed" })] });
+    fireEvent.click(screen.getByRole("button", { name: "More for Title a" }));
+    expect(screen.queryByRole("menuitem", { name: /^Move/ })).toBeNull();
+  });
+
+  it("says where the item went, and leaves focus on its ⋯ for the next step", () => {
+    panel({ todos: ABC });
+    openMove("Title c");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Move to top" }));
+    expect(screen.getByText("Title c moved to 1 of 3.")).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "More for Title c" }));
+  });
+});
+
+describe("dragging", () => {
+  const ROW = 60;
+
+  /** Lays the rows out as the browser would: jsdom has no layout. */
+  function layOut() {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const index = this.parentElement ? Array.from(this.parentElement.children).indexOf(this) : 0;
+      const top = this.tagName === "LI" ? index * ROW : 0;
+      const height = this.tagName === "LI" ? 50 : 1000;
+      return { top, bottom: top + height, height, left: 0, right: 300, width: 300, x: 0, y: top, toJSON: () => ({}) };
+    });
+  }
+  afterEach(() => vi.restoreAllMocks());
+
+  const grip = (title: string) => row(title).querySelector(".todo-grip:not(.todo-grip-off)") as HTMLElement;
+
+  function drag(title: string, dy: number, end: "pointerUp" | "pointerCancel" = "pointerUp") {
+    const handle = grip(title);
+    fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientY: 100 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 100 + dy });
+    fireEvent[end](handle, { pointerId: 1, clientY: 100 + dy });
+  }
+
+  it("a drag down hands over the row it landed above", () => {
+    layOut();
+    const { props } = panel({ todos: [...ABC, todo("d")] });
+    drag("Title a", 2 * ROW + 5);
+    expect(props.onMove).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }), "d");
+  });
+
+  it("a drag to the top hands over the first row", () => {
+    layOut();
+    const { props } = panel({ todos: ABC });
+    drag("Title c", -2 * ROW - 5);
+    expect(props.onMove).toHaveBeenCalledWith(expect.objectContaining({ id: "c" }), "a");
+  });
+
+  it("a drag past the end hands over null", () => {
+    layOut();
+    const { props } = panel({ todos: ABC });
+    drag("Title a", 10 * ROW);
+    expect(props.onMove).toHaveBeenCalledWith(expect.objectContaining({ id: "a" }), null);
+  });
+
+  it("a drag that lands where it began posts nothing", () => {
+    layOut();
+    const { props } = panel({ todos: ABC });
+    drag("Title a", 10);
+    expect(props.onMove).not.toHaveBeenCalled();
+  });
+
+  it("a cancelled drag posts nothing and lets the row go", () => {
+    layOut();
+    const { props } = panel({ todos: ABC });
+    drag("Title a", 2 * ROW, "pointerCancel");
+    expect(props.onMove).not.toHaveBeenCalled();
+    expect(row("Title a").className).not.toContain("todo-dragging");
+    expect(row("Title a").style.transform).toBe("");
+  });
+
+  it("the row follows the finger, and the rows it passes make way", () => {
+    layOut();
+    panel({ todos: ABC });
+    const handle = grip("Title a");
+    fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientY: 100 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 100 + ROW + 5 });
+    expect(row("Title a").className).toContain("todo-dragging");
+    expect(row("Title a").style.transform).toBe(`translateY(${ROW + 5}px)`);
+    expect(row("Title b").style.transform).not.toBe("");
+    expect(row("Title c").style.transform).toBe("");
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 100 + ROW + 5 });
+    expect(row("Title a").className).not.toContain("todo-dragging");
+  });
+
+  it("another finger on the screen doesn't steer it", () => {
+    layOut();
+    const { props } = panel({ todos: ABC });
+    const handle = grip("Title a");
+    fireEvent.pointerDown(handle, { pointerId: 1, button: 0, clientY: 100 });
+    fireEvent.pointerMove(handle, { pointerId: 2, clientY: 400 });
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 100 });
+    expect(props.onMove).not.toHaveBeenCalled();
+  });
+
+  it("a mouse's right button doesn't start one", () => {
+    layOut();
+    const { props } = panel({ todos: ABC });
+    const handle = grip("Title a");
+    fireEvent.pointerDown(handle, { pointerId: 1, button: 2, clientY: 100 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientY: 300 });
+    fireEvent.pointerUp(handle, { pointerId: 1, clientY: 300 });
+    expect(props.onMove).not.toHaveBeenCalled();
+  });
+
+  it("the handle is hidden from a screen reader: the menu is its way to move", () => {
+    panel({ todos: ABC });
+    expect(grip("Title a").getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("only To do rows have one, and not a row with a tap in flight or a list of one", () => {
+    panel({
+      todos: [todo("a"), todo("b"), todo("p", { state: "proposed" }), todo("d", { state: "done", closed: iso(2026, 11, 3, 9) })],
+      busy: new Set(["b"]),
+    });
+    expect(grip("Title a")).toBeTruthy();
+    expect(grip("Title b")).toBeNull();
+    expect(grip("Title p")).toBeNull();
+    expect(grip("Title d")).toBeNull();
+    cleanup();
+    panel({ todos: [todo("a")] });
+    expect(grip("Title a")).toBeNull();
+  });
+});
+
 // --- Chat wiring ---------------------------------------------------------------
 
 function stubStore() {
@@ -329,6 +486,14 @@ function fakeApi(initial: Todo[] | Error) {
       list = list.map((t) => (t.id === id ? next : t));
       return next;
     }),
+    moveTodo: vi.fn(async (id: string, before: string | null) => {
+      const moved = list.find((t) => t.id === id);
+      if (!moved) throw new HttpError(404, "no such to-do");
+      const rest = list.filter((t) => t.id !== id);
+      const at = before === null ? rest.length : rest.findIndex((t) => t.id === before);
+      list = [...rest.slice(0, at), moved, ...rest.slice(at)];
+      return list;
+    }),
     ideas: vi.fn().mockResolvedValue([]),
     dismissIdea: vi.fn(),
     activity: vi.fn().mockResolvedValue({ entries: [], next_before: null }),
@@ -348,6 +513,7 @@ function fakeApi(initial: Todo[] | Error) {
     acceptTodo: Fn;
     reopenTodo: Fn;
     snoozeTodo: Fn;
+    moveTodo: Fn;
     serve: (t: Todo[]) => void;
   };
 }
@@ -553,6 +719,79 @@ describe("Chat and the to-dos panel", () => {
   }
 
   // Mike, 2026-11-04: sending "About this to-do" on the tap spoke for him.
+  const shownOrder = (dialog: HTMLElement) =>
+    within(within(dialog).getByRole("region", { name: "To do" }))
+      .getAllByRole("listitem")
+      .map((li) => li.getAttribute("aria-label"));
+
+  async function moveUp(dialog: HTMLElement, title: string) {
+    fireEvent.click(await within(dialog).findByRole("button", { name: `More for ${title}` }));
+    fireEvent.click(within(dialog).getByRole("menuitem", { name: /^Move/ }));
+    fireEvent.click(within(dialog).getByRole("menuitem", { name: "Move up" }));
+  }
+
+  it("a move shows at once and ends on the box's answer", async () => {
+    const api = fakeApi([todo("a"), todo("b")]);
+    let answer: (list: Todo[]) => void = () => {};
+    api.moveTodo.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    chat(api);
+    const dialog = await openPanel();
+    await moveUp(dialog, "Title b");
+    expect(api.moveTodo).toHaveBeenCalledWith("b", "a");
+    expect(shownOrder(dialog)).toEqual(["Title b", "Title a"]);
+    // The box's list wins, including whatever else changed there.
+    await act(async () => answer([todo("b"), todo("c"), todo("a")]));
+    expect(shownOrder(dialog)).toEqual(["Title b", "Title c", "Title a"]);
+  });
+
+  it("a second move while one is on the wire is not sent", async () => {
+    const api = fakeApi([todo("a"), todo("b"), todo("c")]);
+    api.moveTodo.mockImplementationOnce(() => new Promise(() => {}));
+    chat(api);
+    const dialog = await openPanel();
+    await moveUp(dialog, "Title c");
+    await moveUp(dialog, "Title b");
+    expect(api.moveTodo).toHaveBeenCalledTimes(1);
+  });
+
+  it("a fetch that started before a move can't put the old order back", async () => {
+    const api = fakeApi([todo("a"), todo("b")]);
+    chat(api);
+    const dialog = await openPanel();
+    await within(dialog).findByRole("listitem", { name: "Title b" });
+    let stale: (list: Todo[]) => void = () => {};
+    api.todos.mockImplementationOnce(() => new Promise((resolve) => (stale = resolve)));
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await moveUp(dialog, "Title b");
+    await waitFor(() => expect(shownOrder(dialog)).toEqual(["Title b", "Title a"]));
+    await act(async () => stale([todo("a"), todo("b")]));
+    expect(shownOrder(dialog)).toEqual(["Title b", "Title a"]);
+  });
+
+  it.each([404, 409])("a %d on a move puts the row back, fetches, and says so", async (status) => {
+    const api = fakeApi([todo("a"), todo("b")]);
+    chat(api);
+    const dialog = await openPanel();
+    await within(dialog).findByRole("listitem", { name: "Title b" });
+    api.moveTodo.mockRejectedValueOnce(new HttpError(status, "gone"));
+    const before = api.todos.mock.calls.length;
+    await moveUp(dialog, "Title b");
+    await waitFor(() => expect(api.todos.mock.calls.length).toBeGreaterThan(before));
+    expect((await within(dialog).findByRole("status")).textContent).toBe("That to-do changed; here's the latest.");
+    expect(shownOrder(dialog)).toEqual(["Title a", "Title b"]);
+  });
+
+  it("a move that never reached the box goes back and says it could not save", async () => {
+    const api = fakeApi([todo("a"), todo("b")]);
+    chat(api);
+    const dialog = await openPanel();
+    await within(dialog).findByRole("listitem", { name: "Title b" });
+    api.moveTodo.mockRejectedValueOnce(new TransportError("offline"));
+    await moveUp(dialog, "Title b");
+    expect((await within(dialog).findByRole("status")).textContent).toBe("Couldn't save that. Check your connection.");
+    expect(shownOrder(dialog)).toEqual(["Title a", "Title b"]);
+  });
+
   it("Talk about it closes the pane and stages the to-do above the composer, sending nothing", async () => {
     const api = fakeApi([todo("t3", { title: "Book the dentist" })]);
     const store = await stageTalk(chat(api), "Book the dentist");

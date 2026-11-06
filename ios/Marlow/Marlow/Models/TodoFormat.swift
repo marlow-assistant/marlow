@@ -1,10 +1,11 @@
 import Foundation
 
-/// Sections, sort order, overdue, the badge and every word on the To-dos panel
+/// Sections, overdue, the badge and every word on the To-dos panel
 /// (docs/tasks/todos-and-reminders.md, part 2). The server sends facts (a
-/// state, a due that is a day or an instant, instants); what counts as overdue,
-/// where an item sorts and how a due reads is decided here, in the phone's own
-/// calendar and zone, so a wording tweak never needs a box deploy.
+/// state, a due that is a day or an instant, instants); what counts as overdue
+/// and how a due reads is decided here, in the phone's own calendar and zone,
+/// so a wording tweak never needs a box deploy. To do's order is the exception:
+/// it's the user's, kept on the server so every client shows the same one.
 ///
 /// Everything takes `now` and the calendar as parameters so a test pins both.
 /// A `due` is either a bare `YYYY-MM-DD` day (no zone; the day in the caller's
@@ -65,6 +66,7 @@ enum TodoFormat {
     static let snooze = "Snooze"
     static let talkAbout = "Talk about it"
     static let pickATime = "Pick a time\u{2026}"
+    static let move = "Move"
 
     /// What "Talk about it" sends when the chip goes out with nothing typed.
     /// The item is quoted above the words by `IdeaQuote`, and its details
@@ -156,20 +158,8 @@ enum TodoFormat {
         let ordered: [(offset: Int, element: Todo)]
         switch section {
         case .todo:
-            // Dated and timed by due ascending (a day from its start), then the
-            // undated, oldest first. Ties fall back to age, then list order.
-            ordered = indexed.sorted { a, b in
-                let ad = due(a.element.due, calendar: calendar)?.start
-                let bd = due(b.element.due, calendar: calendar)?.start
-                switch (ad, bd) {
-                case let (x?, y?) where x != y: return x < y
-                case (.some, nil): return true
-                case (nil, .some): return false
-                default:
-                    if a.element.created != b.element.created { return a.element.created < b.element.created }
-                    return a.offset < b.offset
-                }
-            }
+            // The server's order, which is the user's.
+            ordered = indexed
         case .suggested:
             ordered = indexed.sorted { a, b in
                 a.element.created != b.element.created ? a.element.created > b.element.created : a.offset < b.offset
@@ -182,6 +172,54 @@ enum TodoFormat {
             }
         }
         return ordered.map(\.element)
+    }
+
+    // MARK: Moving
+
+    /// The anchor that lands `id` at `index` of `ids`: whatever then sits just
+    /// below it, nil for the bottom.
+    static func anchor(_ ids: [String], moving id: String, to index: Int) -> String? {
+        let rest = ids.filter { $0 != id }
+        return rest.indices.contains(index) ? rest[index] : nil
+    }
+
+    /// The list as the server will have it after a move, for the moment before
+    /// it answers. Same rule as `TodoStore.move`: above the anchor, or after
+    /// the last open item for nil.
+    static func reordered(_ todos: [Todo], moving id: String, before: String?) -> [Todo] {
+        guard let moved = todos.first(where: { $0.id == id }) else { return todos }
+        var rest = todos.filter { $0.id != id }
+        let index: Int?
+        if let before {
+            index = rest.firstIndex { $0.id == before }
+        } else {
+            index = (rest.lastIndex { $0.state == .open } ?? -1) + 1
+        }
+        guard let index else { return todos }
+        rest.insert(moved, at: index)
+        return rest
+    }
+
+    struct MoveChoice: Equatable, Identifiable {
+        let title: String
+        let to: Int
+        var id: String { title }
+    }
+
+    /// The menu's moves for the row at `index` of `count`, the way to reorder
+    /// without a drag. Top and bottom only when they differ from up and down.
+    static func moveChoices(index: Int, count: Int) -> [MoveChoice] {
+        var choices: [MoveChoice] = []
+        if index > 1 { choices.append(MoveChoice(title: "Move to top", to: 0)) }
+        if index > 0 { choices.append(MoveChoice(title: "Move up", to: index - 1)) }
+        if index < count - 1 { choices.append(MoveChoice(title: "Move down", to: index + 1)) }
+        if index < count - 2 { choices.append(MoveChoice(title: "Move to bottom", to: count - 1)) }
+        return choices
+    }
+
+    /// What VoiceOver says after a move.
+    static func movedLine(_ title: String, to index: Int, of count: Int) -> String {
+        "\(title) moved to \(index + 1) of \(count)."
     }
 
     /// An open item whose due has passed: a timed due before now, a day due

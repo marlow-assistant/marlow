@@ -22,6 +22,14 @@ Two files, one lock:
 Items are written before reminder state, so a crash between the two leaves an
 item without bookkeeping (it fires as new), never bookkeeping for a change
 that didn't land.
+
+THE ORDER IS THE FILE'S: `items`, top first, is the list as every client and
+tool shows it. One order, not a due sort with manual overrides, so there is no
+"manual mode" to be in or out of. An item is slotted by its due when it joins
+the open list or its due changes (`_place`), which keeps a list nobody has
+dragged in due order for good; `move` then puts one where the user wants it,
+and it stays there until its own due changes. Closed items keep their place,
+so a tick taken back returns to where it was.
 """
 from __future__ import annotations
 
@@ -30,7 +38,7 @@ import os
 import re
 import tempfile
 import threading
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 from zoneinfo import ZoneInfo
@@ -59,6 +67,10 @@ REASK_AFTER = timedelta(days=2)
 MAX_SNOOZE = timedelta(days=366)
 # A due time this far in the past is still "now" (the tool call took a moment).
 _PAST_GRACE = timedelta(minutes=1)
+# The file's `version`. Absent is a list from before the order lived in the
+# file, when the clients sorted it by due (`_read` upgrades it).
+FILE_VERSION = 2
+_EPOCH = datetime.fromtimestamp(0, timezone.utc)
 
 _ID_RE = re.compile(r"t[1-9][0-9]{0,6}\Z")
 _DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}\Z")
@@ -230,7 +242,7 @@ class TodoStore:
         try:
             raw = json.loads(self.path.read_text(encoding="utf-8"))
         except FileNotFoundError:
-            return {"next_id": 1, "items": []}
+            return {"version": FILE_VERSION, "next_id": 1, "items": []}
         except (OSError, ValueError) as e:
             logger.error("to-do list unreadable at %s: %s", self.path, e)
             raise TodoError("the to-do list file is unreadable, so nothing was changed") from e
@@ -241,6 +253,12 @@ class TodoStore:
         ):
             logger.error("to-do list at %s has the wrong shape", self.path)
             raise TodoError("the to-do list file is unreadable, so nothing was changed")
+        if raw.get("version") != FILE_VERSION:
+            # Here, not in a deploy migration: this is the one writer, and a
+            # script on the box would race it. Reads sort in memory; the next
+            # write makes it permanent, after which a sort would undo drags.
+            self._sort_by_due(raw)
+            raw["version"] = FILE_VERSION
         return raw
 
     def _read_state(self) -> dict[str, dict[str, Any]]:
@@ -291,6 +309,60 @@ class TodoStore:
                     continue
             keep.append(item)
         data["items"] = keep
+
+    # --- order -------------------------------------------------------------
+
+    @staticmethod
+    def _due_moment(item: dict[str, Any], zone: ZoneInfo) -> datetime | None:
+        """Where an item's due falls: a day from its start in the user's zone,
+        as the clients sorted it. One this can't read counts as undated."""
+        due = item.get("due")
+        if not due:
+            return None
+        if _DATE_RE.fullmatch(due):
+            try:
+                return datetime.combine(date.fromisoformat(due), time.min, zone)
+            except ValueError:
+                return None
+        return due_instant(due)
+
+    def _sort_by_due(self, data: dict[str, Any]) -> None:
+        """The order both clients showed before the order was the file's: by
+        due, then the undated, oldest first."""
+        zone = self._zone()
+
+        def key(item: dict[str, Any]) -> tuple[bool, datetime, datetime]:
+            at = self._due_moment(item, zone)
+            created = _parse_instant(item.get("created") or "")
+            return (at is None, at or _EPOCH, created or _EPOCH)
+
+        data["items"].sort(key=key)
+
+    def _place(self, data: dict[str, Any], item: dict[str, Any]) -> None:
+        """Slot an item that just joined the open list or changed its due:
+        undated to the bottom, dated just after the last open item due no
+        later than it. That keeps a due-sorted list sorted. It looks for the
+        last earlier item, not the first later one, because the first later
+        one may be a far-off item dragged to the top, and everything new would
+        pile up above it. With nothing earlier it goes above the first dated
+        item, or else tops the list: dated items outrank undated ones unless
+        someone dragged otherwise."""
+        items = data["items"]
+        items.remove(item)
+        zone = self._zone()
+        when = self._due_moment(item, zone)
+        if when is None:
+            items.append(item)
+            return
+        opened = [(n, self._due_moment(i, zone)) for n, i in enumerate(items) if i["state"] == "open"]
+        dated = [(n, at) for n, at in opened if at is not None]
+        earlier = [n for n, at in dated if at <= when]
+        if earlier:
+            items.insert(earlier[-1] + 1, item)
+        elif opened:
+            items.insert((dated or opened)[0][0], item)
+        else:
+            items.append(item)
 
     # --- parsing -----------------------------------------------------------
 
@@ -415,6 +487,8 @@ class TodoStore:
             }
             data["next_id"] += 1
             data["items"].append(item)
+            if item["state"] == "open":
+                self._place(data, item)
             self._write(data)
             return self._with_state(item, self._read_state())
 
@@ -436,6 +510,8 @@ class TodoStore:
                 due_moved = new_due != item["due"]
                 item["due"] = new_due
             item["updated"] = _iso(self._now())
+            if due_moved and item["state"] == "open":
+                self._place(data, item)
             self._write(data)
             state = self._read_state()
             if due_moved and item["id"] in state:
@@ -489,7 +565,32 @@ class TodoStore:
             if item["state"] != "proposed":
                 raise TodoError(f"{item['id']} is not a proposal (it is {item['state']})")
             item.update(state="open", updated=_iso(self._now()))
+            self._place(data, item)
             self._write(data)
+            return self._with_state(item, self._read_state())
+
+    def move(self, item_id: Any, before: Any) -> dict[str, Any]:
+        """Put an open item just above `before`, or at the bottom of the open
+        items for None. The anchor is an id, not an index, so a change from
+        elsewhere can't shift where the drop lands, and it may be in any state:
+        a ticked row holds its place on screen until the pane reopens, and
+        that place is real here too. `updated` stays: the item didn't change,
+        its place on the list did."""
+        with self._lock:
+            data = self._read()
+            item = self._find(data, item_id)
+            if item["state"] != "open":
+                raise TodoError(f"only an open to-do can be moved; {item['id']} is {item['state']}")
+            anchor = None if before is None else self._find(data, before)
+            if anchor is not item:
+                items = data["items"]
+                items.remove(item)
+                if anchor is not None:
+                    items.insert(items.index(anchor), item)
+                else:
+                    last = max((n for n, i in enumerate(items) if i["state"] == "open"), default=-1)
+                    items.insert(last + 1, item)
+                self._write(data)
             return self._with_state(item, self._read_state())
 
     def snooze(self, item_id: Any, until: Any) -> dict[str, Any]:

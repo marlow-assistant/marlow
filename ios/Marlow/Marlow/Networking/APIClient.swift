@@ -243,6 +243,15 @@ final class APIClient {
         try await todoTap(id, "snooze", body: ["until": until], deviceToken: deviceToken)
     }
 
+    /// `POST /v1/todos/{id}/move`. `before` nil is the bottom, and is sent as
+    /// an explicit null: the server refuses a missing one.
+    func moveTodo(id: String, before: String?, deviceToken: String) async throws -> [Todo] {
+        let response: TodosResponse = try await post(
+            "/v1/todos/\(id)/move", body: ["before": before ?? NSNull()], auth: deviceToken
+        )
+        return response.todos
+    }
+
     private func todoTap(_ id: String, _ action: String, body: [String: Any], deviceToken: String) async throws -> Todo {
         let response: TodoResponse = try await post("/v1/todos/\(id)/\(action)", body: body, auth: deviceToken)
         return response.todo

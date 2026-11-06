@@ -1994,6 +1994,39 @@ button {
   margin-bottom: 10px;
 }
 
+/* The drag handle. touch-action is the point of it: without none, Android
+   Chrome takes a finger on it for a scroll and cancels the pointer. Full row
+   height and pulled over the row's padding, for a thumb-sized target. */
+.todo-grip {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  width: 28px;
+  margin: -12px -8px -12px -12px;
+  padding-left: 12px;
+  color: var(--text-2);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.todo-grip-off {
+  cursor: default;
+}
+
+.todo-sorting > .todo-row {
+  transition: transform 0.15s ease;
+}
+
+.todo-sorting > .todo-dragging {
+  z-index: 2;
+  transition: none;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  cursor: grabbing;
+}
+
 .todo-check {
   flex: none;
   width: 22px;

@@ -440,6 +440,14 @@ export class Api {
     return this.todoTap(id, "snooze", { until }, signal);
   }
 
+  /** `POST /v1/todos/{id}/move`: put an open item just above `before`, or at
+   * the bottom for null, sent explicitly. Answers with the whole list. */
+  async moveTodo(id: string, before: string | null, signal?: AbortSignal): Promise<Todo[]> {
+    const raw = await this.json(`/v1/todos/${encodeURIComponent(id)}/move`, { method: "POST", body: { before }, signal });
+    if (!Array.isArray((raw as { todos?: unknown } | null)?.todos)) throw new DecodeError();
+    return decodeTodos(raw);
+  }
+
   private async todoTap(id: string, action: string, body: object | undefined, signal?: AbortSignal): Promise<Todo> {
     const raw = await this.json(`/v1/todos/${encodeURIComponent(id)}/${action}`, { method: "POST", body, signal });
     const todo = decodeTodo((raw as { todo?: unknown } | null)?.todo);

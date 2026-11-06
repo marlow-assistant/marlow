@@ -223,9 +223,27 @@ enum UIFixture {
 
     /// To-dos for `-uiFixture todos`, none for any other state. Dates are
     /// relative to launch so "overdue", "today" and "tomorrow" hold. The taps
-    /// answer with the item unchanged: this is for looking at.
+    /// answer with the item unchanged: this is for looking at. Moves do apply,
+    /// so a drag can be looked at too.
     struct TodosFixture: TodosAPI {
+        /// The ids in moved order, once something has moved.
+        @MainActor private static var order: [String]?
+
+        @MainActor
         func todos(deviceToken: String) async throws -> [Todo] {
+            let list = fixtureList()
+            guard let order = Self.order else { return list }
+            return order.compactMap { id in list.first { $0.id == id } }
+        }
+
+        @MainActor
+        func moveTodo(id: String, before: String?, deviceToken: String) async throws -> [Todo] {
+            let moved = TodoFormat.reordered(try await todos(deviceToken: ""), moving: id, before: before)
+            Self.order = moved.map(\.id)
+            return moved
+        }
+
+        private func fixtureList() -> [Todo] {
             guard UIFixture.state == .todos else { return [] }
             let calendar = Calendar.current
             let day = DateFormatter()

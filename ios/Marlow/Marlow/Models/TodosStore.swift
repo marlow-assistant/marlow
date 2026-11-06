@@ -11,6 +11,9 @@ protocol TodosAPI {
     func acceptTodo(id: String, deviceToken: String) async throws -> Todo
     /// `until` is an ISO instant with an offset (`TodoFormat.wireInstant`).
     func snoozeTodo(id: String, until: String, deviceToken: String) async throws -> Todo
+    /// Puts an open item just above `before`, or at the bottom for nil.
+    /// Answers with the whole list.
+    func moveTodo(id: String, before: String?, deviceToken: String) async throws -> [Todo]
 }
 
 extension APIClient: TodosAPI {}
@@ -30,6 +33,10 @@ extension APIClient: TodosAPI {}
 /// call. A 404 or 409 means the list on screen was out of date: refetch it and
 /// say so in one calm line. A tap that never reached the box leaves the list
 /// as it was and says so. The line lives in the panel, never in the chat.
+///
+/// **A move is the exception**: a dragged row can't wait in mid-air, so it
+/// shows at once, then the server's list replaces it, and a failure puts the
+/// old order back (`move`).
 @MainActor
 final class TodosStore: ObservableObject {
     /// The server's list in list order, with taps applied. Grouping and order
@@ -53,6 +60,10 @@ final class TodosStore: ObservableObject {
     /// Bumped by every tap that changed the list. A fetch that started before
     /// one carries the state from before it, so its result is not applied.
     private var generation = 0
+    /// One move at a time: each answer is the whole list, and a later move
+    /// restoring an earlier snapshot could lose the first. A second drag in
+    /// that moment snaps back, which beats an order nobody chose.
+    private var isMoving = false
 
     init(
         api: TodosAPI = APIClient(), deviceToken: String,
@@ -147,6 +158,35 @@ final class TodosStore: ObservableObject {
         let wire = TodoFormat.wireInstant(until, timeZone: calendar.timeZone)
         await tap(todo) { [api, deviceToken] in
             try await api.snoozeTodo(id: todo.id, until: wire, deviceToken: deviceToken)
+        }
+    }
+
+    /// The list changes before this returns, not in the task: `List.onMove`
+    /// needs its data moved when the closure ends, or the row jumps back for a
+    /// frame. The task is the wire, for tests to wait on.
+    @discardableResult
+    func move(_ todo: Todo, before: String?) -> Task<Void, Never> {
+        guard !isMoving, !busyIds.contains(todo.id) else { return Task {} }
+        isMoving = true
+        let shown = todos
+        todos = TodoFormat.reordered(todos, moving: todo.id, before: before)
+        generation += 1 // a fetch in the air carries the old order
+        return Task { [api, deviceToken] in
+            defer { isMoving = false }
+            do {
+                let fresh = try await api.moveTodo(id: todo.id, before: before, deviceToken: deviceToken)
+                notice = nil
+                generation += 1
+                todos = fresh.filter { $0.state != .dropped }
+            } catch APIError.server(let status, _) where status == 404 || status == 409 {
+                todos = shown
+                notice = TodoFormat.changedNotice
+                generation += 1
+                await refresh()
+            } catch {
+                todos = shown
+                notice = TodoFormat.unreachableNotice
+            }
         }
     }
 

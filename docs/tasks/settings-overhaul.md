@@ -1,7 +1,7 @@
 # Task — Settings overhaul
 
 **Status:** built on both clients on the `worktree-settings-panes` branch
-(2026-11-06), iOS tried on Mike's phone, web not yet tried on a box, not merged.
+(2026-11-06), iOS tried on Mike's phone, web tried on his box, not merged.
 Part of `pre-invite-polish.md`. iOS `SettingsView` and `SettingsPanes.swift`;
 web `web/src/app/Settings.tsx`.
 

@@ -28,6 +28,8 @@ the list**. The both-clients rule still holds for each item below.
 6. **Re-pairing to a new box** (`repair-against-a-new-box.md`), native only.
    Not something a friend hits, but it bites Mike whenever he tests against
    the trial VM (Mike, 2026-11-06).
+7. **Android back closes the top layer** (`android-back-gesture.md`), web only.
+   Today the gesture leaves the app from anywhere.
 
 ## Cut from the pass
 

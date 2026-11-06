@@ -43,7 +43,13 @@ function open() {
   );
 }
 
-const group = () => screen.getByRole("radiogroup", { name: "Text size" });
+/** The control, opened from its row if it is closed. */
+const group = () => {
+  const control = screen.queryByRole("radiogroup", { name: "Text size" });
+  if (control) return control;
+  fireEvent.click(screen.getByRole("button", { name: /^Text size/ }));
+  return screen.getByRole("radiogroup", { name: "Text size" });
+};
 
 describe("Settings › Text size", () => {
   it("starts on Default", () => {

@@ -108,7 +108,7 @@ export function MarlowSheet({ api, face, onFace, onClose, timeZone, now }: Marlo
           <span />
         )}
         {openFile && <h2>{openFile.title}</h2>}
-        {choosingFace && <h2>Appearance</h2>}
+        {choosingFace && <h2>Avatar</h2>}
         <button type="button" onClick={onClose}>
           Done
         </button>
@@ -118,7 +118,7 @@ export function MarlowSheet({ api, face, onFace, onClose, timeZone, now }: Marlo
           (Mike, 2026-10-16). */}
       {!pushed && (
         <div className="sheet-face">
-          <button type="button" className="sheet-face-button" aria-label="Appearance" onClick={() => setChoosingFace(true)}>
+          <button type="button" className="sheet-face-button" aria-label="Avatar" onClick={() => setChoosingFace(true)}>
             <FaceImage face={face} size={64} crop="header" />
           </button>
           <h2>Marlow</h2>

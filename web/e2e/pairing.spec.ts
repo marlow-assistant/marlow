@@ -40,6 +40,7 @@ test("unpairing revokes the token on the box", async ({ newDevice, request }) =>
   const token = (await idbAll(page, "kv"))?.device_token as string;
   expect(token).toBeTruthy();
   await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "Server connection" }).click();
   await page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "Unpair" }).click();
   await page
     .getByRole("alertdialog", { name: "Unpair from Marlow?" })
@@ -55,6 +56,7 @@ test("unpairing forgets the token locally", async ({ newDevice }) => {
   const { page } = dev;
   expect((await idbAll(page, "kv"))?.device_token).toBeTruthy();
   await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "Server connection" }).click();
   await page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "Unpair" }).click();
   // The confirm is in-app now (iOS's "Unpair from Marlow?"), not window.confirm.
   const confirm = page.getByRole("alertdialog", { name: "Unpair from Marlow?" });

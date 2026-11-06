@@ -216,7 +216,7 @@ describe("marlow sheet", () => {
     expect(screen.getByRole("heading", { name: "Marlow" })).toBeTruthy();
     const strip = within(dialog)
       .getAllByRole("button")
-      .filter((b) => b.getAttribute("aria-label") !== "Appearance")
+      .filter((b) => b.getAttribute("aria-label") !== "Avatar")
       .map((b) => b.textContent);
     expect(strip.filter((t) => t !== "Done")).toEqual(["Activity", "Usage", "Schedule", "Memory", "You", "Soul"]);
     expect(screen.getByRole("button", { name: "Activity" }).getAttribute("aria-pressed")).toBe("true");
@@ -230,10 +230,10 @@ describe("marlow sheet", () => {
     const scrolled = vi.fn();
     Element.prototype.scrollIntoView = scrolled;
     renderViews(fakeApi(), "Activity", () => {}, onFace);
-    fireEvent.click(screen.getByRole("button", { name: "Appearance" }));
-    expect(screen.getByRole("heading", { name: "Appearance" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Avatar" }));
+    expect(screen.getByRole("heading", { name: "Avatar" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Activity" })).toBeNull();
-    const group = screen.getByRole("radiogroup", { name: "Appearance" });
+    const group = screen.getByRole("radiogroup", { name: "Avatar" });
     const current = within(group).getByRole("radio", { name: "Face 1, monocle" });
     expect(current.getAttribute("aria-checked")).toBe("true");
     // Opens on the current face, once: a pick doesn't scroll it again.

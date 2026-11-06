@@ -33,7 +33,7 @@ export function FaceGrid({ face, onFace, scrollToCurrent = false }: { face: Face
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
-    <div className="face-grid" role="radiogroup" aria-label="Appearance">
+    <div className="face-grid" role="radiogroup" aria-label="Avatar">
       {FACES.map((f) => (
         <button
           key={f.id}

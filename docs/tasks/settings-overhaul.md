@@ -1,8 +1,9 @@
 # Task — Settings overhaul
 
-**Status:** designed 2026-11-06 with Mike, not built. Part of
-`pre-invite-polish.md`. Both clients in one PR: iOS `SettingsView` and web
-`web/src/app/Settings.tsx`.
+**Status:** built on both clients on the `worktree-settings-panes` branch
+(2026-11-06), iOS tried on Mike's phone, web not yet tried on a box, not merged.
+Part of `pre-invite-polish.md`. iOS `SettingsView` and `SettingsPanes.swift`;
+web `web/src/app/Settings.tsx`.
 
 ## The problem
 
@@ -58,7 +59,12 @@ they agree), then the open-source notices.
   these values get pasted into bug reports.
 - **The icon footer moves into `FacePicker`,** where the choice is made. The
   note about tapping Done stays true.
-- **Same labels on both:** "Voice", not "Voice mode"; the same Location wording.
+- **Same labels on both:** "Voice", not "Voice mode". The Location footers
+  still differ: web says "about a kilometre", which is what it sends (two
+  decimals). Whether iOS's "your city" is as accurate wasn't checked.
+- **Web's Avatar, Text size and Voice are panes too,** not the rows that opened
+  in place, so a long voice list doesn't sit mid-screen. The row names only the
+  voice; the list says what each is.
 - **"Remind me again daily" becomes "Repeat reminders daily"** on both clients
   (Mike, 2026-11-06). Change `identity/CLAUDE.md` and the `changes.json` entry
   that quote it in the same PR, and the tests that find the switch by label.

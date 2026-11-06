@@ -158,9 +158,7 @@ you finish something, mark it done there as well as here.
 - **`ideas-seen-sync.md`** (2026-10-16): not started. Opening Ideas on one
   client should clear the dot on the others, via `/v1/preferences` like the
   face and Thinking level.
-- **`settings-overhaul.md`** (2026-10-21): not started. Both clients'
-  Settings screens need a pass, plus an acknowledgements page for the
-  Apache-2.0 code the app ships.
+- **`settings-overhaul.md`**: built on both clients on a branch, not merged.
 - **UX lane (`ux-lane.md`)**: done. Editing Marlow's files from the phone is
   a later problem (Mike, 2026-09-29).
 - **Feature ideas:** `side-chats.md` is parked (Mike, 2026-10-12: not while

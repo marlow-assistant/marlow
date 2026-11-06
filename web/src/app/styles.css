@@ -1617,6 +1617,22 @@ button {
   padding: 12px 16px 24px;
 }
 
+/* Settings' panes: Back, then the title centred on the sheet. */
+.sheet-header-pane {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+}
+
+.sheet-header-pane h2 {
+  outline: none;
+}
+
+.sheet-back {
+  justify-self: start;
+  padding-left: 0;
+}
+
 .sheet-empty {
   color: var(--text-2);
   padding: 24px 16px;
@@ -1777,7 +1793,7 @@ button {
   color: var(--red);
 }
 
-/* A row naming the current choice; tapped, its picker opens below it. */
+/* A row naming the current choice; tapped, its picker opens one level down. */
 .settings-disclosure {
   display: flex;
   align-items: center;
@@ -1805,15 +1821,76 @@ button {
 .settings-disclosure::after {
   content: "›";
   color: var(--text-2);
-  transition: transform 0.15s;
-}
-
-.settings-disclosure[aria-expanded="true"]::after {
-  transform: rotate(90deg);
 }
 
 .settings-disclosure + * {
   border-top: 1px solid var(--bg-3);
+}
+
+/* The same 28px as the avatar beside it, so the labels line up. */
+.settings-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-3);
+  color: var(--text-2);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* One line however long: the value clips, the row never wraps. */
+.settings-copy-value {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-copy {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.settings-copy-clip {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notice-row {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notice-row-license {
+  color: var(--text-2);
+  font-size: 0.875rem;
+}
+
+.notice-link {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.notice-text {
+  margin: 0;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .face-circle.face-circle-small {

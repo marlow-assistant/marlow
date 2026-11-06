@@ -141,8 +141,10 @@ At the pinned revision, these reach Marlow's app:
 | Kokoro Core ML conversion (`KokoroANE-v3/NOTICE`) | Apache-2.0 | no: its notice binds redistributing converted Kokoro models, which Marlow doesn't ship |
 
 The other files there (fastcluster, vbx, the Japanese, Spanish and French
-pronunciation data) were not read; check each before the acknowledgements
-screen is built.
+pronunciation data) are in the app's Open-source notices, copied from FluidAudio
+at the pinned revision. Still open before an App Store build: the full list of
+Rust crates inside the NeMo xcframework and their copyright lines, which neither
+the FluidAudio checkout nor the framework carries.
 
 Weights (not bundled; the app downloads them when the user turns voice mode on,
 `VoiceModels.json`): Phonon 31m, Apache-2.0. Its own `LICENSE` is in the

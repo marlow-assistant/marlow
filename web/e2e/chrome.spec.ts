@@ -52,8 +52,12 @@ test("the gear opens Settings; the effort control is bound and persists", async 
   await page.getByRole("button", { name: "Settings" }).click();
   const settings = page.getByRole("dialog", { name: "Settings" });
   await expect(settings).toBeVisible();
-  await expect(settings.getByRole("region", { name: "Status" })).toContainText(new URL(page.url()).host);
+  await settings.getByRole("button", { name: "Server connection" }).click();
+  await expect(settings.getByRole("region", { name: "Server connection" })).toContainText(new URL(page.url()).host);
+  await settings.getByRole("button", { name: "Back" }).click();
+  await settings.getByRole("button", { name: "About" }).click();
   await expect(settings.getByRole("region", { name: "Build" })).toContainText("App");
+  await settings.getByRole("button", { name: "Back" }).click();
   await settings.getByRole("radio", { name: "High" }).click();
   await expect(settings.getByRole("radio", { name: "High" })).toHaveAttribute("aria-checked", "true");
   await settings.getByRole("button", { name: "Done" }).click();

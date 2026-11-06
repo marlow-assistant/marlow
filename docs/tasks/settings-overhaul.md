@@ -23,6 +23,10 @@ same sections and the same problems.
 
 ## Review the whole screen, not just those
 
+The list below is from 2026-10-21 and is out of date. Both clients have since
+gained sections (Your day, Updates; on web also Text size, Voice, Notifications
+and Reminders), so start from the code. Part of `pre-invite-polish.md`.
+
 Mike wants the screen reviewed end to end. Current order (iOS,
 `SettingsView.swift`):
 
@@ -65,8 +69,9 @@ Questions to settle with Mike before building:
 - Keep the texts as bundled resources, not typed into Swift. A test that
   every resolved Swift package has an entry would catch the next
   dependency added without one.
-- Web: same list, if the web client ships any of these (today it doesn't
-  ship FluidAudio; check its npm dependencies' licences instead).
+- Web: its own list from the production npm dependencies, which
+  `dependency-licenses.md` § npm records. It ships no FluidAudio, but it does
+  ship `jsqr` (Apache-2.0) and `phonon-tts` (MIT OR Apache-2.0).
 
 ## Not in scope
 

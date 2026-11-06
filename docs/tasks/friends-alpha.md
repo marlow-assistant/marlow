@@ -6,7 +6,8 @@ In order. Each line is one task doc, and its Status line is the truth.
 
 1. ✅ **Item 5:** Mike's fresh install from the public repo on a Multipass
    VM worked (2026-10-31).
-2. Invite the first one or two friends. iPhone friends use the home-screen
+2. Proposed 2026-11-06: the polish pass, `pre-invite-polish.md`.
+3. Invite the first one or two friends. iPhone friends use the home-screen
    web app, so they need nothing more.
 
 **Status:** installer merged (2026-10-02), first-run onboarding merged (2026-10-02).

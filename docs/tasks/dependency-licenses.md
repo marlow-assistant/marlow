@@ -98,8 +98,10 @@ From `package-lock.json` plus each installed `package.json` (`npm ci`,
 2026-10-27). 105 lockfile entries. `web/package.json` is `private`; the web
 app is built to static files, so only the production set can reach users.
 
-**Production (4):** marked 18.0.14, react 19.3.0, react-dom 19.3.0,
-scheduler 0.28.0. All MIT.
+**Production (6, re-read from the lockfile 2026-11-06):** marked 18.0.14, react 19.3.0,
+react-dom 19.3.0, scheduler 0.28.0, all MIT; jsqr 1.4.0, Apache-2.0;
+phonon-tts 0.5.0, MIT OR Apache-2.0. All permissive. The dev counts below
+are from 2026-10-27.
 
 **Dev and build only (101):**
 

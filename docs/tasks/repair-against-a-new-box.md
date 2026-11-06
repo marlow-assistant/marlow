@@ -1,7 +1,9 @@
 # Re-pairing the iPhone app against a different box
 
 Status: known bug, not started (found 2026-10-30, testing onboarding on the
-trial VM).
+trial VM). Native app only: web's unpair already wipes the transcript and
+everything else (`wipeAll`), checked 2026-11-06. So friends on the web app
+don't hit it, and it waits for TestFlight (`pre-invite-polish.md`).
 
 ## What happened
 Mike unpaired the native iPhone app from his own box and paired it with a
@@ -20,8 +22,7 @@ the same conversation continuing.
 Pairing with a box that isn't the one the app was last paired with starts
 clean: the local transcript, the greeting flag, cached memory/schedule views
 and any per-box settings are cleared, and the new box's greeting shows. A
-re-pair with the same box keeps history, as now. Check how the web client
-handles it too (both clients), and decide what identifies "the same box" (the
+re-pair with the same box keeps history, as now. Decide what identifies "the same box" (the
 server's address isn't enough if a box is reinstalled at the same name).
 Test first: a client test that pairs box A, then box B, and expects no A
 messages.

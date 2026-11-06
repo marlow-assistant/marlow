@@ -44,7 +44,8 @@ you finish something, mark it done there as well as here.
   subscription. The installer merged after a fresh Ubuntu dry run;
   first-run onboarding (its item 9) merged after three VM runs.
   The Android user's install went OK, and Mike's fresh install from the
-  public repo on the trial VM worked (done 2026-10-31). Next: invite the
+  public repo on the trial VM worked (done 2026-10-31). Next: the polish pass
+  proposed in `pre-invite-polish.md`, then invite the
   first friends.
   **Decided 2026-10-25: iPhone friends use the home-screen web app**
   (Safari push and the unread mark work). TestFlight and a push

@@ -2,8 +2,8 @@
 
 Status: known bug, not started (found 2026-10-30, testing onboarding on the
 trial VM). Native app only: web's unpair already wipes the transcript and
-everything else (`wipeAll`), checked 2026-11-06. So friends on the web app
-don't hit it, and it waits for TestFlight (`pre-invite-polish.md`).
+everything else (`wipeAll`), checked 2026-11-06. Friends on the web app don't
+hit it, but it bites Mike when testing, so it's in `pre-invite-polish.md`.
 
 ## What happened
 Mike unpaired the native iPhone app from his own box and paired it with a

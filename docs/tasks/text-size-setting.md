@@ -1,8 +1,8 @@
 # Task — in-app text size setting
 
-**Status:** web shipped: `rem` sizes and a four-step setting (`lib/textSize.ts`). iOS follows
-Dynamic Type, with no in-app control. Still open (checked 2026-11-06): the Playwright
-geometry check at Largest, and seeing it on a real Android phone. Raised by the Android user, who
+**Status:** done (Mike, 2026-11-06; the Android user is happy with it). Web has `rem`
+sizes and a four-step setting (`lib/textSize.ts`); iOS follows Dynamic Type, with no in-app
+control. Raised by the Android user, who
 finds phone text hard to read early in the morning and asked for a desktop app. The cheaper answer is the installed
 Chrome PWA (see the install note below) plus this setting. **Scope both
 clients up front; it is not done until both have it** (root `CLAUDE.md`).

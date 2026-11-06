@@ -1,66 +1,84 @@
 # Task — Settings overhaul
 
-**Status:** not started (2026-10-21). Raised by Mike while testing voice mode:
-"some stuff is weird" on the Settings screen, and it needs an acknowledgements
-page for the Apache-2.0 code the app now ships. Both clients: iOS
-`SettingsView` and web `web/src/app/Settings.tsx` (a port of it) have the
-same sections and the same problems.
+**Status:** designed 2026-11-06 with Mike, not built. Part of
+`pre-invite-polish.md`. Both clients in one PR: iOS `SettingsView` and web
+`web/src/app/Settings.tsx`.
 
-## What Mike flagged
+## The problem
 
-- **A section called "Marlow" inside Marlow's settings.** It holds only
-  Appearance (the face picker, which also changes the Home Screen icon). The
-  whole screen is Marlow's settings, so the heading says nothing.
-- **The server URL wraps onto a second line** (Status → Server), and so do
-  the build labels at the bottom (Build → App `branch@commit`, Server).
-  That wastes vertical space on a screen that's already long.
-- **No acknowledgements.** Voice mode's Phonon voice runs on FluidAudio,
-  compiled into the app under Apache-2.0. Apache-2.0 §4 requires a copy of
-  the licence (and any NOTICE text) to go with a binary distribution. The
-  Phonon model itself is downloaded, not shipped, but crediting it costs
-  nothing. Nothing in the app does this today. That's fine on Mike's own
-  phones, but needed before any wider release.
+Settings has grown to eleven sections on web and eight on iOS, and the first
+thing on either is server detail nobody changes. Everyday controls sit between
+diagnostics, Unpair is on the same screen as them, and the two clients have
+drifted (Reminders is its own section on web only; "Voice" against "Voice
+mode"). Mike wanted few settings, but there are this many, so the job is to
+organise them (Mike, 2026-11-06).
 
-## Review the whole screen, not just those
+## The design: a main pane and two below it
 
-The list below is from 2026-10-21 and is out of date. Both clients have since
-gained sections (Your day, Updates; on web also Text size, Voice, Notifications
-and Reminders), so start from the code. Part of `pre-invite-polish.md`.
+The test for the main pane: would someone change this in normal use? Anything
+that describes the install rather than how Marlow behaves moves down a level.
 
-Mike wants the screen reviewed end to end. Current order (iOS,
-`SettingsView.swift`):
+**Settings** (the main pane, same order on both clients):
 
-1. **Status:** Server, Connection, Device (last 6 of the token).
-2. **Marlow:** Appearance (`FacePicker`); its footer explains the icon change.
-3. **Intelligence:** Thinking (effort picker), Model; footer on effort and cost.
-4. **Location:** sharing level; footer.
-5. **Voice mode:** Phonon voice, download / Play a sample / Delete; one-line
-   footer linking the model card (`VoiceSettingsSection`).
-6. **Build:** App `branch@commit`, Server build.
-7. **Unpair** (destructive, with a confirmation).
+1. **Look and sound:** Appearance, Text size (web only), Voice. Each is a row
+   showing the current choice, opening its picker one level down.
+2. **Intelligence:** Thinking, Model. Model stays read-only, next to Thinking,
+   so the two can be read together.
+3. **Location:** the sharing level.
+4. **Your day:** Starts, Ends, Check-ins, Remind me again daily. Web's separate
+   Reminders section folds in here, as on iOS.
+5. **Notifications** (web only): iOS gets this from the OS.
+6. Two rows with no heading: **What's new** and **About**.
 
-Questions to settle with Mike before building:
+**About:**
 
-- **Order.** What is used most (Appearance, Thinking, Voice) arguably
-  belongs above diagnostics (Status, Build), which are for him and for
-  support. One option: put diagnostics in an "About" page with the build
-  lines and the acknowledgements.
-- **Headings.** "Marlow" goes. Appearance could join a general section, or
-  stand alone as a row.
-- **Long values.** Truncate in the middle (`.truncationMode(.middle)`,
-  single line) or shorten: the host without the scheme, `branch@commit`
-  with the branch clipped. Full text can sit behind a tap, or a long-press
-  to copy.
-- **Footers.** Several are a paragraph. Voice mode's was cut to one line
-  (Mike, 2026-10-21: "way too much information"); apply the same bar
-  everywhere.
-- **Web parity.** The web port follows the same order and copy; change both
-  in one PR.
+- **Connection:** Server, Status, Device.
+- **Build:** App, Server, kept adjacent because the question is whether they
+  agree.
+- **Acknowledgements**, one level further down.
+- **Unpair**, last, with its confirmation as now.
+
+**What's new:** "Show after updates" at the top, then the list. Its own pane
+rather than a section of About: it is written for the user and the update card
+points at it. Web's in-place expanding list goes.
+
+Rejected: Updates inside About (it would bury the one thing here meant for
+everyone, under server detail). Tabs or a search box: too much for about
+fifteen controls.
+
+## Details
+
+- **Words stay valid.** "Settings, under What's new", "under Your day", "Remind
+  me again daily" and "Check-ins" all appear in `identity/`, `changes.json` and
+  the What's New card, so these names and their top-level place must not
+  change. Nothing there mentions Status, Build or Unpair.
+- **Connection problems don't hide in About.** The chat already shows a banner
+  for needing reauthorization or being paused, so Status can move down. Confirm
+  both clients' banners cover every state the Status row shows.
+- **Web needs a small pane stack.** The sheet has no navigation today: add a
+  Back button, a heading for the pane, and focus moved to it on entry and back
+  to the row on return. iOS already has `NavigationStack`.
+- **Long values:** one line, truncated in the middle on iOS. On web keep the
+  `@commit` end visible and clip the branch. Full text copies on tap, because
+  these values get pasted into bug reports.
+- **The icon footer moves into `FacePicker`,** where the choice is made. The
+  note about tapping Done stays true.
+- **Same labels on both:** "Voice", not "Voice mode"; the same Location wording.
+
+## Footers
+
+One line at most; a permission problem still replaces the Location line.
+
+- Intelligence: "Higher is slower, not more expensive."
+- Location: "Sent with each message. Approximate shares your area, Precise your
+  exact position."
+- Your day: "Marlow checks your inbox during your day and tidies up after it."
+  and, with the switch, "Unfinished reminders come back a day later."
+- What's new, About: none.
 
 ## Acknowledgements page
 
-- A row at the bottom of Settings, or in the About page above, opening a
-  plain scrolling list: FluidAudio (Apache-2.0, full licence text), Phonon
+- A row in About, opening a plain scrolling list: FluidAudio (Apache-2.0, full licence text), Phonon
   31m by Gradium (Apache-2.0, linked), plus anything else compiled in.
   FluidAudio links more than its own code: NeMo text processing (NVIDIA,
   Apache-2.0) and Rust crates under MIT or Apache-2.0, listed in

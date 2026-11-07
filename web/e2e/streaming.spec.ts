@@ -17,7 +17,12 @@ test("STR-8 / STR-11: no bubble until there is text; tool labels show before it;
 }) => {
   const token = uniq("tool");
   await startSampler(page, token);
-  const user = await send(page, `#tool ${token}`, token);
+  // #long, not #tool alone: `#tool`'s own reply streams for about 0.25s, shorter
+  // than the 500ms burst poll, so most turns go from no text straight to `done`
+  // and the client never holds any text mid-turn. Measured 2026-11-06: 4 of 16
+  // turns had a poll land in that window, and those 4 were exactly the ones with
+  // text on screen, which is why `typing` below failed about 3 runs in 4.
+  const user = await send(page, `#tool #long ${token}`, token);
   const reply = replyOf(user);
   await waitDone(reply, 30_000);
   await stopSampler(page);

@@ -15,7 +15,8 @@ and a plain word could turn up there.
 
   #approve  ask the server's permission round-trip, as the PreToolUse hook
             would, and wait for the device's answer (allow / deny / timeout)
-  #tool     show two tool activities before the reply
+  #tool     show two tool activities before the reply (alone, that reply streams
+            for ~0.25s, under one poll: add #long to see text mid-turn)
   #long     a reply of about 4,000 characters, slowly (follow-scroll, jump)
   #fail     an error turn
   #markdown a reply exercising headings, lists, code, links and a table

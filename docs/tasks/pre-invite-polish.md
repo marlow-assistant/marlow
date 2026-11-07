@@ -15,9 +15,7 @@ the list**. The both-clients rule still holds for each item below.
    first morning brief. Onboarding hasn't been seen with a real new user
    (`onboarding-v2.md`). Anything a friend would notice joins this list;
    anything else is parked.
-2. **Settings overhaul** (`settings-overhaul.md`), both clients, one PR: today's
-   screen with server and build detail moved behind two rows, plus the
-   open-source notices. Designed 2026-11-06. The largest item.
+2. **Settings overhaul** (`settings-overhaul.md`): done 2026-11-06.
 3. **Unsent draft survives a kill** (`ios-chat-ux-gaps.md` #20), both clients.
    The installed web app gets evicted too, and a lost message is the worst
    first impression on this list.

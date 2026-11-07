@@ -62,7 +62,7 @@ struct SettingsView: View {
                 // Effort is a LATENCY dial on this workload, not a cost one:
                 // measured at ~2,900 thinking tokens against 5.8M cache reads
                 // in a day (docs/tasks/model-and-effort-config.md). The footer
-                // says so plainly rather than letting the picker imply savings.
+                // says nothing about cost, so the picker doesn't imply savings.
                 Section {
                     Picker("Thinking", selection: effortSelection) {
                         ForEach(ThinkingEffort.allCases) { level in

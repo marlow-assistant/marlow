@@ -1,7 +1,6 @@
 # Task — Settings overhaul
 
-**Status:** built on both clients on the `worktree-settings-panes` branch
-(2026-11-06), iOS tried on Mike's phone, web tried on his box, not merged.
+**Status:** shipped on both clients 2026-11-06, tried on Mike's phone and box.
 Part of `pre-invite-polish.md`. iOS `SettingsView` and `SettingsPanes.swift`;
 web `web/src/app/Settings.tsx`.
 
@@ -60,8 +59,9 @@ they agree), then the open-source notices.
 - **The icon footer moves into `FacePicker`,** where the choice is made. The
   note about tapping Done stays true.
 - **Same labels on both:** "Voice", not "Voice mode". The Location footers
-  still differ: web says "about a kilometre", which is what it sends (two
-  decimals). Whether iOS's "your city" is as accurate wasn't checked.
+  differ because the clients do: web says "about a kilometre", which is what it
+  sends (two decimals), and iOS says "your city", being Core Location's reduced
+  accuracy.
 - **Web's Avatar, Text size and Voice are panes too,** not the rows that opened
   in place, so a long voice list doesn't sit mid-screen. The row names only the
   voice; the list says what each is.

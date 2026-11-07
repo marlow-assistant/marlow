@@ -35,10 +35,6 @@ Mike's wishlist lives on the box:
 `ssh marlow@marlow 'cat ~/marlow-identity/memory/marlow-features.md'`. When
 you finish something, mark it done there as well as here.
 
-- **The off-box bundle backup is failing** (found 2026-11-06). No bundle since
-  2026-10-25: the copy launchd runs still points at the working dir's old
-  name. The repo's script is right; re-run `scripts/install-backup-launchd.sh`.
-  Detail in `bundle-backup-ssh-access.md`.
 - **`dependency-licenses.md`**: every iOS build carries about 1 MB of
   GPL-derived pronunciation data that FluidAudio bundles for an engine Marlow
   never uses. It blocks TestFlight or any handed-out build, not the next
@@ -179,6 +175,9 @@ you finish something, mark it done there as well as here.
     systemd covers the box; the doc has the trigger).
 
 Recently done, in case a summary elsewhere says otherwise:
+- the off-box bundle backup runs daily from launchd on the Mac, with a
+  staleness notification; it failed for 12 days after the working dir's
+  rename and was reinstalled 2026-11-06 (`bundle-backup-ssh-access.md`);
 - iOS hands-free voice mode with the Phonon voice;
 - the settings path anchor, and `update.sh` refusing a rollback;
 - box content scrubbed from docs and migration comments;

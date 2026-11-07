@@ -1,14 +1,14 @@
 # Task — `backup-identity-bundle.sh` can't actually reach the box
 
-**Status: FAILING since 2026-10-26 (found 2026-11-06).** The installer copies the
-scripts out of the checkout, and the installed copy dates from 2026-10-14, so it
-still bundles `~/claude-assistant`, the working dir's old name. Newest bundle
-2026-10-25. The repo's script has the new name and box address; the fix is to
-re-run `scripts/install-backup-launchd.sh`. The log recorded STALE from day four
-and nobody acted on it, so whether that notification reached the screen is not
-known. A rename or a script change has to include the reinstall.
+**Status: working again, reinstalled 2026-11-06 (599 commits restored in the check
+clone).** It failed from 2026-10-26: the installer copies the scripts out of the
+checkout, and the installed copy from 2026-10-14 still bundled
+`~/claude-assistant`, the working dir's old name. So a rename or a script change
+has to include re-running `scripts/install-backup-launchd.sh`. The GitHub push kept
+up meanwhile. The log recorded STALE from day four and nobody acted on it, so
+whether that notification reaches the screen is still unknown.
 
-**Was: DONE 2026-10-14 — scheduled, with a staleness alert.** A launchd agent
+**Done 2026-10-14 — scheduled, with a staleness alert.** A launchd agent
 on the Mac (`scripts/install-backup-launchd.sh`) runs the backup daily and at
 login; `scripts/backup-identity-bundle-scheduled.sh` notifies when the newest
 bundle is more than 3 days old. First launchd run 2026-10-14: 381 commits,

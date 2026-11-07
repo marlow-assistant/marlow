@@ -31,6 +31,14 @@ async function fakeTranscription(page: Page, heard: string): Promise<Upload[]> {
     });
     return route.fulfill({ json: { seq: 0, text: heard, final: true, transcript: heard } });
   });
+  // Phonon is the default voice, and its model comes from Hugging Face. Left
+  // reachable, the download raced the reply: when it won, the reply was read
+  // through an AudioContext, correctly and aloud, and the recorder below saw
+  // only unlock()'s empty utterance. That read as `[""]` and a timeout in most
+  // runs on a fast connection (2026-11-06). With the model unreachable every
+  // reply takes the browser's voice, the promise that voice mode is never
+  // silent; phononSpeech.test.ts covers the Phonon route.
+  await page.context().route("https://huggingface.co/**", (route) => route.abort());
   await page.addInitScript(() => {
     const w = window as unknown as { __spoken: string[] };
     w.__spoken = [];
@@ -103,6 +111,7 @@ test("voice mode: talk, send as spoken, hear the reply, and every turn is in the
   expect(report).toMatch(/seg 0: \d+\.\d s, cut: release/);
   expect(report).toMatch(/release -> text: \d+ ms \(\d+ words\)/);
   expect(report).toMatch(/release -> first speech: \d+ ms/);
+  expect(report).toContain("Phonon not in use");
   expect(report).not.toContain(heard);
 
   // Leaving puts the user back in the chat, where the turn is an ordinary bubble.

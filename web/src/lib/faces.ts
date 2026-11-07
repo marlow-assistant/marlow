@@ -69,6 +69,12 @@ export function cropOrigin(crop: FaceCrop): string {
   return `${Math.round(crop.anchor[0] * 100)}% ${Math.round(crop.anchor[1] * 100)}%`;
 }
 
+/** Settings' Avatar row. The faces have no names; the prop is what tells them
+ * apart at a glance. */
+export function facePropName(face: Face): string {
+  return face.prop === "monocle" ? "Monocle" : "Glasses";
+}
+
 export function faceLabel(face: Face): string {
   return `Face ${face.id}, ${face.prop}`;
 }

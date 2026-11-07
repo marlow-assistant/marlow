@@ -1,5 +1,5 @@
 {
-  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 20.",
+  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 22.",
   "entries": [
     {
       "id": 1,
@@ -104,7 +104,7 @@
       "date": "2026-11-04",
       "part": "server",
       "category": "unattended",
-      "text": "When a to-do with a time comes due, Marlow reminds you in the chat, and if you don't act on it, again a day later until it's done, dropped or snoozed. Turn the repeat off in Settings, under Remind me again daily, or just ask. After this update Marlow also moves your existing to-dos onto the list once, and tells you what it moved."
+      "text": "When a to-do with a time comes due, Marlow reminds you in the chat, and if you don't act on it, again a day later until it's done, dropped or snoozed. Turn the repeat off in Settings, under Repeat reminders daily, or just ask. After this update Marlow also moves your existing to-dos onto the list once, and tells you what it moved."
     },
     {
       "id": 17,
@@ -126,6 +126,20 @@
       "part": "server",
       "category": "fix",
       "text": "In Chrome on Android, pulling down no longer reloads the page and closes what you had open."
+    },
+    {
+      "id": 20,
+      "date": "2026-11-06",
+      "part": "app",
+      "category": "feature",
+      "text": "Settings is tidier: your avatar and voice are at the top, and server details, Unpair and the app's build are now under Server connection and About at the bottom. About also lists the open-source software Marlow is built on."
+    },
+    {
+      "id": 21,
+      "date": "2026-11-06",
+      "part": "app",
+      "category": "fix",
+      "text": "On Android, the microphone and voice mode buttons have proper icons, and dictating shows a stop button to end it."
     }
   ]
 }

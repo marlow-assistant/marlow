@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { HttpError, type Api } from "../lib/api";
 import type { Effort } from "../lib/chatStore";
 import {
@@ -10,9 +10,10 @@ import {
   isClockTime,
   type DayTimes,
 } from "../lib/dayFormat";
-import { faceLabel, type Face } from "../lib/faces";
+import { facePropName, type Face } from "../lib/faces";
 import type { LocationSharing, LocationStatus } from "../lib/location";
 import { capitalizedModelName } from "../lib/modelName";
+import { NOTICES, noticeText, type Notice } from "../lib/notices";
 import { accentOf, browserVoiceEngine, choosableVoices, previewVoice, voiceKey, type VoiceEngine } from "../lib/browserSpeech";
 import {
   loadPhonon,
@@ -29,8 +30,9 @@ import {
   type PhononVoice,
 } from "../lib/phononVoices";
 import { KV_TEXT_SIZE, KV_VOICE, kvDelete, kvGet, kvSet } from "../lib/storage";
-import { applyTextSize, currentTextSize, TEXT_SIZES } from "../lib/textSize";
+import { applyTextSize, currentTextSize, TEXT_SIZES, type TextSize } from "../lib/textSize";
 import { FaceGrid, FaceImage } from "./Face";
+import { WaveformIcon } from "./Icons";
 import { enablePush, usePushState } from "./push";
 import type { WhatsNewModel } from "./useWhatsNew";
 import { ChangeRow } from "./WhatsNew";
@@ -75,46 +77,210 @@ export interface SettingsProps {
   voiceEngine?: VoiceEngine | null;
 }
 
-/** Port of iOS `SettingsView`: Status, Intelligence, Build, Unpair, plus a
- * web-only Notifications section (iOS gets its permission from the OS). */
+/** One level below the main pane; `notice` is one below that. */
+type Pane =
+  | { id: "avatar" | "textSize" | "voice" | "server" | "about" | "notices" }
+  | { id: "notice"; notice: Notice };
+
+const PANE_TITLES: Record<Exclude<Pane["id"], "notice">, string> = {
+  avatar: "Avatar",
+  textSize: "Text size",
+  voice: "Voice",
+  server: "Server connection",
+  about: "About",
+  notices: "Open-source notices",
+};
+
+const paneTitle = (pane: Pane) => (pane.id === "notice" ? pane.notice.name : PANE_TITLES[pane.id]);
+
+/** Port of iOS `SettingsView`, plus what only a browser needs: Text size and
+ * Notifications (iOS gets both from the OS). The sheet has no navigation of
+ * its own, so this is `NavigationStack`'s small equivalent: every level stays
+ * mounted under the one on top, which keeps Your day's answer, a Voice preview
+ * and the row to go back to. */
 export function Settings(p: SettingsProps) {
   const [confirming, setConfirming] = useState(false);
+  const [stack, setStack] = useState<Pane[]>([]);
+  const [textSize, setTextSize] = useState(currentTextSize);
   // Once per sheet: a new engine object each render would resubscribe the
   // Voice section's listener every time.
   const voiceEngine = useMemo(
     () => (p.voiceEngine === undefined ? browserVoiceEngine() : p.voiceEngine),
     [p.voiceEngine],
   );
+  const voice = useVoiceChoice(voiceEngine);
   const connection = p.reauthNeeded ? "Needs reauthorization" : p.queuePaused ? "Paused" : "Connected";
+
+  const heading = useRef<HTMLHeadingElement>(null);
+  const mainBody = useRef<HTMLDivElement>(null);
+  // The row that opened each level, to go back to.
+  const openers = useRef<HTMLElement[]>([]);
+  const mainScroll = useRef(0);
+  const goingBack = useRef(false);
+
+  const open = (pane: Pane, e: MouseEvent<HTMLElement>) => {
+    openers.current.push(e.currentTarget);
+    if (stack.length === 0) mainScroll.current = mainBody.current?.scrollTop ?? 0;
+    setStack((s) => [...s, pane]);
+  };
+  const back = () => {
+    goingBack.current = true;
+    setStack((s) => s.slice(0, -1));
+  };
+
+  // Before paint, so the main pane never shows at the top and jumps: its two
+  // rows are at the bottom, and hiding it loses the scroll position.
+  useLayoutEffect(() => {
+    if (goingBack.current) {
+      goingBack.current = false;
+      if (stack.length === 0 && mainBody.current) mainBody.current.scrollTop = mainScroll.current;
+      openers.current.pop()?.focus();
+    } else if (stack.length > 0) {
+      heading.current?.focus();
+    }
+  }, [stack]);
+
+  const top = stack.at(-1);
+
+  const paneBody = (pane: Pane) => {
+    switch (pane.id) {
+      case "avatar":
+        return (
+          <AvatarPicker
+            face={p.face}
+            onFace={(f) => {
+              p.onFace(f);
+              back();
+            }}
+          />
+        );
+      case "textSize":
+        return <TextSizePicker size={textSize} onSize={setTextSize} />;
+      case "voice":
+        return voice?.picker;
+      case "server":
+        return (
+          <>
+            <section className="settings-section" aria-label="Server connection">
+              <dl className="settings-group">
+                <CopyRow label="Server" value={p.host ?? location.host} />
+                <Row label="Connection" value={connection} />
+                {p.token && <Row label="Device" value={p.token.slice(-6)} />}
+              </dl>
+            </section>
+            <section className="settings-section">
+              <div className="settings-group">
+                <button type="button" className="settings-danger" onClick={() => setConfirming(true)}>
+                  Unpair
+                </button>
+              </div>
+            </section>
+          </>
+        );
+      case "about":
+        return (
+          <>
+            {/* Both sides, deliberately adjacent and in the same format: the
+                question this answers is "do these two agree?", which is exactly
+                what a branch deploy makes worth asking. */}
+            <section className="settings-section" aria-label="Build">
+              <h3 className="view-day">Build</h3>
+              <dl className="settings-group">
+                <CopyRow label="App" value={p.webBuild ?? __WEB_BUILD__} />
+                {p.serverBuild ? <CopyRow label="Server" value={p.serverBuild} /> : <Row label="Server" value="—" />}
+              </dl>
+            </section>
+            <section className="settings-section">
+              <div className="settings-group">
+                <PaneRow label="Open-source notices" onOpen={(e) => open({ id: "notices" }, e)} />
+              </div>
+            </section>
+          </>
+        );
+      case "notices":
+        return (
+          <div className="settings-group">
+            {NOTICES.map((n) => (
+              <PaneRow
+                key={n.name}
+                label={
+                  <span className="notice-row">
+                    <span>{n.name}</span>
+                    <span className="notice-row-license">{n.license}</span>
+                  </span>
+                }
+                onOpen={(e) => open({ id: "notice", notice: n }, e)}
+              />
+            ))}
+          </div>
+        );
+      case "notice":
+        return <NoticeText notice={pane.notice} />;
+    }
+  };
 
   return (
     <div className="sheet" role="dialog" aria-label="Settings">
-      <header className="sheet-header">
-        <h2>Settings</h2>
-        <button type="button" onClick={p.onClose}>
-          Done
-        </button>
-      </header>
-      <div className="sheet-body settings-body">
-        <section className="settings-section" aria-label="Status">
-          <h3 className="view-day">Status</h3>
-          <dl className="settings-group">
-            <Row label="Server" value={p.host ?? location.host} />
-            <Row label="Connection" value={connection} />
-            {p.token && <Row label="Device" value={p.token.slice(-6)} />}
-          </dl>
+      {top ? (
+        <header className="sheet-header sheet-header-pane">
+          <button type="button" className="sheet-back" onClick={back}>
+            <span aria-hidden="true">‹ </span>Back
+          </button>
+          <h2 ref={heading} tabIndex={-1}>
+            {paneTitle(top)}
+          </h2>
+        </header>
+      ) : (
+        <header className="sheet-header">
+          <h2>Settings</h2>
+          <button type="button" onClick={p.onClose}>
+            Done
+          </button>
+        </header>
+      )}
+      <div ref={mainBody} className="sheet-body settings-body" hidden={top !== undefined}>
+        <section className="settings-section" aria-label="Appearance and voice">
+          <h3 className="view-day">Appearance and voice</h3>
+          <div className="settings-group">
+            <PaneRow
+              icon={
+                <span className="face-circle face-circle-small">
+                  <FaceImage face={p.face} size={28} crop="large" />
+                </span>
+              }
+              label="Avatar"
+              value={facePropName(p.face)}
+              onOpen={(e) => open({ id: "avatar" }, e)}
+            />
+            <PaneRow
+              icon={
+                <span className="settings-icon" aria-hidden="true">
+                  Aa
+                </span>
+              }
+              label="Text size"
+              value={textSize.label}
+              onOpen={(e) => open({ id: "textSize" }, e)}
+            />
+            {voice && (
+              <PaneRow
+                icon={
+                  <span className="settings-icon" aria-hidden="true">
+                    <WaveformIcon size={18} />
+                  </span>
+                }
+                label="Voice"
+                value={voice.summary}
+                onOpen={(e) => open({ id: "voice" }, e)}
+              />
+            )}
+          </div>
         </section>
-
-        <FaceSection face={p.face} onFace={p.onFace} />
-
-        <TextSizeSection />
-
-        <VoiceSection engine={voiceEngine} />
 
         {/* Effort is a LATENCY dial on this workload, not a cost one: measured
             at ~2,900 thinking tokens against 5.8M cache reads in a day
-            (docs/tasks/model-and-effort-config.md). The footer says so plainly
-            rather than letting the control imply savings. */}
+            (docs/tasks/model-and-effort-config.md). The footer says nothing
+            about cost, so the control doesn't imply savings. */}
         <section className="settings-section" aria-label="Intelligence">
           <h3 className="view-day">Intelligence</h3>
           <div className="settings-group">
@@ -139,9 +305,7 @@ export function Settings(p: SettingsProps) {
               <Row label="Model" value={p.serverModel ? capitalizedModelName(p.serverModel) : "—"} />
             </dl>
           </div>
-          <p className="settings-footer">
-            Higher effort makes replies slower, not more expensive. Applies to your next message.
-          </p>
+          <p className="settings-footer">Higher effort gives better answers, but can be slower to respond.</p>
         </section>
 
         <section className="settings-section" aria-label="Location">
@@ -177,25 +341,19 @@ export function Settings(p: SettingsProps) {
 
         {p.whatsNew && <UpdatesSection whatsNew={p.whatsNew} />}
 
-        {/* Both sides, deliberately adjacent and in the same format: the
-            question this answers is "do these two agree?", which is exactly
-            what a branch deploy makes worth asking. */}
-        <section className="settings-section" aria-label="Build">
-          <h3 className="view-day">Build</h3>
-          <dl className="settings-group">
-            <Row label="App" value={p.webBuild ?? __WEB_BUILD__} />
-            <Row label="Server" value={p.serverBuild ?? "—"} />
-          </dl>
-        </section>
-
         <section className="settings-section">
           <div className="settings-group">
-            <button type="button" className="settings-danger" onClick={() => setConfirming(true)}>
-              Unpair
-            </button>
+            <PaneRow label="Server connection" onOpen={(e) => open({ id: "server" }, e)} />
+            <PaneRow label="About" onOpen={(e) => open({ id: "about" }, e)} />
           </div>
         </section>
       </div>
+
+      {stack.map((pane, i) => (
+        <div key={i} className="sheet-body settings-body" hidden={i !== stack.length - 1}>
+          {paneBody(pane)}
+        </div>
+      ))}
 
       {confirming && (
         <div className="modal-backdrop">
@@ -219,52 +377,28 @@ export function Settings(p: SettingsProps) {
   );
 }
 
-/** A row naming the current choice that opens its picker in place, as iOS
- * puts a picker one level down. Inline, the face grid and the voice list
- * each took a screen of scrolling (Mike, 2026-10-28). */
-function Disclosure(p: { label: string; value: ReactNode; open: boolean; onToggle: () => void; children: ReactNode }) {
+/** A row naming the current choice that opens its picker one level down, as
+ * iOS does. Inline, the face grid and the voice list each took a screen of
+ * scrolling (Mike, 2026-10-28). */
+function PaneRow(p: { icon?: ReactNode; label: ReactNode; value?: string; onOpen: (e: MouseEvent<HTMLElement>) => void }) {
   return (
-    <div className="settings-group">
-      <button type="button" className="settings-disclosure" aria-expanded={p.open} onClick={p.onToggle}>
-        <span>{p.label}</span>
-        <span className="settings-disclosure-value">{p.value}</span>
-      </button>
-      {p.open && p.children}
-    </div>
+    <button type="button" className="settings-disclosure" onClick={p.onOpen}>
+      {p.icon}
+      <span>{p.label}</span>
+      <span className="settings-disclosure-value">{p.value}</span>
+    </button>
   );
 }
 
 /** Shown large, as the avatar's own crop: monocle against glasses is part of
- * the choice, and at the header's 52px it is hard to see. A pick closes it,
+ * the choice, and at the header's 52px it is hard to see. A pick goes back,
  * being the whole errand. No icon footer: a web app's home-screen icon is
  * fixed by its manifest. */
-function FaceSection({ face, onFace }: { face: Face; onFace: (f: Face) => void }) {
-  const [open, setOpen] = useState(false);
+function AvatarPicker({ face, onFace }: { face: Face; onFace: (f: Face) => void }) {
   return (
-    <section className="settings-section" aria-label="Marlow">
-      <h3 className="view-day">Marlow</h3>
-      <Disclosure
-        label="Appearance"
-        value={
-          <>
-            <span className="face-circle face-circle-small">
-              <FaceImage face={face} size={28} crop="large" />
-            </span>
-            {faceLabel(face)}
-          </>
-        }
-        open={open}
-        onToggle={() => setOpen((o) => !o)}
-      >
-        <FaceGrid
-          face={face}
-          onFace={(f) => {
-            onFace(f);
-            setOpen(false);
-          }}
-        />
-      </Disclosure>
-    </section>
+    <div className="settings-group">
+      <FaceGrid face={face} onFace={onFace} scrollToCurrent />
+    </div>
   );
 }
 
@@ -277,13 +411,91 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** How long "Copied" stands in for the value. */
+const COPIED_MS = 1500;
+
+/** A value someone may need to paste into a bug report: one line, however
+ * long, and a tap copies all of it. The end of a build is the commit, the part
+ * that tells two builds apart, so it never clips; what clips is the branch.
+ * iOS's `CopyableRow` cuts the middle, which CSS can't. */
+function CopyRow({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  const at = value.lastIndexOf("@");
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), COPIED_MS);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  return (
+    <div className="settings-row">
+      <dt>{label}</dt>
+      <dd className="settings-copy-value">
+        <button
+          type="button"
+          className="settings-copy"
+          onClick={() => {
+            // No clipboard outside a secure context; then the row just says nothing.
+            void navigator.clipboard?.writeText(value).then(
+              () => setCopied(true),
+              () => {},
+            );
+          }}
+        >
+          {copied ? (
+            "Copied"
+          ) : at > 0 ? (
+            <>
+              <span className="settings-copy-clip">{value.slice(0, at)}</span>
+              <span>{value.slice(at)}</span>
+            </>
+          ) : (
+            <span className="settings-copy-clip">{value}</span>
+          )}
+        </button>
+      </dd>
+    </div>
+  );
+}
+
+/** Lazily, and failing quietly to the link: the text is a separate file that
+ * an offline app may not have yet. */
+function NoticeText({ notice }: { notice: Notice }) {
+  const [text, setText] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void noticeText(notice).then(
+      (t) => {
+        if (live) setText(t);
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [notice]);
+
+  return (
+    <>
+      <a className="notice-link" href={notice.url} target="_blank" rel="noreferrer">
+        {notice.url}
+      </a>
+      {text !== null && (
+        <pre className="notice-text" data-testid="notice-text">
+          {text}
+        </pre>
+      )}
+    </>
+  );
+}
+
 /** Web-only: iOS text follows the system's Dynamic Type setting, which a
  * browser does not pass to a page (lib/textSize.ts). */
-function TextSizeSection() {
-  const [size, setSize] = useState(currentTextSize);
+function TextSizePicker({ size, onSize }: { size: TextSize; onSize: (s: TextSize) => void }) {
   return (
-    <section className="settings-section" aria-label="Text size">
-      <h3 className="view-day">Text size</h3>
+    <section className="settings-section">
       <div className="settings-group">
         <div className="segmented" role="radiogroup" aria-label="Text size">
           {TEXT_SIZES.map((s) => (
@@ -295,7 +507,7 @@ function TextSizeSection() {
               className="segment"
               onClick={() => {
                 applyTextSize(s);
-                setSize(s);
+                onSize(s);
                 void kvSet(KV_TEXT_SIZE, s.id).catch(() => {});
               }}
             >
@@ -333,14 +545,15 @@ const NO_BROWSER_VOICE: SpeechFallback = {
  * previewed, so nothing downloads for someone who only looks. Kept on this
  * device only, like text size: the voices are this device's. The device voices
  * are hidden until the engine lists any, which on Android Chrome is seconds
- * after load; where Phonon can run, its voices keep the section up. */
-function VoiceSection({ engine }: { engine: VoiceEngine | null }) {
+ * after load; where Phonon can run, its voices keep the row up. A hook because
+ * the main pane's row names the choice and the pane below it lists them; null
+ * where there is nothing to choose. */
+function useVoiceChoice(engine: VoiceEngine | null): { summary: string; picker: ReactNode } | null {
   const [voices, setVoices] = useState(() => (engine ? choosableVoices(engine.synth.getVoices()) : []));
   const [chosen, setChosen] = useState<string | null>(null);
   // A tap before the stored choice has loaded wins over it.
   const tapped = useRef(false);
   const phonon = useMemo(() => phononCanRun(), []);
-  const [open, setOpen] = useState(false);
   // The preview's PhononSpeech, made in the first Phonon tap: the tap is when
   // the AudioContext has to be made for iOS (PhononSpeech.unlock).
   const speech = useRef<PhononSpeech | null>(null);
@@ -460,74 +673,74 @@ function VoiceSection({ engine }: { engine: VoiceEngine | null }) {
     return load.state === "failed" ? "Couldn't download" : label;
   };
 
-  // The list stays open after a pick, so voices can be heard one after another.
+  // Only the name: the row has no room for more, and each voice's row in the
+  // list says what it is. The list stays up after a pick, so voices can be
+  // heard one after another.
   const device = voices.find((v) => voiceKey(v) === current);
   const phononChoice = PHONON_VOICES.find((v) => phononVoiceKey(v.name) === current);
   const automatic = phonon && usesPhonon(chosen) ? `Phonon, ${phononVoiceFor(null).name}` : "Device voice";
-  const summary = device
-    ? `${device.name}, ${accentOf(device.lang)} (Device voice)`
-    : phononChoice
-      ? `${phononChoice.name}, ${phononChoice.accent} (Phonon, HQ)`
-      : `Automatic (${automatic})`;
+  const summary = device?.name ?? phononChoice?.name ?? "Automatic";
 
-  return (
-    <section className="settings-section" aria-label="Voice">
-      <h3 className="view-day">Voice</h3>
-      <Disclosure label="Voice" value={summary} open={open} onToggle={() => setOpen((o) => !o)}>
-        <div role="radiogroup" aria-label="Voice">
-          <button type="button" role="radio" aria-checked={current === null} className="voice-option" onClick={() => choose(null)}>
-            <span>Automatic</span>
-            <span className="voice-option-lang">{automatic}</span>
-          </button>
-          {phonon && (
-            <div role="group" aria-label="Phonon">
-              <p className="voice-group-title" aria-hidden="true">
-                Phonon
-              </p>
-              {PHONON_VOICES.map((v) => (
-                <button
-                  key={v.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={current === phononVoiceKey(v.name)}
-                  className="voice-option"
-                  onClick={() => choose(v)}
-                >
-                  <span>{v.name}</span>
-                  <span className="voice-option-lang">{phononSecondary(v)}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          {voices.length > 0 && (
-            <div role="group" aria-label="This device">
-              <p className="voice-group-title" aria-hidden="true">
-                This device
-              </p>
-              {voices.map((v) => (
-                <button
-                  key={voiceKey(v)}
-                  type="button"
-                  role="radio"
-                  aria-checked={current === voiceKey(v)}
-                  className="voice-option"
-                  onClick={() => choose(v)}
-                >
-                  <span>{v.name}</span>
-                  <span className="voice-option-lang">{accentOf(v.lang)} (Device voice)</span>
-                </button>
-              ))}
-            </div>
-          )}
+  return {
+    summary,
+    picker: (
+      <section className="settings-section">
+        <div className="settings-group">
+          <div role="radiogroup" aria-label="Voice">
+            <button type="button" role="radio" aria-checked={current === null} className="voice-option" onClick={() => choose(null)}>
+              <span>Automatic</span>
+              <span className="voice-option-lang">{automatic}</span>
+            </button>
+            {phonon && (
+              <div role="group" aria-label="Phonon">
+                <p className="voice-group-title" aria-hidden="true">
+                  Phonon
+                </p>
+                {PHONON_VOICES.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={current === phononVoiceKey(v.name)}
+                    className="voice-option"
+                    onClick={() => choose(v)}
+                  >
+                    <span>{v.name}</span>
+                    <span className="voice-option-lang">{phononSecondary(v)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {voices.length > 0 && (
+              <div role="group" aria-label="This device">
+                <p className="voice-group-title" aria-hidden="true">
+                  This device
+                </p>
+                {voices.map((v) => (
+                  <button
+                    key={voiceKey(v)}
+                    type="button"
+                    role="radio"
+                    aria-checked={current === voiceKey(v)}
+                    className="voice-option"
+                    onClick={() => choose(v)}
+                  >
+                    <span>{v.name}</span>
+                    <span className="voice-option-lang">{accentOf(v.lang)} (Device voice)</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
-      </Disclosure>
-      <p className="settings-footer">
-        {phonon
-          ? "Phonon voices are made on this device; the others are the browser's own."
-          : "How voice mode reads replies on this device. Tap a voice to hear it."}
-      </p>
-    </section>
-  );
+        <p className="settings-footer">
+          {phonon
+            ? "Phonon voices are made on this device; the others are the browser's own."
+            : "How voice mode reads replies on this device. Tap a voice to hear it."}
+        </p>
+      </section>
+    ),
+  };
 }
 
 /** The other half of the update card (docs/tasks/whats-new.md): the card says
@@ -571,10 +784,12 @@ function UpdatesSection({ whatsNew }: { whatsNew: NonNullable<SettingsProps["wha
   );
 }
 
-/** Web-only: a browser asks for push permission itself, from a user gesture. */
+/** Web-only: a browser asks for push permission itself, from a user gesture.
+ * Left out once it's on, when the row could do nothing (Mike, 2026-11-06).
+ * Blocked or failed stays: that line is the only explanation there is. */
 function NotificationsSection({ api }: { api: Api }) {
   const push = usePushState();
-  if (push === "unsupported") return null;
+  if (push === "unsupported" || push === "on") return null;
   return (
     <section className="settings-section" aria-label="Notifications">
       <h3 className="view-day">Notifications</h3>
@@ -582,16 +797,14 @@ function NotificationsSection({ api }: { api: Api }) {
         <button
           type="button"
           className="settings-action"
-          disabled={push === "on" || push === "denied" || push === "failed"}
+          disabled={push === "denied" || push === "failed"}
           onClick={() => void enablePush(api)}
         >
-          {push === "on"
-            ? "Notifications are on"
-            : push === "denied"
-              ? "Notifications are blocked in the browser"
-              : push === "failed"
-                ? "This browser's notifications can't be turned on"
-                : "Turn on notifications"}
+          {push === "denied"
+            ? "Notifications are blocked in the browser"
+            : push === "failed"
+              ? "This browser's notifications can't be turned on"
+              : "Turn on notifications"}
         </button>
       </div>
     </section>
@@ -666,53 +879,48 @@ function YourDaySection({ api }: { api: Api }) {
   };
 
   return (
-    <>
-      <section className="settings-section" aria-label="Your day">
-        <h3 className="view-day">Your day</h3>
-        <div className="settings-group">
-          <TimeRow label="Starts" value={shown.dayStart} onChange={(v) => change("dayStart", v)} />
-          <TimeRow label="Ends" value={shown.dayEnd} onChange={(v) => change("dayEnd", v)} />
-          {/* Absent from a box that predates check-ins. */}
-          {shown.checkinEveryHours !== null && (
-            <div className="settings-row">
-              <label className="settings-time">
-                Check-ins
-                <select value={shown.checkinEveryHours} onChange={(e) => changeCheckin(Number(e.target.value))}>
-                  {CHECKIN_HOURS.map((h) => (
-                    <option key={h} value={h}>
-                      {checkinLabel(h)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
-        </div>
-        <p className="settings-footer">Marlow tidies up after your day ends, and checks your inbox during it.</p>
-        {error && (
-          <p className="settings-footer settings-error" role="alert">
-            {error}
-          </p>
-        )}
-      </section>
-      {/* Absent from a box that predates to-do reminders. */}
-      {shown.renudge != null && (
-        <section className="settings-section" aria-label="Reminders">
-          <h3 className="view-day">Reminders</h3>
-          <div className="settings-group">
-            <div className="settings-row">
-              <label className="settings-time">
-                Remind me again daily
-                <input type="checkbox" checked={shown.renudge} onChange={(e) => changeRenudge(e.target.checked)} />
-              </label>
-            </div>
+    <section className="settings-section" aria-label="Your day">
+      <h3 className="view-day">Your day</h3>
+      <div className="settings-group">
+        <TimeRow label="Starts" value={shown.dayStart} onChange={(v) => change("dayStart", v)} />
+        <TimeRow label="Ends" value={shown.dayEnd} onChange={(v) => change("dayEnd", v)} />
+        {/* Absent from a box that predates check-ins. */}
+        {shown.checkinEveryHours !== null && (
+          <div className="settings-row">
+            <label className="settings-time">
+              Check-ins
+              <select value={shown.checkinEveryHours} onChange={(e) => changeCheckin(Number(e.target.value))}>
+                {CHECKIN_HOURS.map((h) => (
+                  <option key={h} value={h}>
+                    {checkinLabel(h)}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
-          <p className="settings-footer">
-            If you don't act on a reminder, it comes back a day later until it's done, dropped or snoozed.
-          </p>
-        </section>
+        )}
+        {/* Absent from a box that predates to-do reminders. */}
+        {shown.renudge != null && (
+          <div className="settings-row">
+            <label className="settings-time">
+              Repeat reminders daily
+              <input type="checkbox" checked={shown.renudge} onChange={(e) => changeRenudge(e.target.checked)} />
+            </label>
+          </div>
+        )}
+      </div>
+      <p className="settings-footer">Marlow tidies up after your day ends, and checks your inbox during it.</p>
+      {shown.renudge != null && (
+        <p className="settings-footer">
+          If you don't act on a reminder, it comes back a day later until it's done, dropped or snoozed.
+        </p>
       )}
-    </>
+      {error && (
+        <p className="settings-footer settings-error" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
   );
 }
 

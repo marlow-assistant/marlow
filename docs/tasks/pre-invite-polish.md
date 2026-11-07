@@ -15,9 +15,7 @@ the list**. The both-clients rule still holds for each item below.
    first morning brief. Onboarding hasn't been seen with a real new user
    (`onboarding-v2.md`). Anything a friend would notice joins this list;
    anything else is parked.
-2. **Settings overhaul** (`settings-overhaul.md`), both clients, one PR: today's
-   screen with server and build detail moved behind two rows, plus the
-   open-source notices. Designed 2026-11-06. The largest item.
+2. **Settings overhaul** (`settings-overhaul.md`): done 2026-11-06.
 3. **Unsent draft survives a kill** (`ios-chat-ux-gaps.md` #20), both clients.
    The installed web app gets evicted too, and a lost message is the worst
    first impression on this list.
@@ -28,6 +26,8 @@ the list**. The both-clients rule still holds for each item below.
 6. **Re-pairing to a new box** (`repair-against-a-new-box.md`), native only.
    Not something a friend hits, but it bites Mike whenever he tests against
    the trial VM (Mike, 2026-11-06).
+7. **Android back closes the top layer** (`android-back-gesture.md`), web only.
+   Today the gesture leaves the app from anywhere.
 
 ## Cut from the pass
 

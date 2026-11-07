@@ -3,6 +3,7 @@ import { useMenuDismiss } from "./CopyMenu";
 import type { Api } from "../lib/api";
 import type { ChatStore } from "../lib/chatStore";
 import { Dictation, PartialTranscriptError, transcribeErrorText } from "../lib/dictation";
+import { MicIcon, StopIcon, WaveformIcon } from "./Icons";
 import { downscaleToJpeg, ImageUnsupportedError, MAX_IMAGES } from "../lib/imageDownscale";
 import { Microphone } from "../lib/segmentRecorder";
 import type { Todo } from "../lib/apiModels";
@@ -423,7 +424,13 @@ export function Composer({
             onClick={() => void (dictating === "idle" ? startDictation() : finishDictation())}
             data-testid="mic"
           >
-            {dictating === "transcribing" ? <span className="spinner" aria-hidden="true" /> : "🎙"}
+            {dictating === "transcribing" ? (
+              <span className="spinner" aria-hidden="true" />
+            ) : dictating === "recording" ? (
+              <StopIcon />
+            ) : (
+              <MicIcon />
+            )}
           </button>
         )}
         {canSend ? (
@@ -444,7 +451,7 @@ export function Composer({
               }}
               data-testid="voice-open"
             >
-              〰
+              <WaveformIcon />
             </button>
           )
         )}

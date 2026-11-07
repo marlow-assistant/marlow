@@ -152,7 +152,9 @@ describe("Chat chrome wiring", () => {
     expect(screen.queryByTestId("model-chip")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     const settings = screen.getByRole("dialog", { name: "Settings" });
+    fireEvent.click(within(settings).getByRole("button", { name: "Server connection" }));
     expect(within(settings).getByText("123456")).toBeTruthy();
+    fireEvent.click(within(settings).getByRole("button", { name: "Back" }));
     fireEvent.click(within(settings).getByRole("button", { name: "Done" }));
     expect(screen.queryByRole("dialog")).toBeNull();
 
@@ -192,20 +194,24 @@ function settings(over: Partial<SettingsProps> = {}) {
 const rowValue = (section: string, label: string) =>
   within(screen.getByRole("region", { name: section })).getByText(label).nextElementSibling!.textContent;
 
+const openPane = (row: string | RegExp) => fireEvent.click(screen.getByRole("button", { name: row }));
+
 describe("settings", () => {
-  it("Status: server, connection, and the last six characters of the token", () => {
+  it("Server connection: server, connection, and the last six characters of the token", () => {
     settings();
-    expect(rowValue("Status", "Server")).toBe("marlow.tail1234.ts.net");
-    expect(rowValue("Status", "Connection")).toBe("Connected");
-    expect(rowValue("Status", "Device")).toBe("abcdef");
+    openPane("Server connection");
+    expect(rowValue("Server connection", "Server")).toBe("marlow.tail1234.ts.net");
+    expect(rowValue("Server connection", "Connection")).toBe("Connected");
+    expect(rowValue("Server connection", "Device")).toBe("abcdef");
     expect(screen.queryByText("tok-abcdef")).toBeNull();
   });
 
   it("Connection reads Paused, and Needs reauthorization above it", () => {
     const { rerender, props } = settings({ queuePaused: true });
-    expect(rowValue("Status", "Connection")).toBe("Paused");
+    openPane("Server connection");
+    expect(rowValue("Server connection", "Connection")).toBe("Paused");
     rerender(<Settings {...props} queuePaused reauthNeeded />);
-    expect(rowValue("Status", "Connection")).toBe("Needs reauthorization");
+    expect(rowValue("Server connection", "Connection")).toBe("Needs reauthorization");
   });
 
   it("Intelligence: the control reflects the effort and calls onEffort", () => {
@@ -216,7 +222,7 @@ describe("settings", () => {
     fireEvent.click(within(group).getByRole("radio", { name: "High" }));
     expect(props.onEffort).toHaveBeenCalledWith("high");
     expect(rowValue("Intelligence", "Model")).toBe("Sonnet");
-    expect(screen.getByText(/Higher effort makes replies slower, not more expensive/)).toBeTruthy();
+    expect(screen.getByText("Higher effort gives better answers, but can be slower to respond.")).toBeTruthy();
   });
 
   it("Location: the control reflects the setting and calls onLocationSharing", () => {
@@ -233,12 +239,11 @@ describe("settings", () => {
   it("Face: every face is offered, the current one is checked, a tap calls onFace", () => {
     const { props } = settings({ face: FACES[3] });
     // One row until asked: the grid took a screen of its own (Mike, 2026-10-28).
-    const row = screen.getByRole("button", { name: /^Appearance/ });
-    expect(row.textContent).toContain("Face 4, glasses");
-    expect(screen.queryByRole("radiogroup", { name: "Appearance" })).toBeNull();
+    const row = screen.getByRole("button", { name: /^Avatar/ });
+    expect(row.textContent).toContain("Glasses");
+    expect(screen.queryByRole("radiogroup", { name: "Avatar" })).toBeNull();
     fireEvent.click(row);
-    expect(row.getAttribute("aria-expanded")).toBe("true");
-    const group = screen.getByRole("radiogroup", { name: "Appearance" });
+    const group = screen.getByRole("radiogroup", { name: "Avatar" });
     expect(within(group).getAllByRole("radio")).toHaveLength(FACES.length);
     expect(within(group).getByRole("radio", { name: "Face 4, glasses" }).getAttribute("aria-checked")).toBe("true");
     expect(within(group).getByRole("radio", { name: "Face 1, monocle" }).getAttribute("aria-checked")).toBe("false");
@@ -246,7 +251,8 @@ describe("settings", () => {
     expect(tile.style.transform).toBe(`scale(${FACES[3].large.zoom})`);
     fireEvent.click(within(group).getByRole("radio", { name: "Face 9, monocle" }));
     expect(props.onFace).toHaveBeenCalledWith(FACES[8]);
-    expect(screen.queryByRole("radiogroup", { name: "Appearance" })).toBeNull();
+    expect(screen.queryByRole("radiogroup", { name: "Avatar" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Settings" })).toBeTruthy();
   });
 
   it("Location footer says so when the browser has blocked it, or has no location at all", () => {
@@ -260,12 +266,14 @@ describe("settings", () => {
   it("Model and the server build read as a dash before the first /health", () => {
     settings({ serverModel: null, serverBuild: null });
     expect(rowValue("Intelligence", "Model")).toBe("—");
+    openPane("About");
     expect(rowValue("Build", "Server")).toBe("—");
     expect(rowValue("Build", "App")).toBe("deadbee");
   });
 
   it("Unpair needs a confirmation, and Cancel does nothing", () => {
     const { props } = settings();
+    openPane("Server connection");
     fireEvent.click(screen.getByRole("button", { name: "Unpair" }));
     expect(props.onUnpair).not.toHaveBeenCalled();
     const dialog = screen.getByRole("alertdialog", { name: "Unpair from Marlow?" });

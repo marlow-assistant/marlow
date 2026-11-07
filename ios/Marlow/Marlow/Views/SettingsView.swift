@@ -17,42 +17,52 @@ struct SettingsView: View {
     /// reaching for a `DictationController` of its own.
     var stopDictation: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
-    @State private var showingUnpairConfirmation = false
     @State private var isUnpairing = false
     @StateObject private var yourDay = YourDayModel()
     @AppStorage(EffortPreference.storageKey) private var effortRaw = ThinkingEffort.default.rawValue
     @AppStorage(LocationPreference.storageKey) private var locationRaw = LocationSharing.default.rawValue
+    @AppStorage(FacePreference.storageKey) private var storedFaceID = MarlowFace.default.id
+    /// Read so a change redraws the Voice row.
+    @AppStorage(VoicePreference.voiceKey) private var voiceID = ""
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Status") {
-                    LabeledContent("Server", value: APIClient.host)
-                    LabeledContent("Connection", value: connectionStatus)
-                    if let deviceToken = session.deviceToken {
-                        LabeledContent("Device", value: String(deviceToken.suffix(6)))
-                    }
-                }
-
-                Section {
+                Section("Appearance and voice") {
                     NavigationLink {
                         FacePicker()
                     } label: {
-                        HStack(spacing: 12) {
-                            MarlowAvatar(size: 36)
-                            Text("Appearance")
+                        LabeledContent {
+                            Text(MarlowFace.with(id: storedFaceID).propName)
+                        } label: {
+                            HStack(spacing: 12) {
+                                MarlowAvatar(size: 28)
+                                Text("Avatar")
+                            }
                         }
                     }
-                } header: {
-                    Text("Marlow")
-                } footer: {
-                    Text("Also changes Marlow's icon on your Home Screen when you tap Done.")
+                    NavigationLink {
+                        VoiceSettingsView()
+                    } label: {
+                        LabeledContent {
+                            Text(voiceName)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "waveform.circle.fill")
+                                    .font(.title2)
+                                    .frame(width: 28)
+                                    .foregroundStyle(.secondary)
+                                Text("Voice")
+                            }
+                        }
+                    }
                 }
+                .disabled(isUIFixture)
 
                 // Effort is a LATENCY dial on this workload, not a cost one:
                 // measured at ~2,900 thinking tokens against 5.8M cache reads
                 // in a day (docs/tasks/model-and-effort-config.md). The footer
-                // says so plainly rather than letting the picker imply savings.
+                // says nothing about cost, so the picker doesn't imply savings.
                 Section {
                     Picker("Thinking", selection: effortSelection) {
                         ForEach(ThinkingEffort.allCases) { level in
@@ -69,8 +79,9 @@ struct SettingsView: View {
                 } header: {
                     Text("Intelligence")
                 } footer: {
-                    Text("Higher effort makes replies slower, not more expensive. Applies to your next message.")
+                    Text("Higher effort gives better answers, but can be slower to respond.")
                 }
+                .disabled(isUIFixture)
 
                 Section {
                     Picker("Location", selection: locationSelection) {
@@ -84,6 +95,7 @@ struct SettingsView: View {
                 } footer: {
                     Text(locationFooter)
                 }
+                .disabled(isUIFixture)
 
                 if let times = yourDay.times {
                     Section {
@@ -104,7 +116,7 @@ struct SettingsView: View {
                         }
                         // Absent from a box that predates to-do reminders.
                         if let renudge = times.renudge {
-                            Toggle("Remind me again daily", isOn: renudgeBinding(renudge))
+                            Toggle("Repeat reminders daily", isOn: renudgeBinding(renudge))
                         }
                     } header: {
                         Text("Your day")
@@ -119,9 +131,8 @@ struct SettingsView: View {
                             }
                         }
                     }
+                    .disabled(isUIFixture)
                 }
-
-                VoiceSettingsSection()
 
                 // The other half of the update card (docs/tasks/whats-new.md):
                 // the card's hint points at this switch.
@@ -138,28 +149,34 @@ struct SettingsView: View {
                 } footer: {
                     Text("When Marlow is updated, what changed appears the next time you open the app.")
                 }
-
-                // Both sides, deliberately adjacent and in the same format:
-                // the question this answers is "do these two agree?", which is
-                // exactly what a feature-branch deploy makes worth asking.
-                Section("Build") {
-                    LabeledContent("App", value: "\(gitBranch)@\(gitCommit)")
-                    LabeledContent("Server", value: store.serverBuild ?? "—")
-                }
+                .disabled(isUIFixture)
 
                 Section {
-                    Button("Unpair", role: .destructive) {
-                        showingUnpairConfirmation = true
+                    NavigationLink("Server connection") {
+                        ServerConnectionView(
+                            host: APIClient.host,
+                            connection: connectionStatus,
+                            device: session.deviceToken.map { String($0.suffix(6)) },
+                            isUnpairing: isUnpairing,
+                            isDisabled: isUIFixture,
+                            unpair: unpair
+                        )
                     }
-                    .disabled(isUnpairing)
+                    NavigationLink("About") {
+                        AboutView(
+                            appBuild: "\(gitBranch)@\(gitCommit)",
+                            serverBuild: store.serverBuild ?? "—"
+                        )
+                    }
                 }
             }
             // Under a UI fixture only the chat's store is fake. Everything
             // this screen writes is real: Unpair clears the Keychain token,
             // and the picker sets the install's own preference. A fixture run on a
-            // paired phone must not be able to reach any of it, so the form
-            // still renders, for screenshots, and does nothing.
-            .disabled(isUIFixture)
+            // paired phone must not be able to reach any of it, so each section
+            // that writes still renders, for screenshots, and does nothing.
+            // Server connection and About stay open to look at; Unpair is
+            // disabled inside.
             // The box is the only copy of the day, so it is asked on every
             // open; the section appears once it has answered.
             .task {
@@ -168,18 +185,6 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
-            .confirmationDialog(
-                "Unpair from Marlow?",
-                isPresented: $showingUnpairConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Unpair", role: .destructive) {
-                    unpair()
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("This stops active work and revokes this device on Marlow. Reconnecting needs a new pairing code.")
-            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Done") {
@@ -299,6 +304,11 @@ struct SettingsView: View {
             return "Location is turned off for Marlow in iOS Settings, so nothing is sent."
         }
         return "Sent with each message so Marlow knows where you are. Approximate shares your city; Precise shares your exact position."
+    }
+
+    private var voiceName: String {
+        _ = voiceID
+        return VoicePreference.voice().name
     }
 
     private var connectionStatus: String {

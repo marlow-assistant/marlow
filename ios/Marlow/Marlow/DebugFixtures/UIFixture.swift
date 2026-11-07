@@ -19,8 +19,8 @@ import os
 /// is generic on purpose: screenshots may end up in a PR.
 ///
 /// **Only the chat's store is fake.** The session, Keychain and preferences
-/// are the install's real ones, which is why `SettingsView` disables its whole
-/// form under a fixture: its Unpair would sign a paired phone out for real
+/// are the install's real ones, which is why `SettingsView` disables what writes:
+/// under a fixture its Unpair would sign a paired phone out for real
 /// (`/code-review medium` finding, 2026-09-28). Anything new that writes real
 /// state from a screen reachable here needs the same guard.
 ///

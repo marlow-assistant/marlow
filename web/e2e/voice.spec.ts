@@ -156,6 +156,32 @@ test("dictation: the mic types what was heard into the draft, and sends nothing 
   expect(posts).toHaveLength(0);
 });
 
+/** As text they were whatever the device's emoji font drew, and 〰 was a
+ * squiggle (Mike, 2026-11-06). */
+test("the mic and voice mode draw their own icons, with a stop to end dictating", async ({ newDevice }) => {
+  const { page } = await newDevice({
+    setup: async (p) => {
+      await fakeTranscription(p, "anything");
+    },
+  });
+  const mic = page.getByTestId("mic");
+  await expect(mic.locator('svg[data-icon="mic"]')).toBeVisible();
+  await expect(mic).toHaveText("");
+  const voiceOpen = page.getByTestId("voice-open");
+  await expect(voiceOpen.locator('svg[data-icon="waveform"]')).toBeVisible();
+  await expect(voiceOpen).toHaveText("");
+
+  await mic.click();
+  await expect(mic.locator('svg[data-icon="stop"]')).toBeVisible();
+  await page.waitForTimeout(500);
+  await mic.click();
+  await expect(mic.locator('svg[data-icon="mic"]')).toBeVisible();
+
+  await composerInput(page).fill("");
+  await voiceOpen.click();
+  await expect(bigButton(page).locator('svg[data-icon="mic"]')).toBeVisible();
+});
+
 test("no mic and no voice mode when the box can't transcribe", async ({ page }) => {
   // The dev server has no model: GET /v1/transcribe says so.
   await expect(composerInput(page)).toBeVisible();

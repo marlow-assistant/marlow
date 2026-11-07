@@ -156,9 +156,9 @@ describe("Settings › Your day", () => {
   });
 });
 
-describe("Settings › Remind me again daily", () => {
+describe("Settings › Repeat reminders daily", () => {
   const WITH = { ...DAY, renudge: true };
-  const toggle = () => screen.getByLabelText("Remind me again daily") as HTMLInputElement;
+  const toggle = () => screen.getByLabelText("Repeat reminders daily") as HTMLInputElement;
 
   it("shows the box's setting and the footnote", async () => {
     open({ dayTimes: vi.fn().mockResolvedValue(WITH) });
@@ -201,6 +201,6 @@ describe("Settings › Remind me again daily", () => {
   it("a box that predates it has no toggle, and the day rows stay", async () => {
     open({ dayTimes: vi.fn().mockResolvedValue({ ...DAY, renudge: null }) });
     await waitFor(() => expect(starts().value).toBe("08:00"));
-    expect(screen.queryByLabelText("Remind me again daily")).toBeNull();
+    expect(screen.queryByLabelText("Repeat reminders daily")).toBeNull();
   });
 });

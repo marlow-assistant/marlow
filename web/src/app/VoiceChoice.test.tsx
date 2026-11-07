@@ -197,7 +197,7 @@ describe("Settings › Voice", () => {
 
   it("fills in when the engine's list arrives late, as Android Chrome's does", () => {
     open();
-    expect(screen.queryByRole("region", { name: "Voice" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Voice/ })).toBeNull();
     act(() => synth.voicesChanged([voice("Daniel", "en-GB")]));
     expect(within(group()).getByRole("radio", { name: /Daniel/ })).toBeTruthy();
   });
@@ -208,29 +208,27 @@ describe("Settings › Voice", () => {
     load.mockResolvedValue(new FakeEngine());
     await kvSet(KV_VOICE, "phonon:Zoey");
     open();
-    await waitFor(() => expect(voiceRow().textContent).toContain("Zoey, American (Phonon, HQ)"));
-    expect(voiceRow().getAttribute("aria-expanded")).toBe("false");
+    await waitFor(() => expect(voiceRow().textContent).toContain("Zoey"));
     expect(screen.queryByRole("radiogroup", { name: "Voice" })).toBeNull();
 
     fireEvent.click(voiceRow());
-    expect(voiceRow().getAttribute("aria-expanded")).toBe("true");
     fireEvent.click(within(group()).getByRole("radio", { name: /Daniel/ }));
     expect(screen.getByRole("radiogroup", { name: "Voice" })).toBeTruthy();
-    expect(voiceRow().textContent).toContain("Daniel, British (Device voice)");
 
-    fireEvent.click(voiceRow());
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(screen.queryByRole("radiogroup", { name: "Voice" })).toBeNull();
+    expect(voiceRow().textContent).toContain("Daniel");
   });
 
   it("names Automatic on the row when nothing is chosen", () => {
     phononCanRun();
     open();
-    expect(voiceRow().textContent).toContain("Automatic (Phonon, Alfie)");
+    expect(voiceRow().textContent).toContain("Automatic");
   });
 
   it("is left out where the browser can't speak", () => {
     open(null);
-    expect(screen.queryByRole("region", { name: "Voice" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Voice/ })).toBeNull();
     expect(screen.queryByRole("radiogroup", { name: "Voice" })).toBeNull();
   });
 
@@ -365,7 +363,7 @@ describe("Settings › Voice", () => {
     it("is not mentioned where it can't run", () => {
       synth.voices = [voice("Samantha", "en-US")];
       open();
-      expect(screen.getByRole("region", { name: "Voice" }).textContent).not.toContain("Phonon");
+      expect(group().closest("section")!.textContent).not.toContain("Phonon");
       expect(within(group()).getByRole("radio", { name: /Automatic/ }).textContent).toContain("Device voice");
       expect(screen.queryByRole("group", { name: "Phonon" })).toBeNull();
     });

@@ -135,7 +135,7 @@ final class YourDayModel: ObservableObject {
         }
     }
 
-    /// "Remind me again daily" (docs/tasks/todos-and-reminders.md). Rides the
+    /// "Repeat reminders daily" (docs/tasks/todos-and-reminders.md). Rides the
     /// same preferences object and the same revert-on-failure as the others.
     func setRenudge(_ on: Bool, api: YourDayAPI, deviceToken: String) async {
         guard var shown = times, shown.renudge != nil, shown.renudge != on else { return }

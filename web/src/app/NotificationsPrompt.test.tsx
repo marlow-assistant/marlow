@@ -126,7 +126,8 @@ describe("WEB-9 notifications prompt", () => {
     expect(prompt()).not.toBeNull();
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Turn on notifications" })));
     expect(prompt()).toBeNull();
-    expect(screen.getByRole("button", { name: "Notifications are on" })).toBeTruthy();
+    // Nothing left for the section to do, so it goes (Mike, 2026-11-06).
+    expect(screen.queryByRole("region", { name: "Notifications" })).toBeNull();
   });
 
   it("a permission granted elsewhere is picked up when the app comes back to the foreground", async () => {

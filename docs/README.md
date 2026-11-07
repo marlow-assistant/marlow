@@ -13,7 +13,8 @@ Where to start:
 - [`marlow-v2-design.md`](marlow-v2-design.md): why it is built the way it
   is, with the options that were turned down left in.
 - [`marlow-v2-implementation-plan.md`](marlow-v2-implementation-plan.md):
-  what was built, module by module.
+  the original build plan and the server-client protocol. Later modules are
+  in `tasks/`.
 - [`marlow-v2-START.md`](marlow-v2-START.md): where things stand now.
 - [`tasks/`](tasks/): one note per feature, bug or decision, each with its
   reasoning.

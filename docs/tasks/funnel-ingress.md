@@ -1,7 +1,7 @@
 # Funnel ingress — a box the phone reaches without Tailscale
 
-**Status: BUILDING (2026-10-24).** Before inviting more
-users. The reason is Mike's direction (2026-10-17): a hardened non-Tailscale
+**Status: built and merged 2026-10-25, off on every box.** What's still open is
+in `marlow-v2-START.md`. Built before inviting more users. The reason is Mike's direction (2026-10-17): a hardened non-Tailscale
 endpoint is the likely end state for phones, iOS too, and its priority rises
 with each new user. Tailscale on a phone costs battery even with On Demand, is
 one more thing to install, and On Demand is "not immediate", which can leave a

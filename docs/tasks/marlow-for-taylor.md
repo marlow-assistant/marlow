@@ -1,9 +1,9 @@
 # Marlow for Taylor: a second Marlow on the box
 
-**Status: building, on Pro (Mike, 2026-10-17).** Taylor gets her own Claude
-Pro account, paid by Mike, and her instance runs in subscription mode like
-his: Sonnet at Medium, the claude.ai connectors on her login. Still to do:
-pieces 1, 5 and 6. Pieces 2–4 are gone: API-key mode was built and then
+**Status: live.** Still open: a push to that phone hasn't been observed. Taylor
+has her own Claude Pro account, paid by Mike, and her instance runs in
+subscription mode like his: Sonnet at Medium, the claude.ai connectors on her
+login. Pieces 2–4 are gone: API-key mode was built and then
 removed 2026-10-17 as dead code (Mike), along with the Haiku shadow run; both
 survive only in the pre-snapshot history. The API key Mike made for her stays
 in 1Password, unused: not on the box, not in any repo, never in a chat.

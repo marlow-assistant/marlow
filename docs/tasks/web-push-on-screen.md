@@ -1,6 +1,6 @@
 # Don't web-push a device that's on screen
 
-**Status:** built on `worktree-skip-push-on-screen`. Seen on Mike's iPhone
+**Status:** merged. Seen on Mike's iPhone
 home-screen web app (2026-10-25): no banner or toast with the app open, and
 a phone locked right after sending still got its banner, late as expected.
 Not yet seen: a Mac Safari back tab still getting its pushes.

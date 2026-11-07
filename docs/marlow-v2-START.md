@@ -35,11 +35,15 @@ Mike's wishlist lives on the box:
 `ssh marlow@marlow 'cat ~/marlow-identity/memory/marlow-features.md'`. When
 you finish something, mark it done there as well as here.
 
-- **`dependency-licenses.md`: look at soon** (Mike, 2026-10-31). Every
-  iOS build carries about 1 MB of GPL-derived pronunciation data that
-  FluidAudio bundles for an engine Marlow never uses. Strip it before the app
-  goes any wider than Mike's own phones. The doc's top section has the
-  detail and a likely fix.
+- **The off-box bundle backup is failing** (found 2026-11-06). No bundle since
+  2026-10-25: the copy launchd runs still points at the working dir's old
+  name. The repo's script is right; re-run `scripts/install-backup-launchd.sh`.
+  Detail in `bundle-backup-ssh-access.md`.
+- **`dependency-licenses.md`**: every iOS build carries about 1 MB of
+  GPL-derived pronunciation data that FluidAudio bundles for an engine Marlow
+  never uses. It blocks TestFlight or any handed-out build, not the next
+  invite, since friends use the web app (`pre-invite-polish.md`). The doc's
+  top section has the detail and a likely fix.
 - **`friends-alpha.md`**: Marlow for 3–5 friends, each on their own
   subscription. The installer merged after a fresh Ubuntu dry run;
   first-run onboarding (its item 9) merged after three VM runs.
@@ -79,7 +83,7 @@ you finish something, mark it done there as well as here.
 - **`whats-new.md`** (2026-10-23): the "Marlow was updated" card and
   Settings' What's new, from a repo-root `changes.json`; built on both
   clients, merged 2026-10-23; seen on Mike's iPhone, Android not yet. Next
-  entry id is 7. Its policy (what gets
+  id is the highest in `changes.json` plus one. Its policy (what gets
   an entry) is now a working rule in `CLAUDE.md`.
 - **`ios-image-input.md`** (2026-10-23): camera shipped on both clients. Multi-image messages (up to 6, Mike's picks) shipped on both clients 2026-10-24, device-checked on the iPhone and the Android emulator's PWA. Follow-ups specced, not started: `image-viewer.md`, `message-retention-setting.md`, `share-and-files.md`.
 - **`bare-default-risk.md`** (2026-10-19): watching, nothing to build. The
@@ -178,8 +182,6 @@ Recently done, in case a summary elsewhere says otherwise:
 - iOS hands-free voice mode with the Phonon voice;
 - the settings path anchor, and `update.sh` refusing a rollback;
 - box content scrubbed from docs and migration comments;
-- the off-box bundle backup runs daily from launchd on the Mac, with a
-  staleness notification (`bundle-backup-ssh-access.md`);
 - iOS markdown tables, route planning;
 - the weather tools, the ideas panel, message location, box migrations and
   the web halves of the Usage panel and approval card;
@@ -210,10 +212,11 @@ Their task docs hold the detail.
   - `sudo` there needs a real terminal.
   - This Mac has no working `tailscale` CLI, so set
     `MARLOW_PUBLIC_BIND_HOST` explicitly.
-- **Builds** (2026-10-23): both instances ran `main` as of the what's-new
-  merge (the second one plus a docs commit), the second with speech to text
-  installed. Phones: Mike's had that change's branch build (same code as
-  `main`), the second user's had `main` at the same point. Claude installs Debug builds with
+- **Builds** (last recorded 2026-11-06, not re-checked): Mike's instance and
+  phone ran the Settings branch, since squash-merged, so both still need
+  moving to `main`. The second instance and phone had manual to-do order but
+  not Settings. The Android user's box was at the 2026-10-28 repo switch.
+  Claude installs Debug builds with
   `xcodebuild` + `devicectl` (a phone on Wi-Fi only: build for
   `generic/platform=iOS`, install with `devicectl`).
 - **CLI:** 2.1.301 on the box, for both `marlow` and `mike` (Mike, 2026-10-16,
@@ -332,5 +335,3 @@ The numbers are cited elsewhere, so don't renumber them.
   - APNs keys (production and sandbox), in
     `~/.marlow/apns/` on this Mac, **never** in the repo.
   - Topic: `com.mikemason.Marlow`.
-- **`deploy/bootstrap.sh` is not started.** Mike asked for it: one
-  idempotent script so a second host is repeatable.

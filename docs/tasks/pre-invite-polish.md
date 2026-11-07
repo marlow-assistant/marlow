@@ -1,7 +1,7 @@
 # Pre-invite polish pass
 
-**Status:** scoped 2026-11-06, not started. Text size is done (Mike, 2026-11-06:
-the Android user is happy with it).
+**Status:** scoped 2026-11-06. Settings and text size are done (Mike, 2026-11-06:
+the Android user is happy with text size); the rest is not started.
 
 The goal is what a friend notices in their first week. Friends use the web
 app, on Android or added to an iPhone home screen (`friends-alpha.md`;
@@ -49,6 +49,6 @@ Each is still worth doing, just not before an invite:
 
 ## Done when
 
-Items 2 to 6 are on `main` and on all three boxes, each on both clients or
+Items 2 to 7 are on `main` and on all three boxes, each on both clients or
 with a stated reason why not, and the walkthrough has been repeated with
 nothing new a friend would notice.

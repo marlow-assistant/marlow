@@ -32,6 +32,7 @@ import { useWhatsNew } from "./useWhatsNew";
 import { WhatsNewCard } from "./WhatsNew";
 import { MarlowSheet } from "./Views";
 import { VoiceMode } from "./VoiceMode";
+import { ReaderContext, ReadingPill, useMessageReader, usePreparing, useReading } from "./ReadAloud";
 
 interface Following {
   userId: string;
@@ -118,6 +119,18 @@ export function Chat({
   }, [api]);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [dictating, setDictating] = useState(false);
+  // "Read aloud" on a reply (docs/tasks/read-aloud.md). Voice mode and
+  // dictation each want the speaker or the mic to themselves.
+  const reader = useMessageReader();
+  const reading = useReading(reader);
+  const preparing = usePreparing(reader);
+  useEffect(() => {
+    if (voiceOpen || dictating) reader?.stop();
+  }, [reader, voiceOpen, dictating]);
+  // Settings' voice samples would play over the reply.
+  useEffect(() => {
+    if (sheet === "settings") reader?.stop();
+  }, [reader, sheet]);
   // Layout, not a plain effect: a PermissionCard mounting in the same commit
   // plays its sound from its own effect, and must find the switch already set.
   useLayoutEffect(() => setChatFeedbackMuted(voiceOpen || dictating), [voiceOpen, dictating]);
@@ -429,6 +442,7 @@ export function Chat({
   });
 
   return (
+    <ReaderContext.Provider value={reader}>
     <div className="chat">
       <PresenceHeader
         presence={presence}
@@ -489,6 +503,7 @@ export function Chat({
             )}
           </div>
         )}
+        {reading !== null && !voiceOpen && <ReadingPill preparing={preparing} onStop={() => reader?.stop()} />}
         {far && (
           <button type="button" className="jump" aria-label="Jump to latest" onClick={jump} data-testid="jump">
             ↓{unseen && <span className="unseen-dot" data-testid="unseen-dot" />}
@@ -586,6 +601,7 @@ export function Chat({
           />
         )}
     </div>
+    </ReaderContext.Provider>
   );
 }
 

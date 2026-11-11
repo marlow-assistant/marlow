@@ -1,5 +1,5 @@
 {
-  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 22.",
+  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 23.",
   "entries": [
     {
       "id": 1,
@@ -140,6 +140,13 @@
       "part": "app",
       "category": "fix",
       "text": "On Android, the microphone and voice mode buttons have proper icons, and dictating shows a stop button to end it."
+    },
+    {
+      "id": 22,
+      "date": "2026-11-11",
+      "part": "app",
+      "category": "feature",
+      "text": "Press and hold one of Marlow's replies and choose Read aloud to hear it in the voice you picked in Settings. Tap Stop reading to end it."
     }
   ]
 }

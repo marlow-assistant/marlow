@@ -9,7 +9,18 @@ import { createPortal } from "react-dom";
  *
  * A reader who has selected part of the text gets the browser's own menu
  * instead, so copying a sentence still works on desktop. */
-export function Copyable({ text, className, children }: { text: string; className: string; children: ReactNode }) {
+export function Copyable({
+  text,
+  className,
+  children,
+  readAloud,
+}: {
+  text: string;
+  className: string;
+  children: ReactNode;
+  /** A finished reply's "Read aloud" (docs/tasks/read-aloud.md), under Copy. */
+  readAloud?: ReadAloudItem;
+}) {
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   const onContextMenu = (e: MouseEvent<HTMLDivElement>) => {
     if (at) {
@@ -32,13 +43,22 @@ export function Copyable({ text, className, children }: { text: string; classNam
   return (
     <div className={`${className} copyable`} tabIndex={0} onContextMenu={onContextMenu}>
       {children}
-      {at && <CopyMenu text={text} at={at} onClose={() => setAt(null)} />}
+      {at && <CopyMenu text={text} at={at} readAloud={readAloud} onClose={() => setAt(null)} />}
     </div>
   );
 }
 
+export interface ReadAloudItem {
+  /** This message is the one being read: the item stops it instead. */
+  reading: boolean;
+  onRead: () => void;
+  onStop: () => void;
+}
+
 const MENU_WIDTH = 132;
-const MENU_HEIGHT = 44;
+/** One item's height, and the menu's padding round them. */
+const ITEM_HEIGHT = 36;
+const MENU_PADDING = 8;
 const MARGIN = 8;
 
 /** How a small menu goes away: a press outside `ref` or Escape, and, for a
@@ -84,17 +104,28 @@ export function useMenuDismiss(
   }, [ref, anchored]);
 }
 
-function CopyMenu({ text, at, onClose }: { text: string; at: { x: number; y: number }; onClose: () => void }) {
+function CopyMenu({
+  text,
+  at,
+  readAloud,
+  onClose,
+}: {
+  text: string;
+  at: { x: number; y: number };
+  readAloud?: ReadAloudItem;
+  onClose: () => void;
+}) {
   const ref = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
   const [copied, setCopied] = useState(false);
   useMenuDismiss(ref, onClose);
 
+  const menuHeight = (readAloud ? 2 : 1) * ITEM_HEIGHT + MENU_PADDING;
   // Above the finger, so the hand does not cover it; below if there is no room.
   const left = Math.max(MARGIN, Math.min(at.x - MENU_WIDTH / 2, window.innerWidth - MENU_WIDTH - MARGIN));
-  const above = at.y - MENU_HEIGHT - 24;
-  const top = above >= MARGIN ? above : Math.min(at.y + 24, window.innerHeight - MENU_HEIGHT - MARGIN);
+  const above = at.y - menuHeight - 24;
+  const top = above >= MARGIN ? above : Math.min(at.y + 24, window.innerHeight - menuHeight - MARGIN);
 
   return createPortal(
     <div className="copy-menu" role="menu" ref={ref} style={{ left, top }} data-testid="copy-menu">
@@ -114,6 +145,19 @@ function CopyMenu({ text, at, onClose }: { text: string; at: { x: number; y: num
       >
         {copied ? "Copied" : "Copy"}
       </button>
+      {readAloud && (
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            if (readAloud.reading) readAloud.onStop();
+            else readAloud.onRead();
+            close.current();
+          }}
+        >
+          {readAloud.reading ? "Stop reading" : "Read aloud"}
+        </button>
+      )}
     </div>,
     document.body,
   );

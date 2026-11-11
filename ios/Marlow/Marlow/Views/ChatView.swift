@@ -40,6 +40,8 @@ struct ChatView: View {
     @EnvironmentObject private var session: SessionStore
     @StateObject private var store: ChatStore
     @StateObject private var dictation = DictationController()
+    /// "Read aloud" on a reply's long-press menu (docs/tasks/read-aloud.md).
+    @StateObject private var reader = MessageReader()
     @State private var draft = ""
     @State private var showingSettings = false
     @State private var showingMarlow = false
@@ -323,7 +325,23 @@ struct ChatView: View {
                 // system alert) that don't mean the user left the app and
                 // shouldn't cut off an in-progress dictation.
                 dictation.stop()
+                // Its session is `.playback`, but the app has no background
+                // audio mode, so the read would be cut off anyway; this
+                // also frees Phonon's model.
+                reader.release()
             }
+        }
+        // Both take the audio session for themselves, so the reader hands
+        // it over rather than deactivating it.
+        .onChange(of: dictation.isRecording) { _, recording in
+            if recording { reader.handOff() }
+        }
+        .onChange(of: showingVoiceMode) { _, open in
+            if open { reader.handOff() }
+        }
+        // Settings' voice samples would play over the reply.
+        .onChange(of: showingSettings) { _, open in
+            if open { reader.stop() }
         }
         .task { Self.ensureDictationAssets() }
         // Launch fetch; later foregrounds go through `onChange(of: scenePhase)`.
@@ -495,7 +513,10 @@ struct ChatView: View {
                                     isAttachedFailure: message.clientMsgId
                                         .flatMap(UUID.init(uuidString:))
                                         .map { failedReplies[$0] == message.id } ?? false,
-                                    reportsFrame: followedExchange?.contains(message.id) == true
+                                    reportsFrame: followedExchange?.contains(message.id) == true,
+                                    isBeingRead: reader.readingID == message.id,
+                                    onReadAloud: { reader.read(id: message.id, text: message.text) },
+                                    onStopReading: { reader.stop() }
                                 ).id(message.id)
                             }
                         }
@@ -700,6 +721,18 @@ struct ChatView: View {
                 }
             }
             .animation(.snappy(duration: 0.25), value: permissionPillRequest?.requestId)
+            // While a reply is read aloud: the way to stop it without
+            // finding the message again (Mike chose a pill, 2026-11-11).
+            // Not while dictating, where the permission pill sits, since
+            // starting dictation stops the reading anyway.
+            .overlay(alignment: .bottom) {
+                if reader.readingID != nil {
+                    ReadingAloudPill { reader.stop() }
+                        .padding(.bottom, 10)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(.snappy(duration: 0.25), value: reader.readingID)
             // The viewport height, measured from the BACKGROUND, not by wrapping the
             // transcript in a `GeometryReader`. A GeometryReader as a
             // container hands its child an unstable size proposal during
@@ -2083,6 +2116,10 @@ private struct MessageRow: View {
     /// Only the two rows of an exchange `ChatView` is following after a send
     /// measure themselves; every other row stays reader-free.
     var reportsFrame = false
+    /// Read aloud (docs/tasks/read-aloud.md): this reply is the one playing.
+    var isBeingRead = false
+    var onReadAloud: () -> Void = {}
+    var onStopReading: () -> Void = {}
 
     /// Retrying only makes sense for a turn that originated on this device —
     /// `clientMsgId` is how `retry(_:)` finds the original text to resend.
@@ -2344,7 +2381,27 @@ private struct MessageRow: View {
         // The long-press lift takes the bubble's own outline instead of a
         // rectangle round it.
         .contentShape(.contextMenuPreview, bubbleShape)
-        .contextMenu { copyMenu }
+        .contextMenu {
+            copyMenu
+            readAloudItem
+        }
+    }
+
+    /// Read aloud, on a finished reply of Marlow's only: the error string
+    /// and Mike's own bubble are not worth hearing.
+    @ViewBuilder
+    private var readAloudItem: some View {
+        if !isUser, message.status == .done {
+            if isBeingRead {
+                Button(action: onStopReading) {
+                    Label("Stop Reading", systemImage: "stop.fill")
+                }
+            } else {
+                Button(action: onReadAloud) {
+                    Label("Read Aloud", systemImage: "speaker.wave.2")
+                }
+            }
+        }
     }
 
     /// Whole-message Copy (§2), on the bubble and on a failed turn's error
@@ -2414,6 +2471,30 @@ private struct MessageRow: View {
             .padding(.leading, 4)
             .contextMenu { copyMenu }
         }
+    }
+}
+
+/// Floats above the composer while a reply is read aloud; a tap stops it
+/// (docs/tasks/read-aloud.md). Styled like `PermissionPendingPill`.
+private struct ReadingAloudPill: View {
+    let onStop: () -> Void
+
+    var body: some View {
+        Button(action: onStop) {
+            HStack(spacing: 8) {
+                Image(systemName: "stop.fill")
+                    .foregroundStyle(Color.accentColor)
+                Text("Stop reading")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 10)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.15), radius: 10, y: 3)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Stop reading aloud")
     }
 }
 

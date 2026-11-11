@@ -76,6 +76,9 @@ you finish something, mark it done there as well as here.
   store reminders hang off and the To-dos pane on both clients, merged
   2026-11-04 and live on Mike's box. Manual order, the last gap, merged
   2026-11-06 and live on Mike's and Taylor's boxes. Part 3 (Trello backing) is direction only.
+- **`read-aloud.md`** (2026-11-11): Read aloud on a reply's long-press
+  menu, with a Stop reading pill, built on both clients. Not yet heard on a
+  phone.
 - **`whats-new.md`** (2026-10-23): the "Marlow was updated" card and
   Settings' What's new, from a repo-root `changes.json`; built on both
   clients, merged 2026-10-23; seen on Mike's iPhone, Android not yet. Next

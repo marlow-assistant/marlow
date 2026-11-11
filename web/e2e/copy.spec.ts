@@ -22,7 +22,7 @@ test("RND-4: holding a reply opens a Copy menu that copies the whole message; no
   expect(box.y).toBeGreaterThanOrEqual(0);
 
   await menu.getByRole("menuitem", { name: "Copy" }).click();
-  await expect(menu.getByRole("menuitem")).toHaveText("Copied");
+  await expect(menu.getByRole("menuitem").first()).toHaveText("Copied");
   await expect(menu).toHaveCount(0, { timeout: 3_000 });
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toBe((await bubble.innerText()).trim());

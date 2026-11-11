@@ -32,9 +32,14 @@ one plays.
   on `ChatView`. It keeps the loaded speech between reads of the same voice
   and builds a fresh one when Settings' voice changes. Session `.playback` /
   `.spokenAudio`, like the Settings sample, so the silent switch doesn't mute
-  it. It stops when dictation starts or voice mode opens, and is released
-  (model freed) when the app goes to the background, because the app has no
-  background audio mode.
+  it. When dictation starts or voice mode opens it stops but leaves the
+  session alone (`handOff`), because by then they have set the session up
+  for themselves. Opening Settings stops it, so a voice sample can't play
+  over it. It is released (model freed) when the app goes to the
+  background, because the app has no background audio mode.
+  **So locking the phone stops a read.** Listening to a long reply with the
+  screen off would need the `audio` background mode. That's a product call
+  for Mike, not done here.
 - **Web:** `MessageReader` (`lib/messageReader.ts`), owned by `Chat` through
   `useMessageReader` (`app/ReadAloud.tsx`), reached by rows through
   `ReaderContext`. The speech is voice mode's: `PhononSpeech` over
@@ -42,8 +47,10 @@ one plays.
   loaded, then with Phonon, and Phonon is only fetched for someone who reads
   with it. The stored voice is read on every read, so a change in Settings
   applies to the next one. `unlock()` runs inside the tap, before anything is
-  awaited, because iOS Safari speaks only after a speak in a user gesture. It
-  stops when dictation starts or voice mode opens.
+  awaited, because iOS Safari speaks only after a speak in a user gesture.
+  Once Phonon has been started it reads everything, so picking a device voice
+  afterwards swaps in a fresh speech that never loaded it (`fits`). It stops
+  when dictation starts, voice mode opens or Settings opens.
 
 ## Open
 

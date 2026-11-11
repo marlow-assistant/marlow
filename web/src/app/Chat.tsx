@@ -126,6 +126,10 @@ export function Chat({
   useEffect(() => {
     if (voiceOpen || dictating) reader?.stop();
   }, [reader, voiceOpen, dictating]);
+  // Settings' voice samples would play over the reply.
+  useEffect(() => {
+    if (sheet === "settings") reader?.stop();
+  }, [reader, sheet]);
   // Layout, not a plain effect: a PermissionCard mounting in the same commit
   // plays its sound from its own effect, and must find the switch already set.
   useLayoutEffect(() => setChatFeedbackMuted(voiceOpen || dictating), [voiceOpen, dictating]);

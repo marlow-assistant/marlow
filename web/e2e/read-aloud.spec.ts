@@ -3,9 +3,9 @@
 // stays "speaking" until stopped, so the pill can be seen and tapped;
 // Phonon's model is unreachable, as in voice.spec.ts, so the browser's voice
 // reads. Nothing here hears audio.
-import { exchange, expect, test } from "./fixtures";
+import { exchange, expect, test, type Page } from "./fixtures";
 
-test("holding a reply offers Read aloud; the pill stops it", async ({ page }) => {
+async function fakeSpeech(page: Page): Promise<void> {
   await page.context().route("https://huggingface.co/**", (route) => route.abort());
   await page.addInitScript(() => {
     const w = window as unknown as { __spoken: string[]; __cancels: number };
@@ -26,8 +26,10 @@ test("holding a reply offers Read aloud; the pill stops it", async ({ page }) =>
     };
     Object.defineProperty(window, "speechSynthesis", { value: fake, configurable: true });
   });
-  await page.reload();
+}
 
+test("holding a reply offers Read aloud; the pill stops it", async ({ newDevice }) => {
+  const { page } = await newDevice({ setup: fakeSpeech });
   const { reply } = await exchange(page);
   const bubble = reply.locator(".bubble");
   const menu = page.getByTestId("copy-menu");
@@ -48,8 +50,10 @@ test("holding a reply offers Read aloud; the pill stops it", async ({ page }) =>
   const said = (await spoken()).join(" ");
   expect((await bubble.innerText()).replace(/\s+/g, " ")).toContain(said.split(" ").slice(0, 3).join(" "));
 
-  // The menu on the message being read stops it.
-  await bubble.click({ button: "right" });
+  // The menu on the message being read stops it. Held at its top corner:
+  // the pill floats over the bottom of the transcript, as the jump button
+  // does, and can sit on a short last reply.
+  await bubble.click({ button: "right", position: { x: 8, y: 8 } });
   await expect(menu.getByRole("menuitem").nth(1)).toHaveText("Stop reading");
   await page.keyboard.press("Escape");
 

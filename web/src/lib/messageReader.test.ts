@@ -32,16 +32,17 @@ class FakeSpeech implements ReaderSpeech {
   }
 }
 
-function make(stored: string | null = null) {
+function make(stored: string | null = null, fits: (s: FakeSpeech, v: string | null) => boolean = () => true) {
   const speeches: FakeSpeech[] = [];
   const configured: (string | null)[] = [];
-  const reader = new MessageReader({
+  const reader = new MessageReader<FakeSpeech>({
     makeSpeech: () => {
       const s = new FakeSpeech();
       speeches.push(s);
       return s;
     },
     storedVoice: () => Promise.resolve(stored),
+    fits,
     configure: (_speech, voice) => configured.push(voice),
   });
   return { reader, speeches, configured };
@@ -121,6 +122,25 @@ describe("MessageReader", () => {
     expect(speeches[0].stops).toBe(1);
     expect(speeches[0].spoken.at(-1)).toBe("Second reply.");
     speeches[0].finishOne();
+    expect(reader.reading).toBeNull();
+  });
+
+  it("a speech that no longer fits the stored voice is replaced before it speaks", async () => {
+    // Phonon, once loaded, reads everything: a device voice picked after it
+    // needs a speech that never loaded it.
+    let fit = true;
+    const { reader, speeches } = make("device-voice", () => fit);
+    reader.read("a", "First.");
+    await tick();
+    fit = false;
+    reader.read("b", "Second.");
+    await tick();
+    expect(speeches).toHaveLength(2);
+    expect(speeches[0].closes).toBe(1);
+    expect(speeches[0].spoken).toEqual(["First."]);
+    expect(speeches[1].spoken).toEqual(["Second."]);
+    expect(speeches[1].unlocks).toBe(1);
+    speeches[1].finishOne();
     expect(reader.reading).toBeNull();
   });
 

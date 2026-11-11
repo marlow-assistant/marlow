@@ -14,6 +14,7 @@ final class MessageReader: ObservableObject {
     /// The message being read, for the stop pill and the menu's label.
     @Published private(set) var readingID: UUID?
 
+    /// What the loaded speech was built for. A change means a fresh one.
     private let voiceID: @MainActor () -> String
     private let makeSpeech: @MainActor () -> SpeechOutput
     private let activate: @MainActor () -> Void
@@ -23,7 +24,7 @@ final class MessageReader: ObservableObject {
     private var left = 0
 
     init(
-        voiceID: @escaping @MainActor () -> String = { VoicePreference.voice().id },
+        voiceID: @escaping @MainActor () -> String = { MessageReader.speechKey() },
         makeSpeech: @escaping @MainActor () -> SpeechOutput = { @MainActor in VoiceChoice.speech() },
         activate: @escaping @MainActor () -> Void = { MessageReader.activateSession() },
         deactivate: @escaping @MainActor () -> Void = { MessageReader.deactivateSession() }
@@ -43,16 +44,31 @@ final class MessageReader: ObservableObject {
             .filter { !$0.isEmpty }
     }
 
+    /// The voice, and whether Phonon is downloaded: a reader built before
+    /// the download would otherwise keep Apple's voice after it, and one
+    /// built before a delete would keep a model whose pack is gone
+    /// (`/code-review high`, 2026-11-11).
+    static func speechKey() -> String {
+        let downloaded = VoiceModelStore.shared.directory(for: .phonon) != nil
+        return "\(VoicePreference.voice().id)|\(downloaded)"
+    }
+
     func read(id: UUID, text: String) {
-        stop()
         let sentences = Self.sentences(of: text)
-        guard !sentences.isEmpty else { return }
+        guard !sentences.isEmpty else { return stop() }
+        // Replacing one read with another keeps the session up: bouncing it
+        // tells other apps to resume, then ducks them again.
+        let wasReading = readingID != nil
+        halt()
         let voice = voiceID()
         if loaded?.voice != voice {
             loaded = (voice, makeSpeech())
         }
-        guard let speech = loaded?.speech else { return }
-        activate()
+        guard let speech = loaded?.speech else {
+            if wasReading { deactivate() }
+            return
+        }
+        if !wasReading { activate() }
         left = sentences.count
         readingID = id
         speech.onUtteranceFinished = { [weak self] in
@@ -65,10 +81,22 @@ final class MessageReader: ObservableObject {
 
     func stop() {
         guard readingID != nil else { return }
+        halt()
+        deactivate()
+    }
+
+    /// Stops for dictation or voice mode, which have already set the session
+    /// up for themselves by the time this hears of them: deactivating it
+    /// here would pull it out from under the recorder.
+    func handOff() {
+        halt()
+    }
+
+    private func halt() {
+        guard readingID != nil else { return }
         readingID = nil
         left = 0
         loaded?.speech.stopSpeaking()
-        deactivate()
     }
 
     /// Stops and frees the voice's model: when the app goes to the

@@ -331,11 +331,16 @@ struct ChatView: View {
                 reader.release()
             }
         }
-        // Both take the audio session for themselves.
+        // Both take the audio session for themselves, so the reader hands
+        // it over rather than deactivating it.
         .onChange(of: dictation.isRecording) { _, recording in
-            if recording { reader.stop() }
+            if recording { reader.handOff() }
         }
         .onChange(of: showingVoiceMode) { _, open in
+            if open { reader.handOff() }
+        }
+        // Settings' voice samples would play over the reply.
+        .onChange(of: showingSettings) { _, open in
             if open { reader.stop() }
         }
         .task { Self.ensureDictationAssets() }

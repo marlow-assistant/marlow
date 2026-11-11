@@ -71,8 +71,21 @@ final class MessageReaderTests: XCTestCase {
         XCTAssertEqual(speeches.count, 1, "the loaded voice is kept between reads")
         XCTAssertEqual(speeches[0].stops, 1)
         XCTAssertEqual(speeches[0].spoken.last, "Second reply.")
+        XCTAssertEqual(sessions, ["on"], "the session isn't bounced between replies")
         speeches[0].finishOne()
         XCTAssertNil(reader.readingID)
+        XCTAssertEqual(sessions, ["on", "off"])
+    }
+
+    /// Dictation and voice mode have already taken the session by the time
+    /// the reader hears of them: it must not deactivate it under them.
+    func testHandOffStopsWithoutTouchingTheSession() {
+        let reader = make()
+        reader.read(id: UUID(), text: "One. Two.")
+        reader.handOff()
+        XCTAssertNil(reader.readingID)
+        XCTAssertEqual(speeches[0].stops, 1)
+        XCTAssertEqual(sessions, ["on"])
     }
 
     func testANewVoiceInSettingsLoadsAFreshSpeech() {

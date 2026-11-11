@@ -17,14 +17,18 @@ export interface ReaderSpeech extends SpeechOutput {
   close(): void;
 }
 
-export interface MessageReaderDeps {
+export interface MessageReaderDeps<S extends ReaderSpeech> {
   /** Built on the first read and kept: loading Phonon takes seconds. */
-  makeSpeech: () => ReaderSpeech;
+  makeSpeech: () => S;
   /** The voice stored in Settings, read fresh on every read so a change
    * there applies to the next one. */
   storedVoice: () => Promise<string | null>;
+  /** Whether the kept speech can still read in that voice. Phonon, once
+   * loaded, reads everything it is handed, so a device voice picked after it
+   * needs a speech that never loaded it (`/code-review high`, 2026-11-11). */
+  fits: (speech: S, stored: string | null) => boolean;
   /** Points the speech at that voice, and starts Phonon if it reads with it. */
-  configure: (speech: ReaderSpeech, stored: string | null) => void;
+  configure: (speech: S, stored: string | null) => void;
 }
 
 /** The sentences of `text` worth hearing, as voice mode would say them. */
@@ -36,19 +40,19 @@ export function readableSentences(text: string): string[] {
     .filter((s) => s !== "");
 }
 
-export class MessageReader {
+export class MessageReader<S extends ReaderSpeech = ReaderSpeech> {
   /** The id of the message being read, for the stop pill and the menu. */
   reading: string | null = null;
 
-  private readonly deps: MessageReaderDeps;
-  private speech: ReaderSpeech | null = null;
+  private readonly deps: MessageReaderDeps<S>;
+  private speech: S | null = null;
   private left = 0;
   /** Bumped by every stop, so a read stopped while the stored voice was
    * still being fetched never starts. */
   private gen = 0;
   private listeners = new Set<() => void>();
 
-  constructor(deps: MessageReaderDeps) {
+  constructor(deps: MessageReaderDeps<S>) {
     this.deps = deps;
   }
 
@@ -62,12 +66,8 @@ export class MessageReader {
     this.stop();
     const sentences = readableSentences(text);
     if (sentences.length === 0) return;
-    const speech = (this.speech ??= this.deps.makeSpeech());
-    speech.unlock();
-    speech.onUtteranceFinished = () => {
-      if (this.reading === null) return;
-      if (--this.left <= 0) this.stop();
-    };
+    // Unlocked inside the tap, before anything is awaited.
+    (this.speech ??= this.deps.makeSpeech()).unlock();
     const gen = this.gen;
     this.left = sentences.length;
     this.setReading(id);
@@ -75,7 +75,19 @@ export class MessageReader {
       .storedVoice()
       .catch(() => null)
       .then((stored) => {
-        if (gen !== this.gen) return;
+        if (gen !== this.gen || !this.speech) return;
+        if (!this.deps.fits(this.speech, stored)) {
+          // The page's speech is already unlocked, and a speech that never
+          // loaded Phonon needs no AudioContext, so no gesture is lost here.
+          this.speech.close();
+          this.speech = this.deps.makeSpeech();
+          this.speech.unlock();
+        }
+        const speech = this.speech;
+        speech.onUtteranceFinished = () => {
+          if (this.reading === null) return;
+          if (--this.left <= 0) this.stop();
+        };
         this.deps.configure(speech, stored);
         sentences.forEach((s) => speech.speak(s));
       });

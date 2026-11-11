@@ -916,6 +916,34 @@ button {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
+/* Read aloud (docs/tasks/read-aloud.md): floats centred above the composer
+   while a reply is read, like iOS's pill; a tap stops it. */
+.reading-pill {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--bg-3);
+  color: var(--text);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.reading-pill-stop {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
 /* SCR-15: a 10 accent dot at the button's top-right with a 2 ring in the
    background colour. */
 .unseen-dot {

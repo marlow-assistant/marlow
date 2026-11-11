@@ -6,6 +6,7 @@ import { attachmentIdsOf, imageKeysOf, type ChatMessage } from "../lib/types";
 import { Markdown, SettledMarkdown } from "../markdown/Markdown";
 import { Copyable } from "./CopyMenu";
 import { useImageUrl, useStream } from "./hooks";
+import { useReadAloud } from "./ReadAloud";
 
 export interface RowProps {
   message: ChatMessage;
@@ -121,13 +122,7 @@ function AssistantRow({ message, store, pairedAway }: RowProps) {
     case "done":
       // STR-8: a tools-only turn gets no bubble, not an empty pill.
       if (!message.text.trim()) return null;
-      return (
-        <div className="assistant-line">
-          <Copyable text={message.text} className="bubble bubble-assistant">
-            <SettledMarkdown text={message.text} />
-          </Copyable>
-        </div>
-      );
+      return <DoneReply message={message} />;
     case "error":
       if (pairedAway) return null;
       return (
@@ -145,6 +140,18 @@ function AssistantRow({ message, store, pairedAway }: RowProps) {
     default:
       return <InFlight message={message} store={store} />;
   }
+}
+
+/** A finished reply: Copy and Read aloud on a long press. */
+function DoneReply({ message }: { message: ChatMessage }) {
+  const readAloud = useReadAloud(message.id, message.text);
+  return (
+    <div className="assistant-line">
+      <Copyable text={message.text} className="bubble bubble-assistant" readAloud={readAloud}>
+        <SettledMarkdown text={message.text} />
+      </Copyable>
+    </div>
+  );
 }
 
 /** The placeholder while a turn is in flight. The only part of the list that

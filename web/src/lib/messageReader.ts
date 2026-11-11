@@ -4,8 +4,9 @@
 //
 // Read the way voice mode reads a reply: one speak() per sentence, so Phonon
 // makes the next while this one plays, with code and markdown kept out. The
-// speech is voice mode's own (`PhononSpeech` over the browser's voice), so
-// until Phonon has loaded, and wherever it can't, the browser's voice reads.
+// speech is voice mode's own (`PhononSpeech` over the browser's voice). A
+// read waits for Phonon to load; only where it can't does the browser's voice
+// read (`MessageReaderDeps.configure`).
 
 import { CodeFenceFilter, plainSpeech, SentenceChunker } from "./spokenReply";
 import type { SpeechOutput } from "./voiceMode";
@@ -27,8 +28,12 @@ export interface MessageReaderDeps<S extends ReaderSpeech> {
    * loaded, reads everything it is handed, so a device voice picked after it
    * needs a speech that never loaded it (`/code-review high`, 2026-11-11). */
   fits: (speech: S, stored: string | null) => boolean;
-  /** Points the speech at that voice, and starts Phonon if it reads with it. */
-  configure: (speech: S, stored: string | null) => void;
+  /** Points the speech at that voice, and starts Phonon if it reads with it.
+   * A promise holds the read until the voice is ready: reading in a stand-in
+   * voice meanwhile was worse than waiting (Mike on Chrome's default voice,
+   * 2026-11-11: "awful"). Voice mode is the other way round, never silent,
+   * since there the alternative is silence in a car. */
+  configure: (speech: S, stored: string | null) => void | Promise<void>;
 }
 
 /** The sentences of `text` worth hearing, as voice mode would say them. */
@@ -43,6 +48,8 @@ export function readableSentences(text: string): string[] {
 export class MessageReader<S extends ReaderSpeech = ReaderSpeech> {
   /** The id of the message being read, for the stop pill and the menu. */
   reading: string | null = null;
+  /** Waiting for the voice (Phonon loading, or its first download). */
+  preparing = false;
 
   private readonly deps: MessageReaderDeps<S>;
   private speech: S | null = null;
@@ -88,8 +95,15 @@ export class MessageReader<S extends ReaderSpeech = ReaderSpeech> {
           if (this.reading === null) return;
           if (--this.left <= 0) this.stop();
         };
-        this.deps.configure(speech, stored);
-        sentences.forEach((s) => speech.speak(s));
+        const ready = this.deps.configure(speech, stored);
+        const go = () => {
+          if (gen !== this.gen) return;
+          this.setPreparing(false);
+          sentences.forEach((s) => speech.speak(s));
+        };
+        if (!ready) return go();
+        this.setPreparing(true);
+        void ready.then(go, go);
       });
   }
 
@@ -98,7 +112,14 @@ export class MessageReader<S extends ReaderSpeech = ReaderSpeech> {
     this.gen++;
     this.left = 0;
     this.speech?.stopSpeaking();
+    this.preparing = false;
     this.setReading(null);
+  }
+
+  private setPreparing(on: boolean): void {
+    if (this.preparing === on) return;
+    this.preparing = on;
+    this.listeners.forEach((l) => l());
   }
 
   /** Leaving the chat: Safari caps the AudioContexts a page holds. */

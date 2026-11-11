@@ -43,7 +43,9 @@ function make(stored: string | null = null, fits: (s: FakeSpeech, v: string | nu
     },
     storedVoice: () => Promise.resolve(stored),
     fits,
-    configure: (_speech, voice) => configured.push(voice),
+    configure: (_speech, voice) => {
+      configured.push(voice);
+    },
   });
   return { reader, speeches, configured };
 }
@@ -142,6 +144,52 @@ describe("MessageReader", () => {
     expect(speeches[1].unlocks).toBe(1);
     speeches[1].finishOne();
     expect(reader.reading).toBeNull();
+  });
+
+  it("waits for the voice to be ready, preparing meanwhile, rather than reading in a stand-in", async () => {
+    // Mike, 2026-11-11: Chrome's default voice reading while Phonon loaded
+    // was "awful"; the wait is better.
+    let ready!: () => void;
+    const speeches: FakeSpeech[] = [];
+    const reader = new MessageReader<FakeSpeech>({
+      makeSpeech: () => {
+        const s = new FakeSpeech();
+        speeches.push(s);
+        return s;
+      },
+      storedVoice: () => Promise.resolve(null),
+      fits: () => true,
+      configure: () => new Promise<void>((r) => (ready = r)),
+    });
+    const seen: boolean[] = [];
+    reader.subscribe(() => seen.push(reader.preparing));
+    reader.read("a", "Hello.");
+    await tick();
+    expect(reader.preparing).toBe(true);
+    expect(speeches[0].spoken).toEqual([]);
+    ready();
+    await tick();
+    expect(reader.preparing).toBe(false);
+    expect(speeches[0].spoken).toEqual(["Hello."]);
+    expect(reader.reading).toBe("a");
+  });
+
+  it("a stop while the voice is being prepared says nothing once it is ready", async () => {
+    let ready!: () => void;
+    const speech = new FakeSpeech();
+    const reader = new MessageReader<FakeSpeech>({
+      makeSpeech: () => speech,
+      storedVoice: () => Promise.resolve(null),
+      fits: () => true,
+      configure: () => new Promise<void>((r) => (ready = r)),
+    });
+    reader.read("a", "Hello.");
+    await tick();
+    reader.stop();
+    expect(reader.preparing).toBe(false);
+    ready();
+    await tick();
+    expect(speech.spoken).toEqual([]);
   });
 
   it("nothing to say reads nothing", () => {

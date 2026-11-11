@@ -19,6 +19,30 @@ class PairSpeech {
   });
   /** Phonon was started, so once loaded it reads everything it is handed. */
   started = false;
+  /** Settles once Phonon is ready or has failed (then the browser's voice
+   * reads, the only one left). Never rejects. */
+  private loaded: Promise<void> | null = null;
+  private settled = false;
+
+  /** Starts Phonon, and resolves once it can read; nothing to wait for once
+   * it has settled, so a later read never flashes "Preparing". */
+  ready(): Promise<void> | void {
+    if (this.settled) return;
+    if (!this.loaded) {
+      this.started = true;
+      this.loaded = new Promise<void>((resolve) => {
+        this.phonon.onLoad = (status) => {
+          // Kept settled after a failure: `PhononSpeech.start` never
+          // retries, so a fresh wait would never end.
+          if (status.state === "loading") return;
+          this.settled = true;
+          resolve();
+        };
+      });
+      this.phonon.start();
+    }
+    return this.loaded;
+  }
 
   get onUtteranceFinished() {
     return this.phonon.onUtteranceFinished;
@@ -41,7 +65,7 @@ class PairSpeech {
 }
 
 /** What rows use of the reader. */
-export type Reader = Pick<MessageReader, "reading" | "read" | "stop" | "subscribe">;
+export type Reader = Pick<MessageReader, "reading" | "preparing" | "read" | "stop" | "subscribe">;
 
 export const ReaderContext = createContext<Reader | null>(null);
 
@@ -59,14 +83,12 @@ export function useMessageReader(): Reader | null {
       fits: (speech, stored) => usesPhonon(stored) || !speech.started,
       // As VoiceMode.tsx does: a Phonon voice is no voiceURI, so the
       // browser's voice keeps its default; Phonon loads only for someone
-      // who reads with it.
+      // who reads with it. Unlike voice mode, the read waits for Phonon
+      // rather than starting in the browser's voice (`MessageReaderDeps`).
       configure: (speech, stored) => {
         if (!isPhononKey(stored)) speech.browser.setChosenVoice(stored);
         speech.phonon.setVoice(phononVoiceFor(stored).name);
-        if (usesPhonon(stored)) {
-          speech.phonon.start();
-          speech.started = true;
-        }
+        if (usesPhonon(stored)) return speech.ready();
       },
     });
     setReader(r);
@@ -85,6 +107,11 @@ export function useReading(reader: Reader | null): string | null {
   return useSyncExternalStore(reader?.subscribe ?? noSubscribe, () => reader?.reading ?? null);
 }
 
+/** Whether the read is waiting for its voice to load. */
+export function usePreparing(reader: Reader | null): boolean {
+  return useSyncExternalStore(reader?.subscribe ?? noSubscribe, () => reader?.preparing ?? false);
+}
+
 /** What a reply's menu needs, or undefined where there is no reader. Each row
  * watches only whether it is the one being read, so starting or ending a read
  * re-renders two rows, not the transcript (`/code-review high`, 2026-11-11). */
@@ -99,12 +126,24 @@ export function useReadAloud(id: string, text: string) {
   };
 }
 
-/** Floats above the composer while a reply is read; a tap stops it. */
-export function ReadingPill({ onStop }: { onStop: () => void }) {
+/** Floats above the composer while a reply is read; a tap stops it. While
+ * Phonon loads (the first time, a ~65 MB download) it says so, since the
+ * read is silent until then. */
+export function ReadingPill({ onStop, preparing = false }: { onStop: () => void; preparing?: boolean }) {
   return (
-    <button type="button" className="reading-pill" onClick={onStop} data-testid="reading-pill">
-      <span className="reading-pill-stop" aria-hidden="true" />
-      Stop reading
+    <button
+      type="button"
+      className="reading-pill"
+      onClick={onStop}
+      data-testid="reading-pill"
+      aria-label="Stop reading"
+    >
+      {preparing ? (
+        <span className="spinner" aria-hidden="true" />
+      ) : (
+        <span className="reading-pill-stop" aria-hidden="true" />
+      )}
+      {preparing ? "Preparing the voice…" : "Stop reading"}
     </button>
   );
 }

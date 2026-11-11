@@ -53,4 +53,13 @@ describe("The stop pill", () => {
     fireEvent.click(screen.getByRole("button", { name: "Stop reading" }));
     expect(onStop).toHaveBeenCalledOnce();
   });
+
+  it("says the voice is being prepared while Phonon loads, and still stops", () => {
+    const onStop = vi.fn();
+    render(<ReadingPill preparing onStop={onStop} />);
+    const pill = screen.getByTestId("reading-pill");
+    expect(pill.textContent).toContain("Preparing the voice…");
+    fireEvent.click(pill);
+    expect(onStop).toHaveBeenCalledOnce();
+  });
 });

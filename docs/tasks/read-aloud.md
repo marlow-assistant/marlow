@@ -19,6 +19,12 @@ Decided with Mike, 2026-11-11:
 - **iOS before Phonon is downloaded:** Apple's voice reads, as the Settings
   sample does (`VoiceChoice`). Hiding the item, or pointing to Settings, were
   the alternatives. Voice mode itself still won't open without Phonon.
+- **Web while Phonon loads:** the read waits, and the pill says "Preparing
+  the voice…". At first it read in the browser's voice until Phonon landed,
+  as voice mode does. Mike heard Chrome's default and called it "awful"
+  (2026-11-11). The browser's voice now reads only when Phonon fails to load.
+  Voice mode keeps its stand-in, because there the alternative is silence
+  while driving.
 
 ## How
 
@@ -43,9 +49,10 @@ one plays.
 - **Web:** `MessageReader` (`lib/messageReader.ts`), owned by `Chat` through
   `useMessageReader` (`app/ReadAloud.tsx`), reached by rows through
   `ReaderContext`. The speech is voice mode's: `PhononSpeech` over
-  `BrowserSpeech`. It reads with the browser's voice until Phonon has
-  loaded, then with Phonon, and Phonon is only fetched for someone who reads
-  with it. The stored voice is read on every read, so a change in Settings
+  `BrowserSpeech`. For a Phonon voice, `configure` returns a promise that
+  settles when Phonon is ready or has failed. The reader holds the read until
+  then (`preparing`), and the browser's voice reads only after a failure.
+  Phonon is fetched only for someone who reads with it. The stored voice is read on every read, so a change in Settings
   applies to the next one. `unlock()` runs inside the tap, before anything is
   awaited, because iOS Safari speaks only after a speak in a user gesture.
   Once Phonon has been started it reads everything, so picking a device voice
@@ -54,8 +61,9 @@ one plays.
 
 ## Open
 
-- Hear it on Mike's iPhone, both before and after Phonon is downloaded.
+- Hear it on an iPhone without Phonon downloaded. Mike's iPhone, which has
+  Phonon, reads fine (2026-11-11).
 - Hear it on Android Chrome, including the first read, which starts the
-  ~65 MB Phonon download and reads in Google's voice until it lands.
+  ~65 MB Phonon download and shows "Preparing the voice…" until it lands.
 - iOS keeps its own Phonon in memory alongside Settings' preview while both
   are loaded. Not measured; the reader frees its model in the background.

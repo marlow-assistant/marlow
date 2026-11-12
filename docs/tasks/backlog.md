@@ -114,14 +114,6 @@ these. Each task doc lists exactly what is unseen.
 Sketches: the symptom, what we already know, and the first step. None is a
 spec, and the order means nothing.
 
-### To-do ids in replies (raised 2026-11-10)
-
-Marlow referred to to-dos by id ("t13"), which the app never shows. Fixed by
-a behaviour note on Mike's box only; `identity/CLAUDE.md` ("To-dos") does not
-say it, so every other box still does it. One line in the template: name a
-to-do by a short natural phrase; ids stay in tool calls. Needs a
-`changes.json` entry.
-
 ### Notification flood after a computer wakes (raised 2026-11-10)
 
 After Mike's PC sleeps, waking it brings minutes of back-to-back Marlow

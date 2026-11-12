@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 from server.log import get_logger
 from server.preferences import preferences_store
-from server.todos import todo_store
+from server.todos import ID_RULE, todo_store
 
 if TYPE_CHECKING:
     from server.queue import WorkQueue
@@ -66,7 +66,7 @@ def reminder_prompt(items: list[dict[str, Any]]) -> str:
     one = len(items) == 1
     return (
         f"[To-do reminder: {'this item' if one else 'these items'} on the user's list "
-        f"{'is' if one else 'are'} due now.\n"
+        f"{'is' if one else 'are'} due now. {ID_RULE}\n"
         + "\n".join(lines)
         + "\nRemind them in a line or two, with anything you know that bears on it. "
         "If you know one is already done, mark it with todo_done. Replying [silent] without "
@@ -80,9 +80,8 @@ BRIEFING_NOTES_CHARS = 300
 
 
 def _item_line(item: dict[str, Any], facts: list[str], *, notes_limit: int | None = None) -> str:
-    text = f"- `{item['id']}` \"{_flat(item['title'])}\""
-    if facts:
-        text += f" ({'; '.join(facts)})"
+    # Title first, id last: see todos.ID_RULE.
+    text = f"- \"{_flat(item['title'])}\" ({'; '.join([*facts, 'id ' + item['id']])})"
     if item.get("notes"):
         notes = _flat(item["notes"])
         if notes_limit is not None and len(notes) > notes_limit:
@@ -123,7 +122,7 @@ def briefing_block() -> str:
         lines.extend(proposed)
     return (
         "[To-do list, from the store (the server's copy is the list; memory notes "
-        "about to-dos may be stale):\n" + "\n".join(lines) + "]"
+        f"about to-dos may be stale). {ID_RULE}\n" +"\n".join(lines) + "]"
     )
 
 
@@ -186,11 +185,11 @@ def stale_proposals_sentence() -> str:
         return ""
     if not items:
         return ""
-    named = ", ".join(f"`{i['id']}` \"{_flat(i['title'])}\"" for i in items)
+    named = ", ".join(f"\"{_flat(i['title'])}\" (id {i['id']})" for i in items)
     return (
         f" You proposed these to-dos two or more days ago and they're still unconfirmed: {named}."
         " If it fits this conversation, ask once whether to keep them (todo_accept) or drop them"
-        " (todo_drop); after this they stay on the list without being raised again."
+        " (todo_drop); after this they stay on the list without being raised again. " + ID_RULE
     )
 
 

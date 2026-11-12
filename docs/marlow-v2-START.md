@@ -34,6 +34,8 @@ in one of those instead. Hard constraints and working rules are in the root
 Mike's wishlist lives on the box:
 `ssh marlow@marlow 'cat ~/marlow-identity/memory/marlow-features.md'`. When
 you finish something, mark it done there as well as here.
+Wishlist items with no task doc yet are mirrored, ranked, in
+`tasks/feature-backlog.md`.
 
 - **`dependency-licenses.md`**: every iOS build carries about 1 MB of
   GPL-derived pronunciation data that FluidAudio bundles for an engine Marlow

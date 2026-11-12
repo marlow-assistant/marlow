@@ -1,6 +1,7 @@
 # Task — the user picks the model (Sonnet or Opus), box-wide
 
-**Status: in progress, 2026-11-12.** Server, web and iOS on one branch.
+**Status: shipped 2026-11-12.** Server, web and iOS. Box-tested on Mike's box
+first, where Opus ran fine on the Pro plan.
 
 ## The decision (Mike, 2026-11-12)
 

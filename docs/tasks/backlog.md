@@ -20,8 +20,6 @@ Tags: *not started*, *specced* (ready for an implementor), *in progress*,
 
 ## Features
 
-- **Model picker** (`model-picker.md`): Sonnet or Opus, box-wide, chosen in
-  Settings; "Think time" relabels effort. *in progress*
 - **Friends alpha** (`friends-alpha.md`): the polish pass, then invite the
   first one or two friends. *in progress*
 - **Share and files** (`share-and-files.md`): share sheet in, files out,
@@ -67,6 +65,9 @@ Tags: *not started*, *specced* (ready for an implementor), *in progress*,
   halves after rendering). *parked*
 - **Snappiness** (`reply-length-and-perceived-speed.md`): tool turns still
   ~12 s median to first word. *watching*
+- **Snappiness lab** (`snappiness-lab.md`): try speed strategies on the Mac
+  by feel (replayed timing, or the real CLI on a scratch identity); first up,
+  a spoken status line on voice turns. *idea*
 
 ## Waiting on a real-device check
 

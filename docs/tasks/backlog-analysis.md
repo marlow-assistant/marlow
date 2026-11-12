@@ -33,7 +33,7 @@ than a couple of weeks, or the work it ranks has moved, redo it.
 
 ### Small jobs that pay off quickly
 
-1. **Model picker** (`model-picker.md`), *in progress 2026-11-12*. Became
+1. **Model picker** (`model-picker.md`), *shipped 2026-11-12*. Became
    a box-wide Sonnet/Opus choice in Settings instead of a per-job model: one
    model for every turn keeps the UI honest and avoids rewriting the day's
    cache when `consolidate` resumes chat.

@@ -353,9 +353,10 @@ final class ChatStore: ObservableObject {
     /// depends on `now` (a reset clears it), so the view asks `UsageFormat`
     /// at draw time. A failed fetch leaves the previous reading in place.
     @Published private(set) var usageReport: UsageReport?
-    /// The model the server reports it is running (`/health`). Display-only —
-    /// nil until the first health poll lands, and on a server predating the
-    /// field, in which case Settings shows a dash rather than guessing.
+    /// The model the server reports it is running (`/health`): the user's
+    /// pick, else the operator's. Nil until the first health poll lands, and on
+    /// a server predating the field, in which case Settings checks neither
+    /// model rather than guessing. Settings' pick goes through `pickModel`.
     @Published private(set) var serverModel: String?
     /// `branch@sha` for the code the SERVER PROCESS is running, once a health
     /// poll has landed. Surfaced in Settings because the box can now be put on
@@ -525,6 +526,19 @@ final class ChatStore: ObservableObject {
         for (_, task) in activeTasks { task.cancel() }
         for (_, task) in activityPlaybackTasks { task.cancel() }
         for (_, task) in partialTextTasks { task.cancel() }
+    }
+
+    /// Settings' model pick (docs/tasks/model-picker.md). Shown once the box
+    /// has it, not before: every turn reads it there, so a pick the box didn't
+    /// take must not look made. False when it didn't.
+    func pickModel(_ model: MarlowModel, api: ModelAPI = APIClient()) async -> Bool {
+        do {
+            try await api.setModel(model, deviceToken: deviceToken)
+        } catch {
+            return false
+        }
+        serverModel = model.rawValue
+        return true
     }
 
     /// Stops all outstanding network work without touching the persisted

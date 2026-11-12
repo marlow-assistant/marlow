@@ -265,7 +265,7 @@ enum ActivityFormat {
         if let duration = duration(entry) { parts.append("Took \(duration)") }
         if let model = entry.model, !model.isEmpty { parts.append(modelName(model)) }
         if let effort = entry.effort, !effort.isEmpty {
-            let word = ThinkingEffort(rawValue: effort)?.displayName ?? effort
+            let word = ThinkingEffort(rawValue: effort)?.activityWord ?? effort
             parts.append("\(word) effort")
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")

@@ -1,11 +1,12 @@
 """Choices about Marlow that every client shares (/v1/preferences).
 
-The face and the Thinking level. Until 2026-10-16 both were per device, so web
+The face, the Thinking level and the model. Until 2026-10-16 both were per device, so web
 and iOS could show different Marlows that thought differently; there is one
 assistant, so the box holds one of each (Mike). Clients still keep a local
 copy and send the effort with every message (docs/tasks/model-and-effort-
 config.md): this store is what keeps those copies in step, not a new source
-the turn reads.
+the turn reads. The model is the exception (docs/tasks/model-picker.md): it is
+box-wide, every turn including cron reads it here, and no message carries it.
 
 The face is an id and nothing else: which ids exist, what each looks like and
 how it is cropped are the clients' (lib/faces.ts, MarlowFace.swift), so a new
@@ -37,6 +38,10 @@ logger = get_logger(__name__)
 MAX_FACE_ID = 999
 # The clients' three levels (ThinkingEffort.swift, chatStore's Effort).
 EFFORTS = ("low", "medium", "high")
+# The models a user can pick, in the order the clients show them
+# (docs/tasks/model-picker.md). One per box: every turn runs on it. No Haiku:
+# the shadow run had it get facts wrong (model-shadow-run.md).
+MODELS = ("sonnet", "opus")
 
 # "Your day", local wall-clock "HH:MM" in the schedule store's timezone. The
 # defaults reproduce the times the harness used before the setting existed
@@ -125,6 +130,14 @@ class PreferencesStore:
             value = self._read().get("effort")
         return value if value in EFFORTS else None
 
+    def model(self) -> str | None:
+        """The user's model, or None for the operator's MARLOW_MODEL. Unlike
+        effort, the turn reads this one: it is box-wide, so cron and
+        compaction need it too, and nothing carries it per message."""
+        with self._lock:
+            value = self._read().get("model")
+        return value if isinstance(value, str) and value in MODELS else None
+
     def day(self) -> tuple[str, str]:
         """(start, end) of "Your day", defaults filled in. Never raises: the
         overnight jobs render from this, and an unreadable or invalid file
@@ -172,6 +185,7 @@ class PreferencesStore:
         *,
         face: int | None = None,
         effort: str | None = None,
+        model: str | None = None,
         day_start: str | None = None,
         day_end: str | None = None,
         checkin_every_hours: int | None = None,
@@ -205,6 +219,12 @@ class PreferencesStore:
                 data["face"] = face
             if effort is not None:
                 data["effort"] = effort
+            if model is not None:
+                # The endpoint's Literal bounds it; this is for any other
+                # caller, since every turn reads the value back.
+                if model not in MODELS:
+                    raise ValueError(f"unknown model: {model!r}")
+                data["model"] = model
             path = self._file()
             path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             tmp = path.with_suffix(".json.tmp")

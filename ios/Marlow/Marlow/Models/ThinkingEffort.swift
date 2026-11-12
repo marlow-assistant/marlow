@@ -26,14 +26,19 @@ enum ThinkingEffort: String, CaseIterable, Identifiable, Sendable {
     /// What goes on the wire. Matches the server's allowlist exactly.
     var wireValue: String { rawValue }
 
-    /// Sentence-case for the picker in Settings.
+    /// The picker in Settings, under "Think time" rather than "Intelligence"
+    /// (Mike, 2026-11-12): what a level buys is time spent thinking, and a
+    /// quick one is a fair choice for snappier replies.
     var displayName: String {
         switch self {
-        case .low: return "Low"
-        case .medium: return "Medium"
-        case .high: return "High"
+        case .low: return "Quick"
+        case .medium: return "Balanced"
+        case .high: return "Thorough"
         }
     }
+
+    /// The activity row's "High effort": technical, and the same as web's.
+    var activityWord: String { rawValue.capitalized }
 
     /// Matches the server-side default from piece 1, so an untouched app and an
     /// unconfigured server agree rather than disagreeing invisibly. Medium
@@ -68,6 +73,40 @@ enum EffortPreference {
         defaults.set(effort.rawValue, forKey: storageKey)
     }
 }
+
+/// The model a user can pick (docs/tasks/model-picker.md). One per box: chat
+/// and every scheduled job run on it, so unlike effort it is server state, not
+/// a device copy, and shows as picked only once the box has it. Must match the
+/// box's MODELS (server/preferences.py); no Haiku, per the shadow run.
+enum MarlowModel: String, CaseIterable, Identifiable, Sendable {
+    case sonnet
+    case opus
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .sonnet: return "Sonnet"
+        case .opus: return "Opus"
+        }
+    }
+
+    /// `/health`'s model as one of these, or nil when it is neither: no
+    /// health yet, or an operator's MARLOW_MODEL outside the two.
+    init?(serverModel: String?) {
+        guard let serverModel,
+              let model = MarlowModel(rawValue: serverModel.capitalizedModelName.lowercased())
+        else { return nil }
+        self = model
+    }
+}
+
+/// The one call the model picker makes, as a seam for tests.
+protocol ModelAPI {
+    func setModel(_ model: MarlowModel, deviceToken: String) async throws
+}
+
+extension APIClient: ModelAPI {}
 
 extension String {
     /// `"claude-sonnet-5"` -> `"Sonnet"`, `"sonnet"` -> `"Sonnet"`. The server

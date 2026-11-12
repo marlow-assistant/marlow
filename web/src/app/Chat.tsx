@@ -576,6 +576,7 @@ export function Chat({
           serverModel={state.serverModel}
           serverBuild={state.serverBuild}
           onEffort={onEffort}
+          onModel={(m) => store.setServerModel(m)}
           locationSharing={locationState.sharing}
           locationStatus={locationState.status}
           onLocationSharing={(s) => location.setSharing(s)}

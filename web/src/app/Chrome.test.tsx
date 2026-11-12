@@ -214,15 +214,39 @@ describe("settings", () => {
     expect(rowValue("Server connection", "Connection")).toBe("Needs reauthorization");
   });
 
-  it("Intelligence: the control reflects the effort and calls onEffort", () => {
+  it("Think time: the control reflects the effort and calls onEffort", () => {
     const { props } = settings({ effort: "medium" });
-    const group = screen.getByRole("radiogroup", { name: "Thinking" });
-    expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Low", "Medium", "High"]);
-    expect(within(group).getByRole("radio", { name: "Medium" }).getAttribute("aria-checked")).toBe("true");
-    fireEvent.click(within(group).getByRole("radio", { name: "High" }));
+    const group = screen.getByRole("radiogroup", { name: "Think time" });
+    expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Quick", "Balanced", "Thorough"]);
+    expect(within(group).getByRole("radio", { name: "Balanced" }).getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(within(group).getByRole("radio", { name: "Thorough" }));
     expect(props.onEffort).toHaveBeenCalledWith("high");
-    expect(rowValue("Intelligence", "Model")).toBe("Sonnet");
-    expect(screen.getByText("Higher effort gives better answers, but can be slower to respond.")).toBeTruthy();
+    expect(screen.getByText(/Longer think time helps with hard questions, but Marlow will take longer to respond\.$/)).toBeTruthy();
+  });
+
+  it("Model: the box's model is checked, and a pick goes to the box before it shows", async () => {
+    const setModel = vi.fn().mockResolvedValue(undefined);
+    const onModel = vi.fn();
+    settings({ serverModel: "claude-sonnet-5-5", onModel, api: { ...api, setModel } as unknown as Api });
+    const group = screen.getByRole("radiogroup", { name: "Model" });
+    expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Sonnet", "Opus"]);
+    expect(within(group).getByRole("radio", { name: "Sonnet" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText(/^Opus has the best judgment but uses your plan's limits about twice as fast\.$/)).toBeTruthy();
+    fireEvent.click(within(group).getByRole("radio", { name: "Opus" }));
+    expect(setModel).toHaveBeenCalledWith("opus");
+    await vi.waitFor(() => expect(onModel).toHaveBeenCalledWith("opus"));
+    fireEvent.click(within(group).getByRole("radio", { name: "Sonnet" }));
+    expect(setModel).toHaveBeenCalledTimes(1);
+  });
+
+  it("Model: a pick the box didn't take says so and changes nothing", async () => {
+    const setModel = vi.fn().mockRejectedValue(new Error("offline"));
+    const onModel = vi.fn();
+    settings({ serverModel: "sonnet", onModel, api: { ...api, setModel } as unknown as Api });
+    fireEvent.click(screen.getByRole("radio", { name: "Opus" }));
+    expect(await screen.findByText("Couldn't change the model. Try again when Marlow is reachable.")).toBeTruthy();
+    expect(onModel).not.toHaveBeenCalled();
+    expect(screen.getByRole("radio", { name: "Sonnet" }).getAttribute("aria-checked")).toBe("true");
   });
 
   it("Location: the control reflects the setting and calls onLocationSharing", () => {
@@ -263,9 +287,10 @@ describe("settings", () => {
     expect(screen.getByText("Location isn't available in this browser.")).toBeTruthy();
   });
 
-  it("Model and the server build read as a dash before the first /health", () => {
+  it("No model is checked, and the server build reads as a dash, before the first /health", () => {
     settings({ serverModel: null, serverBuild: null });
-    expect(rowValue("Intelligence", "Model")).toBe("—");
+    const group = screen.getByRole("radiogroup", { name: "Model" });
+    expect(within(group).getAllByRole("radio").map((r) => r.getAttribute("aria-checked"))).toEqual(["false", "false"]);
     openPane("About");
     expect(rowValue("Build", "Server")).toBe("—");
     expect(rowValue("Build", "App")).toBe("deadbee");

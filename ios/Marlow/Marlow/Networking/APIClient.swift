@@ -287,6 +287,12 @@ final class APIClient {
         let _: EmptyResponse = try await post("/v1/preferences", body: body, auth: deviceToken)
     }
 
+    /// The box-wide model (docs/tasks/model-picker.md). Throws if the box
+    /// didn't take it; there is no device copy to fall back on.
+    func setModel(_ model: MarlowModel, deviceToken: String) async throws {
+        let _: EmptyResponse = try await post("/v1/preferences", body: ["model": model.rawValue], auth: deviceToken)
+    }
+
     /// "Your day", only the field that changed. Answers with the box's whole
     /// object; a refusal is `APIError.server(status: 422, detail: code)`.
     /// Not part of `PreferenceSync`: the box is the only copy.

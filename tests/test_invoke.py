@@ -613,6 +613,59 @@ def test_run_claude_model_and_effort_settings_reach_the_invocation(tmp_path, mon
     assert "--effort=high" in argv
 
 
+_ARGV_ECHO_BIN = textwrap.dedent(
+    """\
+    #!/usr/bin/env python3
+    import json, sys
+    print(json.dumps({
+        "is_error": False,
+        "subtype": "success",
+        "result": "\\x00".join(sys.argv[1:]),
+        "session_id": "s1",
+        "permission_denials": [],
+    }))
+    """
+)
+
+
+@pytest.mark.parametrize("source", ["chat", "cron", "compaction", None])
+def test_the_users_model_runs_every_turn(tmp_path, monkeypatch, source):
+    # docs/tasks/model-picker.md: one model per box, chosen in Settings, for
+    # chat, scheduled jobs and compaction alike. A job on a different model
+    # from chat would rewrite the day's cache and name a model the UI doesn't.
+    from server.preferences import preferences_store
+
+    fake_bin = tmp_path / "claude"
+    write_executable(fake_bin, _ARGV_ECHO_BIN)
+    _with_claude_bin(monkeypatch, str(fake_bin))
+    preferences_store.update(model="opus")
+
+    result = asyncio.run(run_claude("hello", source=source))
+
+    argv = result.result_text.split("\x00")
+    assert [a for a in argv if a.startswith("--model=")] == ["--model=opus"]
+    assert argv.index("--model=opus") < argv.index("--")
+
+
+@pytest.mark.parametrize("stored", ["--settings={}", "haiku", "Opus", "claude-opus-5-5", 3, None])
+def test_a_stored_model_outside_the_allowlist_never_reaches_argv(tmp_path, monkeypatch, stored):
+    # The store is server-private and its endpoint takes two values, but the
+    # argv boundary checks again, as for effort: what reaches the CLI is one
+    # of the MODELS constants or the operator's setting, by construction.
+    fake_bin = tmp_path / "claude"
+    write_executable(fake_bin, _ARGV_ECHO_BIN)
+    _with_claude_bin(monkeypatch, str(fake_bin))
+    real_settings.preferences_path.parent.mkdir(parents=True, exist_ok=True)
+    real_settings.preferences_path.write_text(json.dumps({"model": stored}))
+
+    result = asyncio.run(run_claude("hello"))
+
+    argv = result.result_text.split("\x00")
+    assert [a for a in argv if a.startswith("--model=")] == [f"--model={real_settings.model}"]
+    if isinstance(stored, str):
+        assert not any(a == stored or a.endswith(f"={stored}") for a in argv)
+
+
 def test_run_claude_does_not_retry_when_stderr_lacks_the_session_id(tmp_path, monkeypatch):
     # The fixed phrase alone is a weak guard: a non-zero exit whose stderr
     # echoes the prompt (or argv) back would satisfy it, letting a crafted

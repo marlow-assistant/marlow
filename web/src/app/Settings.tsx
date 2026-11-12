@@ -12,7 +12,7 @@ import {
 } from "../lib/dayFormat";
 import { facePropName, type Face } from "../lib/faces";
 import type { LocationSharing, LocationStatus } from "../lib/location";
-import { capitalizedModelName } from "../lib/modelName";
+import { MODEL_CHOICES, modelChoice, type ModelChoice } from "../lib/modelName";
 import { NOTICES, noticeText, type Notice } from "../lib/notices";
 import { accentOf, browserVoiceEngine, choosableVoices, previewVoice, voiceKey, type VoiceEngine } from "../lib/browserSpeech";
 import {
@@ -37,10 +37,13 @@ import { enablePush, usePushState } from "./push";
 import type { WhatsNewModel } from "./useWhatsNew";
 import { ChangeRow } from "./WhatsNew";
 
+// "Think time", not "Intelligence" (Mike, 2026-11-12): what the level buys is
+// time spent thinking, and a quick one is a fair choice for snappier replies.
+// Still low/medium/high on the wire.
 const LEVELS: { value: Effort; label: string }[] = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
+  { value: "low", label: "Quick" },
+  { value: "medium", label: "Balanced" },
+  { value: "high", label: "Thorough" },
 ];
 
 const LOCATION_LEVELS: { value: LocationSharing; label: string }[] = [
@@ -59,6 +62,9 @@ export interface SettingsProps {
   serverModel: string | null;
   serverBuild: string | null;
   onEffort: (e: Effort) => void;
+  /** After the box has taken a model, so every view shows it at once rather
+   * than at the next /health. Optional so a test not about it needn't. */
+  onModel?: (m: ModelChoice) => void;
   locationSharing: LocationSharing;
   /** "blocked": the browser refused the permission; "unavailable": no API. */
   locationStatus: LocationStatus;
@@ -109,6 +115,18 @@ export function Settings(p: SettingsProps) {
     [p.voiceEngine],
   );
   const voice = useVoiceChoice(voiceEngine);
+  const currentModel = modelChoice(p.serverModel);
+  const [modelError, setModelError] = useState(false);
+  // Server state, not a device copy like effort: the box reads it for every
+  // turn, so it shows as picked only once the box has it.
+  const pickModel = (m: ModelChoice) => {
+    if (m === currentModel) return;
+    setModelError(false);
+    p.api.setModel(m).then(
+      () => p.onModel?.(m),
+      () => setModelError(true),
+    );
+  };
   const connection = p.reauthNeeded ? "Needs reauthorization" : p.queuePaused ? "Paused" : "Connected";
 
   const heading = useRef<HTMLHeadingElement>(null);
@@ -277,14 +295,41 @@ export function Settings(p: SettingsProps) {
           </div>
         </section>
 
-        {/* Effort is a LATENCY dial on this workload, not a cost one: measured
-            at ~2,900 thinking tokens against 5.8M cache reads in a day
-            (docs/tasks/model-and-effort-config.md). The footer says nothing
-            about cost, so the control doesn't imply savings. */}
-        <section className="settings-section" aria-label="Intelligence">
-          <h3 className="view-day">Intelligence</h3>
+        {/* The model is box-wide: chat and every scheduled job run on it
+            (docs/tasks/model-picker.md), so a pick shows only once the box
+            has it. Effort ("Think time") is a LATENCY dial on this workload,
+            not a cost one: ~2,900 thinking tokens against 5.8M cache reads in
+            a day (docs/tasks/model-and-effort-config.md). So the footer puts
+            the cost on the model and only the wait on think time. */}
+        <section className="settings-section" aria-label="Model">
+          <h3 className="view-day">Model</h3>
           <div className="settings-group">
-            <div className="segmented" role="radiogroup" aria-label="Thinking">
+            <div className="segmented" role="radiogroup" aria-label="Model">
+              {MODEL_CHOICES.map((m) => (
+                <button
+                  key={m.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={currentModel === m.value}
+                  className="segment"
+                  onClick={() => pickModel(m.value)}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="settings-footer">
+            {modelError
+              ? "Couldn't change the model. Try again when Marlow is reachable."
+              : "Opus has the best judgment but uses your plan's limits about twice as fast."}
+          </p>
+        </section>
+
+        <section className="settings-section" aria-label="Think time">
+          <h3 className="view-day">Think time</h3>
+          <div className="settings-group">
+            <div className="segmented" role="radiogroup" aria-label="Think time">
               {LEVELS.map((l) => (
                 <button
                   key={l.value}
@@ -298,14 +343,10 @@ export function Settings(p: SettingsProps) {
                 </button>
               ))}
             </div>
-            {/* Read-only, in the same section so the header's "Sonnet/Low" is
-                legible here. There is no model picker on purpose: switching
-                models pays a full cold prefix read. */}
-            <dl className="settings-rows">
-              <Row label="Model" value={p.serverModel ? capitalizedModelName(p.serverModel) : "—"} />
-            </dl>
           </div>
-          <p className="settings-footer">Higher effort gives better answers, but can be slower to respond.</p>
+          <p className="settings-footer">
+            Longer think time helps with hard questions, but Marlow will take longer to respond.
+          </p>
         </section>
 
         <section className="settings-section" aria-label="Location">

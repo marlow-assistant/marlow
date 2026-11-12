@@ -49,7 +49,7 @@ from server.location import validate as validate_location
 from server.log import get_logger
 from server.pairing import PairingError, pairing_store
 from server.presence import presence
-from server.preferences import EFFORTS, MAX_CHECKIN_EVERY_HOURS, MAX_FACE_ID, DayError, preferences_store
+from server.preferences import EFFORTS, MAX_CHECKIN_EVERY_HOURS, MAX_FACE_ID, MODELS, DayError, preferences_store
 from server import approval_summary
 from server.active_turn import SIMILAR_ALLOW_REASON
 from server.permissions import PermissionRequest, permission_registry, similar_grants
@@ -714,7 +714,10 @@ def _preferences() -> dict[str, Any]:
     return {
         "face": preferences_store.face(),
         "effort": preferences_store.effort(),
-        # Never null, unlike the two above: the harness runs on these whether
+        # The user's pick, null until made; /health reports the model in
+        # force, which falls back to the operator's (docs/tasks/model-picker.md).
+        "model": preferences_store.model(),
+        # Never null, unlike the three above: the harness runs on these whether
         # or not anyone picked them, so the client shows what is in force.
         "day_start": day_start,
         "day_end": day_end,
@@ -739,6 +742,9 @@ class PreferencesRequest(BaseModel):
 
     face: int | None = Field(None, ge=1, le=MAX_FACE_ID, strict=True)
     effort: Literal[EFFORTS] | None = None  # type: ignore[valid-type]
+    # Every turn reads this back into `--model=` (invoke.model_in_force), so
+    # only the two constants land; anything else is a 422.
+    model: Literal[MODELS] | None = None  # type: ignore[valid-type]
     # "HH:MM", local to the schedule store's zone. Checked as a pair against
     # what is stored (preferences.validate_day).
     day_start: str | None = Field(None, max_length=5)
@@ -750,7 +756,8 @@ class PreferencesRequest(BaseModel):
 @public_app.post("/v1/preferences")
 def set_preferences(body: PreferencesRequest, token: str = Depends(require_device_token)) -> dict[str, Any]:
     if (
-        body.face is None and body.effort is None and body.day_start is None
+        body.face is None and body.effort is None and body.model is None
+        and body.day_start is None
         and body.day_end is None and body.checkin_every_hours is None
         and body.renudge is None
     ):
@@ -761,6 +768,7 @@ def set_preferences(body: PreferencesRequest, token: str = Depends(require_devic
         preferences_store.update(
             face=body.face,
             effort=body.effort,
+            model=body.model,
             day_start=body.day_start,
             day_end=body.day_end,
             checkin_every_hours=body.checkin_every_hours,

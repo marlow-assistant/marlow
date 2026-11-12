@@ -173,3 +173,65 @@ struct ThinkingEffortTests {
         #expect(sent.map(\.effort) == [.low, .high])
     }
 }
+
+/// docs/tasks/model-picker.md: one model per box, picked in Settings, and the
+/// effort levels named for what they buy.
+@MainActor
+struct ModelPickerTests {
+
+    /// The box's MODELS (server/preferences.py), in the order Settings shows
+    /// them. A value here alone would be a 422 at the box.
+    @Test func theModelsAreTheBoxsTwo() {
+        #expect(MarlowModel.allCases.map(\.rawValue) == ["sonnet", "opus"])
+        #expect(MarlowModel.allCases.map(\.displayName) == ["Sonnet", "Opus"])
+    }
+
+    /// `/health` may spell the model as the alias or the full id; anything
+    /// else (an operator's own MARLOW_MODEL, no health yet) is no choice, so
+    /// neither segment reads as picked.
+    @Test func readsTheModelHealthReports() {
+        #expect(MarlowModel(serverModel: "sonnet") == .sonnet)
+        #expect(MarlowModel(serverModel: "claude-opus-5-5") == .opus)
+        #expect(MarlowModel(serverModel: "haiku") == nil)
+        #expect(MarlowModel(serverModel: nil) == nil)
+    }
+
+    /// "Think time", not "Intelligence" (Mike, 2026-11-12). The wire values
+    /// don't move.
+    @Test func thinkTimeLevelsAreNamedForTheWait() {
+        #expect(ThinkingEffort.allCases.map(\.displayName) == ["Quick", "Balanced", "Thorough"])
+        #expect(ThinkingEffort.allCases.map(\.wireValue) == ["low", "medium", "high"])
+    }
+
+    /// The activity row stays technical, and the same as web's.
+    @Test func theActivityRowKeepsTheEffortWord() {
+        #expect(ThinkingEffort.high.activityWord == "High")
+        #expect(ThinkingEffort.low.activityWord == "Low")
+    }
+
+    @Test func aPickShowsOnceTheBoxHasIt() async {
+        let store = ChatStore(
+            deviceToken: "tok", client: FakeChatAPI(), persistURL: makeTempTranscriptURL(), policy: .test()
+        )
+        defer { store.cancelActiveWork() }
+        let api = FakeModelAPI()
+
+        #expect(await store.pickModel(.opus, api: api))
+        #expect(api.sent == [.opus])
+        #expect(store.serverModel == "opus")
+
+        api.fails = true
+        #expect(await store.pickModel(.sonnet, api: api) == false)
+        #expect(store.serverModel == "opus", "a pick the box didn't take changes nothing")
+    }
+}
+
+private final class FakeModelAPI: ModelAPI, @unchecked Sendable {
+    var sent: [MarlowModel] = []
+    var fails = false
+
+    func setModel(_ model: MarlowModel, deviceToken: String) async throws {
+        if fails { throw APIError.server(status: 0, detail: nil) }
+        sent.append(model)
+    }
+}

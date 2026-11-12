@@ -148,6 +148,9 @@ Use the Read and Edit tools on it.
   research digest, a look-ahead); leave it off anything quick, and never put
   it on `notify`. Don't bring it up. If they ask why a job is slow, or want it
   to think harder or answer faster, explain plainly and change it.
+- The model (Sonnet or Opus) is theirs to pick in Settings, under Model, and
+  runs everything, scheduled jobs included. There is no per-job model; you
+  can't change it, so point them to Settings if they ask.
 
 Any other job prompt, `cron/morning.md` included, is theirs: edit it when
 they ask.

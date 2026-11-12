@@ -33,13 +33,10 @@ than a couple of weeks, or the work it ranks has moved, redo it.
 
 ### Small jobs that pay off quickly
 
-1. **Opus for research jobs** (`backlog.md`). Add a `"model"` setting
-   to each schedules entry, the same way `"effort"` works, which Marlow sets
-   itself on research jobs nobody waits on. The 2026-10-18 measurement
-   (`model-and-effort-config.md`) puts Opus on every job at about 55% more;
-   on those jobs alone it's much less. `ideas` and `consolidate` must move
-   together because they share a cache. No switch in chat: every change there
-   pays a cold prefix.
+1. **Model picker** (`model-picker.md`), *in progress 2026-11-12*. Became
+   a box-wide Sonnet/Opus choice in Settings instead of a per-job model: one
+   model for every turn keeps the UI honest and avoids rewriting the day's
+   cache when `consolidate` resumes chat.
 2. **Stop showing to-do ids in replies** (`backlog.md`). The fix
    exists only on Mike's box. One line in `identity/CLAUDE.md` "To-dos"
    delivers it to every box, plus a `changes.json` entry.

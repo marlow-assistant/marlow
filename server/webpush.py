@@ -21,6 +21,7 @@ import tempfile
 
 import requests
 import threading
+import time
 from urllib.parse import urlsplit
 
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
@@ -209,9 +210,14 @@ async def send(device_token: str, data: dict, *, permission_request: bool = Fals
         return
     ttl = int(settings.t_hook_seconds) if permission_request else _DEFAULT_TTL_SECONDS
     urgency = "high" if high_urgency else "normal"
+    # When it left the box, epoch seconds. The push service may hold it for
+    # the TTL; the service worker shows one that arrives late (a machine
+    # waking from sleep) without a sound (web/src/lib/pushNotification.ts).
+    # Web only: APNs payloads keep push.py's shape.
+    body = json.dumps({**data, "sent_at": time.time()})
     try:
         await asyncio.wait_for(
-            asyncio.to_thread(_send_blocking, subscription, json.dumps(data), ttl, urgency),
+            asyncio.to_thread(_send_blocking, subscription, body, ttl, urgency),
             timeout=_SEND_TIMEOUT_SECONDS,
         )
     except asyncio.TimeoutError:

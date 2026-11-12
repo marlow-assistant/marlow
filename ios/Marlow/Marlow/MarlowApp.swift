@@ -11,7 +11,7 @@ struct MarlowApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        // Settings' Intelligence and Location pickers, the only segmented
+        // Settings' Model, Think time and Location pickers, the only segmented
         // controls. SwiftUI has no font for them, and the default 13pt reads
         // small beside the rows around it (Mike, 2026-11-06). Scaled to follow
         // the phone's text size, as the default does not; capped because past

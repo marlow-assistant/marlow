@@ -1,5 +1,5 @@
 {
-  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 23.",
+  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 24.",
   "entries": [
     {
       "id": 1,
@@ -147,6 +147,13 @@
       "part": "app",
       "category": "feature",
       "text": "Press and hold one of Marlow's replies and choose Read aloud to hear it in the voice you picked in Settings. Tap Stop reading to end it."
+    },
+    {
+      "id": 23,
+      "date": "2026-11-12",
+      "part": "server",
+      "category": "feature",
+      "text": "You can now choose the model Marlow runs on, in Settings under Model: Sonnet or Opus. Opus has the best judgment and uses your plan's limits about twice as fast, and your scheduled jobs use it too. Thinking is now called Think time: Quick, Balanced or Thorough."
     }
   ]
 }

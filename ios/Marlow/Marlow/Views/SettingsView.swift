@@ -18,6 +18,8 @@ struct SettingsView: View {
     var stopDictation: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
     @State private var isUnpairing = false
+    /// The last model pick didn't reach the box; the footer says so.
+    @State private var modelFailed = false
     @StateObject private var yourDay = YourDayModel()
     @AppStorage(EffortPreference.storageKey) private var effortRaw = ThinkingEffort.default.rawValue
     @AppStorage(LocationPreference.storageKey) private var locationRaw = LocationSharing.default.rawValue
@@ -59,27 +61,38 @@ struct SettingsView: View {
                 }
                 .disabled(isUIFixture)
 
+                // The model is box-wide: chat and every scheduled job run on it
+                // (docs/tasks/model-picker.md), so a pick shows only once the
+                // box has it. The cost goes in this footer, not think time's.
+                Section {
+                    Picker("Model", selection: modelSelection) {
+                        ForEach(MarlowModel.allCases) { model in
+                            Text(model.displayName).tag(Optional(model))
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                } header: {
+                    Text("Model")
+                } footer: {
+                    Text(modelFailed ? Self.modelFailedText : Self.modelFooter)
+                }
+                .disabled(isUIFixture)
+
                 // Effort is a LATENCY dial on this workload, not a cost one:
                 // measured at ~2,900 thinking tokens against 5.8M cache reads
                 // in a day (docs/tasks/model-and-effort-config.md). The footer
                 // says nothing about cost, so the picker doesn't imply savings.
                 Section {
-                    Picker("Thinking", selection: effortSelection) {
+                    Picker("Think time", selection: effortSelection) {
                         ForEach(ThinkingEffort.allCases) { level in
                             Text(level.displayName).tag(level)
                         }
                     }
                     .pickerStyle(.segmented)
-                    // Read-only, and shown in the same section so the model and
-                    // effort a reply came from can be read together (the chat
-                    // header's "Sonnet/Low" chip was removed 2026-10-12, so this
-                    // is the only place). There is no model picker on
-                    // purpose: switching models pays a full cold prefix read.
-                    LabeledContent("Model", value: store.serverModel?.capitalizedModelName ?? "—")
                 } header: {
-                    Text("Intelligence")
+                    Text("Think time")
                 } footer: {
-                    Text("Higher effort gives better answers, but can be slower to respond.")
+                    Text(Self.thinkTimeFooter)
                 }
                 .disabled(isUIFixture)
 
@@ -250,6 +263,26 @@ struct SettingsView: View {
                 PreferenceSync.picked(.effort)
                 guard let deviceToken = session.deviceToken else { return }
                 Task { await PreferenceSync.send(api: APIClient(), deviceToken: deviceToken) }
+            }
+        )
+    }
+
+    static let modelFooter =
+        "Opus has the best judgment and uses your plan's limits about twice as fast. Scheduled jobs use the same model."
+    static let modelFailedText = "Couldn't change the model. Try again when Marlow is reachable."
+    static let thinkTimeFooter =
+        "Longer think time helps with hard questions, but replies start later. Most of the wait is Marlow looking things up."
+
+    /// The box's model, not a device copy: the getter is what `/health` (or
+    /// the last pick the box took) says, so a pick that fails snaps back.
+    /// Nil, neither segment, before the first health poll.
+    private var modelSelection: Binding<MarlowModel?> {
+        Binding(
+            get: { MarlowModel(serverModel: store.serverModel) },
+            set: { picked in
+                guard let picked, picked != MarlowModel(serverModel: store.serverModel) else { return }
+                modelFailed = false
+                Task { modelFailed = !(await store.pickModel(picked)) }
             }
         )
     }

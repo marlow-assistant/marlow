@@ -234,7 +234,8 @@ chosen level (`/v1/preferences`, `server/preferences.py`) so every client shows
 the same one (Mike); it only keeps clients in step, and the turn still runs on
 what the message carries.
 
-**Model is display-only.** Effort toggles; model does not: effort is cheap to
+**Model is display-only** — *superseded 2026-11-12 by `model-picker.md`: the
+user now picks Sonnet or Opus, box-wide, for every turn.* Effort toggles; model does not: effort is cheap to
 switch mid-session, a model switch pays a full cold prefix read. Mike confirmed
 2026-08-18 that the Claude GUI warns about exactly this. Showing the model
 without offering to change it is the honest version of that constraint.
@@ -405,8 +406,9 @@ which neither a model nor an effort change would fix. If Opus is revisited, the
 shadow run (`model-shadow-run.md`) is the way to measure it, and `ideas` and
 `consolidate` should move together.
 
-**No model or effort toggle on the clients.** The model is a per-box operator
-setting; a user who wonders "am I suddenly using more?" sees it in the Usage
+**No model or effort toggle on the clients** — *superseded 2026-11-12: the
+user picks the model in Settings (`model-picker.md`); `MARLOW_MODEL` is the
+fallback.* The model was a per-box operator setting; a user who wonders "am I suddenly using more?" sees it in the Usage
 panel, and each turn's model and effort are shown in its activity row (since
 2026-10-18).
 

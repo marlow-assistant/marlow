@@ -319,6 +319,14 @@ export function Settings(p: SettingsProps) {
               ))}
             </div>
           </div>
+          <p className="settings-footer">
+            {modelError
+              ? "Couldn't change the model. Try again when Marlow is reachable."
+              : "Opus has the best judgment and uses your plan's limits about twice as fast. Scheduled jobs use the same model."}
+          </p>
+        </section>
+
+        <section className="settings-section" aria-label="Think time">
           <h3 className="view-day">Think time</h3>
           <div className="settings-group">
             <div className="segmented" role="radiogroup" aria-label="Think time">
@@ -337,9 +345,8 @@ export function Settings(p: SettingsProps) {
             </div>
           </div>
           <p className="settings-footer">
-            {modelError
-              ? "Couldn't change the model. Try again when Marlow is reachable."
-              : "Opus has the best judgment and uses your plan's limits about twice as fast. Longer think time helps with hard questions, but replies start later; most of the wait is Marlow looking things up."}
+            Longer think time helps with hard questions, but replies start later. Most of the wait is Marlow looking
+            things up.
           </p>
         </section>
 

@@ -40,9 +40,9 @@ than a couple of weeks, or the work it ranks has moved, redo it.
 2. **Stop showing to-do ids in replies** (`backlog.md`). The fix
    exists only on Mike's box. One line in `identity/CLAUDE.md` "To-dos"
    delivers it to every box, plus a `changes.json` entry.
-3. **Notification flood after a computer wakes** (`backlog.md`). In
-   `web/src/sw.ts`, drop stale pushes or ones already read elsewhere, and
-   merge a backlog into one notification. Small, and felt every time.
+3. **Notification flood after a computer wakes**, *done 2026-11-12*. Replies
+   share one tag and a backlog folds into one counted notification; the
+   server has no per-device read state, so "already read" is judged by age.
 
 ### Bigger features that add capability
 

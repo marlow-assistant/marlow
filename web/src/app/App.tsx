@@ -7,7 +7,7 @@ import { picked, pull, type PreferenceSyncDeps } from "../lib/preferenceSync";
 import { getToken, idbPersistence, kvDelete, kvGet, kvSet, KV_EFFORT, KV_FACE, KV_LOCATION, setToken, wipeAll } from "../lib/storage";
 import { Chat } from "./Chat";
 import { Pairing } from "./Pairing";
-import { closePermissionNotifications, registerServiceWorker, syncPushSubscription, unsubscribePush } from "./push";
+import { closeNotificationsTheAppShows, registerServiceWorker, syncPushSubscription, unsubscribePush } from "./push";
 
 type Boot =
   | { kind: "loading" }
@@ -248,12 +248,12 @@ function Session({ token, onForget }: { token: string; onForget: (reason?: strin
     const clearBadge = () => void (navigator as Navigator & { clearAppBadge?: () => Promise<void> }).clearAppBadge?.()?.catch(() => {});
     if (document.visibilityState === "visible") {
       clearBadge();
-      void closePermissionNotifications();
+      void closeNotificationsTheAppShows();
     }
     const onVisible = () => {
       if (document.visibilityState === "visible") {
         clearBadge();
-        void closePermissionNotifications();
+        void closeNotificationsTheAppShows();
         store.restartLoop();
       }
     };

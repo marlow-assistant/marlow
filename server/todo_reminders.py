@@ -122,7 +122,7 @@ def briefing_block() -> str:
         lines.extend(proposed)
     return (
         "[To-do list, from the store (the server's copy is the list; memory notes "
-        f"about to-dos may be stale). {ID_RULE}\n" +"\n".join(lines) + "]"
+        f"about to-dos may be stale). {ID_RULE}\n" + "\n".join(lines) + "]"
     )
 
 

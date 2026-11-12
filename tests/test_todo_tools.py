@@ -48,10 +48,10 @@ def _call(name, **arguments):
 def test_add_then_list(store) -> None:
     text, err = _call("todo_add", title="Book the dentist", due="2026-11-06 09:00", source="user")
     assert not err
-    assert text.startswith("Added t1 (open)")
+    assert text.startswith("Added (open): Book the dentist · due Fri 2026-11-06 09:00 · id t1")
     text, err = _call("todo_list")
     assert not err
-    assert "t1 · open · Book the dentist · due Fri 2026-11-06 09:00" in text
+    assert "Book the dentist · open · due Fri 2026-11-06 09:00 · id t1" in text
 
 
 def test_an_inferred_add_says_it_is_a_proposal_and_wont_remind(store) -> None:
@@ -130,7 +130,7 @@ def test_the_internal_endpoint_answers_a_tool_call(store) -> None:
         reply = client.post("/internal/todos/tool", json={"name": "todo_add", "arguments": {"title": "x", "source": "user"}})
         assert reply.status_code == 200
         assert reply.json() == {
-            "text": "Added t1 (open): x — no time, so no reminder of its own; it shows on their list and in the brief.",
+            "text": "Added (open): x · id t1 — no time, so no reminder of its own; it shows on their list and in the brief.",
             "is_error": False,
         }
         reply = client.post("/internal/todos/tool", json={"name": "todo_done", "arguments": {"id": "t9"}})

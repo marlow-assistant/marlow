@@ -64,6 +64,8 @@ from `docs/marlow-v2-implementation-plan.md`.
   unattended, stores or sends off-box, or how it behaves. Policy, categories
   and `part` (server vs app): `docs/tasks/whats-new.md`. The card on both
   clients reads that file; a change without an entry lands silently.
+- **A new task doc gets a line in `docs/tasks/backlog.md`** in the same
+  commit; shipping or closing one removes it. That file is the one backlog.
 - **Don't drop a comment that records *why*.** Several encode device-only
   findings with dates — if the code moves in a refactor, the comment moves with
   it. Deleting one costs the next session the bug it prevents.

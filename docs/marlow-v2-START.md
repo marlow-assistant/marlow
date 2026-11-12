@@ -34,8 +34,8 @@ in one of those instead. Hard constraints and working rules are in the root
 Mike's wishlist lives on the box:
 `ssh marlow@marlow 'cat ~/marlow-identity/memory/marlow-features.md'`. When
 you finish something, mark it done there as well as here.
-Wishlist items with no task doc yet are mirrored in
-`tasks/feature-backlog.md` (the backlog only). **What to build next** is
+Every open item, task doc or not, has a line in `tasks/backlog.md`, the
+single backlog. **What to build next** is
 `tasks/backlog-analysis.md`: a dated, ranked review across every source.
 Asked what to work on, start there; if its date is more than a couple of
 weeks old or its picks have moved, redo the review as that file describes.

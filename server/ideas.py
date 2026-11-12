@@ -316,8 +316,10 @@ def accepted_context(idea: Idea) -> str:
     email and web pages, so they are framed as what was offered, never as an
     instruction from Mike; his only instruction is the tap."""
     return (
-        f"[Idea: the user tapped Do it on your idea `{idea.id}`,"
-        f" \"{_inline(idea.title)}\". The plan you offered: {_inline(idea.plan)}"
+        # Title first, id last: an id leading in backticks reads as a label
+        # to repeat to the user (todos.ID_RULE, 2026-11-12).
+        f"[Idea: the user tapped Do it on your idea \"{_inline(idea.title)}\""
+        f" (id {idea.id}). The plan you offered: {_inline(idea.plan)}"
         f" The server has recorded the acceptance; do not edit ideas/ideas-responses.json.]"
     )
 

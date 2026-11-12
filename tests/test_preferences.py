@@ -13,13 +13,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from server.app import internal_app, public_app
-from server.preferences import EFFORTS, MAX_FACE_ID, DayError, PreferencesStore, preferences_store, validate_day
+from server.preferences import EFFORTS, MAX_FACE_ID, MODELS, DayError, PreferencesStore, preferences_store, validate_day
 
 from tests.test_app import _paired_headers, isolated_pairing_state  # noqa: F401 (fixture)
 
 
 # What GET answers on a box where nobody has set "Your day".
-DEFAULT_DAY = {"day_start": "08:00", "day_end": "23:00", "checkin_every_hours": 3, "renudge": True}
+# `model` rides along: null until picked, like face and effort.
+DEFAULT_DAY = {"day_start": "08:00", "day_end": "23:00", "checkin_every_hours": 3, "renudge": True, "model": None}
 
 
 @pytest.fixture
@@ -63,6 +64,8 @@ def test_sending_one_keeps_the_other(clients):
         {"checkin_every_hours": 7}, {"checkin_every_hours": -1}, {"checkin_every_hours": "3"},
         {"checkin_every_hours": True}, {"checkin_every_hours": 2.5},
         {"renudge": "no"}, {"renudge": 0},
+        {"model": "haiku"}, {"model": "Opus"}, {"model": "claude-opus-5-5"},
+        {"model": "--settings={}"}, {"model": 1}, {"model": None},
     ],
 )
 def test_junk_is_refused_and_leaves_the_choice_alone(clients, body):
@@ -189,7 +192,7 @@ def test_the_endpoint_sets_the_day_and_words_nothing(clients, monkeypatch):
     monkeypatch.setattr("server.app.schedules.sync_after_turn", lambda *a: synced.append(1))
 
     got = client.post("/v1/preferences", json={"day_end": "01:00"}, headers=headers)
-    assert got.json() == {"face": None, "effort": None, "day_start": "08:00", "day_end": "01:00", "checkin_every_hours": 3, "renudge": True}
+    assert got.json() == {"face": None, "effort": None, "model": None, "day_start": "08:00", "day_end": "01:00", "checkin_every_hours": 3, "renudge": True}
     assert synced == [1], "a changed day re-renders the crontab at once"
 
     client.post("/v1/preferences", json={"face": 2}, headers=headers)
@@ -227,3 +230,39 @@ def test_a_changed_interval_re_renders_the_crontab(clients, monkeypatch):
     assert synced == [1]
     client.post("/v1/preferences", json={"checkin_every_hours": 0}, headers=headers)
     assert synced == [1], "unchanged: nothing to re-render"
+
+
+def test_the_models_are_sonnet_and_opus():
+    """docs/tasks/model-picker.md: no Haiku (the shadow run), and the order
+    is the order the clients show."""
+    assert MODELS == ("sonnet", "opus")
+
+
+def test_a_model_is_picked_and_read_back(clients):
+    client, headers = clients
+    assert client.get("/v1/preferences", headers=headers).json()["model"] is None
+    body = client.post("/v1/preferences", json={"model": "opus"}, headers=headers).json()
+    assert body["model"] == "opus"
+    client.post("/v1/preferences", json={"effort": "low"}, headers=headers)
+    assert client.get("/v1/preferences", headers=headers).json() == DEFAULT_DAY | {
+        "face": None, "effort": "low", "model": "opus",
+    }
+    assert preferences_store.model() == "opus"
+
+
+@pytest.mark.parametrize("text", ['{"model": "haiku"}', '{"model": true}', '{"model": "--x"}', "nope"])
+def test_an_odd_stored_model_reads_as_nothing_picked(tmp_path, text):
+    path = tmp_path / "preferences.json"
+    path.write_text(text)
+    assert PreferencesStore(path).model() is None
+
+
+def test_health_reports_the_model_in_force(clients):
+    """The header ("Opus/Low") and Settings read /health, so a pick shows up
+    on every client without a client change."""
+    from server import health
+    from server.config import settings
+
+    assert health.get_health()["model"] == settings.model
+    preferences_store.update(model="opus")
+    assert health.get_health()["model"] == "opus"

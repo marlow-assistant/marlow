@@ -62,6 +62,7 @@ from server.boundaries import (
 from server.config import settings
 from server.identity import IdentityLoadError, get_identity_context
 from server.log import get_logger
+from server.preferences import MODELS, preferences_store
 from server.telemetry import identity_fingerprint, record_invocation
 from server.turn_context import SPOKEN_TURN_NOTE, prepend_turn_context
 
@@ -1480,6 +1481,20 @@ async def run_claude(
         return result
 
 
+def model_in_force() -> str:
+    """The model every turn runs on: the user's pick, else the operator's.
+
+    One per box, for chat, cron and compaction alike (docs/tasks/model-
+    picker.md): a job on a different model from chat would rewrite the day's
+    cache and name a model the UI doesn't show. The stored value is matched
+    against MODELS and the matched constant returned, never the stored
+    string, like effort: the file is server-private and its endpoint takes
+    two values, but this is the argv boundary.
+    """
+    chosen = preferences_store.model()
+    return next((allowed for allowed in MODELS if chosen == allowed), settings.model)
+
+
 def _effort_for_source(source: str | None, requested_effort: str | None) -> str:
     """Thinking effort for one turn, by who asked for it.
 
@@ -1687,7 +1702,8 @@ async def _invoke_once(
     # right. That is the `session_hint` bug exactly. An allowlist will guard it
     # too; this makes it safe by construction if the allowlist ever slips.
     applied_effort = _effort_for_source(source, effort)
-    args += [f"--model={settings.model}", f"--effort={applied_effort}"]
+    applied_model = model_in_force()
+    args += [f"--model={applied_model}", f"--effort={applied_effort}"]
 
     if resume and session_id:
         # One token, not ["--resume", session_id]. `claude --help` declares
@@ -1735,7 +1751,7 @@ async def _invoke_once(
         resume,
         session_id,
         settings.bwrap_enabled,
-        settings.model,
+        applied_model,
         requested_effort_for_log,
         applied_effort,
         streaming,

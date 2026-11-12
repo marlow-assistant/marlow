@@ -20,6 +20,8 @@ Tags: *not started*, *specced* (ready for an implementor), *in progress*,
 
 ## Features
 
+- **Model picker** (`model-picker.md`): Sonnet or Opus, box-wide, chosen in
+  Settings; "Think time" relabels effort. *in progress*
 - **Friends alpha** (`friends-alpha.md`): the polish pass, then invite the
   first one or two friends. *in progress*
 - **Share and files** (`share-and-files.md`): share sheet in, files out,
@@ -110,22 +112,6 @@ these. Each task doc lists exactly what is unseen.
 
 Sketches: the symptom, what we already know, and the first step. None is a
 spec, and the order means nothing.
-
-### Opus as an option (raised 2026-11-11)
-
-Let Marlow run on Opus 5.5 as well as Sonnet 5.5. The model today is one
-per-box setting (`MARLOW_MODEL`, default `sonnet`); effort is per job.
-`model-and-effort-config.md` ("Per-job effort, and why not Opus",
-2026-10-18) already measured the cost: Opus for `consolidate` alone adds
-~20% to a box's API-equivalent total, Opus for every job ~55%, and `ideas`
-and `consolidate` must move together because they share a cache. It also
-records the decision not to put a model toggle on the clients.
-
-Open: who picks (a per-entry `"model"` key in `cron/schedules.json` that
-Marlow sets itself, like `"effort"`, versus a chat-side switch, which pays a
-cold prefix on every change); whether it falls back to Sonnet when the
-`rate_limit_event` window runs low. The cheapest first step is per-entry
-model on the research jobs nobody waits on, mirroring per-entry effort.
 
 ### To-do ids in replies (raised 2026-11-10)
 

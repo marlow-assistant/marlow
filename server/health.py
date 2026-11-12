@@ -8,6 +8,7 @@ from typing import Any
 from server import auth_monitor
 from server.config import settings
 from server.identity_git import GIT_HARDENING_FLAGS
+from server.invoke import model_in_force
 from server.permissions import permission_registry
 from server.queue import work_queue
 
@@ -75,7 +76,9 @@ def get_health() -> dict[str, Any]:
         "queue_depth": work_queue.depth,
         "queue_paused": work_queue.paused,
         "oldest_pending_permission_age": permission_registry.oldest_pending_age(),
-        "model": settings.model,
+        # The model in force, the user's pick or the operator's: clients
+        # show it in the header and Settings (docs/tasks/model-picker.md).
+        "model": model_in_force(),
         "effort": settings.effort,
         **_BUILD_IDENTITY,
     }

@@ -322,7 +322,7 @@ export function Settings(p: SettingsProps) {
           <p className="settings-footer">
             {modelError
               ? "Couldn't change the model. Try again when Marlow is reachable."
-              : "Opus has the best judgment and uses your plan's limits about twice as fast. Scheduled jobs use the same model."}
+              : "Opus has the best judgment but uses your plan's limits about twice as fast."}
           </p>
         </section>
 
@@ -345,8 +345,7 @@ export function Settings(p: SettingsProps) {
             </div>
           </div>
           <p className="settings-footer">
-            Longer think time helps with hard questions, but replies start later. Most of the wait is Marlow looking
-            things up.
+            Longer think time helps with hard questions, but Marlow will take longer to respond.
           </p>
         </section>
 

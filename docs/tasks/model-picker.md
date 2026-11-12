@@ -63,5 +63,4 @@ queue, and may count against Pro's limits.
 - Clients: the "Intelligence" section becomes **Model** (Sonnet / Opus) and
   **Think time** (Quick / Balanced / Thorough, still `low`/`medium`/`high` on
   the wire). The footer says what each costs: Opus uses a plan's limits about
-  twice as fast; longer think time starts replies later, and most of the wait
-  is looking things up.
+  twice as fast, and longer think time makes Marlow slower to respond.

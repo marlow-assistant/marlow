@@ -268,10 +268,10 @@ struct SettingsView: View {
     }
 
     static let modelFooter =
-        "Opus has the best judgment and uses your plan's limits about twice as fast. Scheduled jobs use the same model."
+        "Opus has the best judgment but uses your plan's limits about twice as fast."
     static let modelFailedText = "Couldn't change the model. Try again when Marlow is reachable."
     static let thinkTimeFooter =
-        "Longer think time helps with hard questions, but replies start later. Most of the wait is Marlow looking things up."
+        "Longer think time helps with hard questions, but Marlow will take longer to respond."
 
     /// The box's model, not a device copy: the getter is what `/health` (or
     /// the last pick the box took) says, so a pick that fails snaps back.

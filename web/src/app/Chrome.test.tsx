@@ -221,7 +221,7 @@ describe("settings", () => {
     expect(within(group).getByRole("radio", { name: "Balanced" }).getAttribute("aria-checked")).toBe("true");
     fireEvent.click(within(group).getByRole("radio", { name: "Thorough" }));
     expect(props.onEffort).toHaveBeenCalledWith("high");
-    expect(screen.getByText(/Longer think time helps with hard questions, but replies start later/)).toBeTruthy();
+    expect(screen.getByText(/Longer think time helps with hard questions, but Marlow will take longer to respond\.$/)).toBeTruthy();
   });
 
   it("Model: the box's model is checked, and a pick goes to the box before it shows", async () => {
@@ -231,7 +231,7 @@ describe("settings", () => {
     const group = screen.getByRole("radiogroup", { name: "Model" });
     expect(within(group).getAllByRole("radio").map((r) => r.textContent)).toEqual(["Sonnet", "Opus"]);
     expect(within(group).getByRole("radio", { name: "Sonnet" }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText(/Opus has the best judgment and uses your plan's limits about twice as fast/)).toBeTruthy();
+    expect(screen.getByText(/^Opus has the best judgment but uses your plan's limits about twice as fast\.$/)).toBeTruthy();
     fireEvent.click(within(group).getByRole("radio", { name: "Opus" }));
     expect(setModel).toHaveBeenCalledWith("opus");
     await vi.waitFor(() => expect(onModel).toHaveBeenCalledWith("opus"));

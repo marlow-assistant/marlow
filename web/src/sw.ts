@@ -9,12 +9,16 @@
 
 import {
   chosenFaceIcon,
+  collapseReply,
   DENY_ACTION,
   decodePushData,
   mustShowEveryPush,
+  type NotificationPlan,
   PERMISSION_TAG_PREFIX,
   planNotification,
+  REPLY_TAG,
   settlesPermissionPrompts,
+  turnCreatedAt,
   turnText,
 } from "./lib/pushNotification";
 import { getToken, kvGet, KV_FACE } from "./lib/storage";
@@ -50,19 +54,31 @@ async function handlePush(event: PushEvent): Promise<void> {
   }
   const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
   const focused = windows.some((c) => c.focused && c.visibilityState === "visible");
+  let createdAt: number | null = null;
   const plan = await planNotification(
     data,
     focused,
-    fetchTurnText,
+    async (ref) => {
+      const turn = await fetchTurn(ref);
+      createdAt = turnCreatedAt(turn);
+      return turn === null ? null : turnText(turn);
+    },
     mustShowEveryPush(self.navigator.userAgent),
   );
   if (plan.badge) await setBadge();
   if (plan.notification) {
-    const { title, closeImmediately, requestId, ...rest } = plan.notification;
+    let shown: NotificationPlan & { renotify?: boolean } = plan.notification;
+    let collapse: unknown;
+    if (shown.tag === REPLY_TAG) {
+      const [earlier] = await self.registration.getNotifications({ tag: REPLY_TAG });
+      const folded = collapseReply(shown, (earlier?.data as { collapse?: unknown } | null)?.collapse, Date.now(), createdAt);
+      ({ collapse, ...shown } = folded);
+    }
+    const { title, closeImmediately, requestId, ...rest } = shown;
     await self.registration.showNotification(title, {
       ...rest,
       icon: await chosenFaceIcon(() => kvGet(KV_FACE)),
-      data: { url: "/", requestId },
+      data: { url: "/", requestId, collapse },
     } as NotificationOptions);
     if (closeImmediately) {
       for (const n of await self.registration.getNotifications({ tag: rest.tag })) n.close();
@@ -70,9 +86,9 @@ async function handlePush(event: PushEvent): Promise<void> {
   }
 }
 
-/** The reply's own text, fetched from the box with the stored token; the
- * push service never saw it. */
-async function fetchTurnText(ref: string): Promise<string | null> {
+/** The turn behind a reply, fetched from the box with the stored token; the
+ * push service never saw its text. */
+async function fetchTurn(ref: string): Promise<unknown> {
   const token = await getToken();
   if (!token) return null;
   const controller = new AbortController();
@@ -84,7 +100,7 @@ async function fetchTurnText(ref: string): Promise<string | null> {
       cache: "no-store",
     });
     if (!r.ok) return null;
-    return turnText(await r.json());
+    return await r.json();
   } finally {
     clearTimeout(timer);
   }

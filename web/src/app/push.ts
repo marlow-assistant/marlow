@@ -9,7 +9,7 @@
 
 import { useEffect, useState } from "react";
 import { CancelledError, isTransientSendError, type Api } from "../lib/api";
-import { PERMISSION_TAG_PREFIX } from "../lib/pushNotification";
+import { PERMISSION_TAG_PREFIX, REPLY_TAG } from "../lib/pushNotification";
 
 /** `failed`: permission granted, but the box refused or could not store the
  * subscription (for example a push service outside the server's allowlist,
@@ -150,13 +150,15 @@ function sameKey(a: ArrayBuffer | null, b: Uint8Array): boolean {
 
 /** The open app shows any pending prompt itself (its permissions poll), so a
  * permission notification is redundant once the app is in front, and stale if
- * the prompt was settled elsewhere. Called when the page becomes visible. */
-export async function closePermissionNotifications(): Promise<void> {
+ * the prompt was settled elsewhere. Reply notifications go too: the chat on
+ * screen has read them, and a count left up would keep growing from there.
+ * Called when the page becomes visible. */
+export async function closeNotificationsTheAppShows(): Promise<void> {
   try {
     if (!("serviceWorker" in navigator)) return;
     const reg = await navigator.serviceWorker.getRegistration();
     for (const n of (await reg?.getNotifications()) ?? []) {
-      if (n.tag.startsWith(PERMISSION_TAG_PREFIX)) n.close();
+      if (n.tag.startsWith(PERMISSION_TAG_PREFIX) || n.tag === REPLY_TAG) n.close();
     }
   } catch {
     // Best effort: the next turn_ready closes it anyway.

@@ -111,7 +111,7 @@ async function planFor(
         const text = data.ref ? await fetchTurnText(data.ref).catch(() => null) : null;
         body = preview(text);
       }
-      return { notification: { title: "Marlow", body, tag: `turn-${data.ref ?? "unknown"}` }, badge: true };
+      return { notification: { title: "Marlow", body, tag: REPLY_TAG }, badge: true };
     }
     case "permission_request":
       // The only path that reaches an idle desktop (PRM-4). Review and Deny,
@@ -169,6 +169,70 @@ async function planFor(
  * queue runs one turn at a time, so any prompt it raised is settled by then. */
 export function settlesPermissionPrompts(data: PushPayloadData): boolean {
   return data.type === "turn_ready" || data.type === "notify";
+}
+
+/** Every reply notification (`turn_ready`, `notify`) shares this tag, so a
+ * newer one replaces the older instead of stacking. A tag per turn turned a
+ * computer waking from sleep into minutes of back-to-back toasts: the push
+ * service holds a day of pushes (webpush.py's TTL) and delivers them all at
+ * once (raised 2026-11-10). */
+export const REPLY_TAG = "marlow-reply";
+/** A reply within this long of the previous one replaces it without a new
+ * toast: a backlog arrives seconds apart, real replies rarely do. */
+export const BURST_MS = 60_000;
+/** A reply this old is shown without a sound; on a machine that slept it was
+ * very likely read on the phone already. The server keeps no read state per
+ * device, so age is the only signal the worker has. */
+export const STALE_MS = 30 * 60_000;
+
+/** What a reply notification remembers in its data, for the next one. */
+export interface ReplyCollapse {
+  count: number;
+  lastPushAt: number;
+}
+
+export interface CollapsedReply extends NotificationPlan {
+  renotify?: boolean;
+  collapse: ReplyCollapse;
+}
+
+/** Folds a reply into the one already showing, if any. `earlier` is that
+ * notification's `collapse` data (anything else counts as none);
+ * `createdAt` is the turn's epoch seconds, when known. Never sets both
+ * `silent` and `renotify`: showNotification throws on that pair. */
+export function collapseReply(
+  plan: NotificationPlan,
+  earlier: unknown,
+  now: number,
+  createdAt: number | null,
+): CollapsedReply {
+  const prev = asCollapse(earlier);
+  const count = (prev?.count ?? 0) + 1;
+  const burst = prev !== null && now - prev.lastPushAt < BURST_MS;
+  const stale = createdAt !== null && now - createdAt * 1000 > STALE_MS;
+  const quiet = burst || stale;
+  return {
+    ...plan,
+    title: count > 1 ? `Marlow · ${count} new` : plan.title,
+    silent: quiet || undefined,
+    // Without it, replacing a showing notification makes no sound or toast.
+    renotify: (!quiet && prev !== null) || undefined,
+    collapse: { count, lastPushAt: now },
+  };
+}
+
+function asCollapse(v: unknown): ReplyCollapse | null {
+  if (!v || typeof v !== "object") return null;
+  const c = v as Record<string, unknown>;
+  return typeof c.count === "number" && typeof c.lastPushAt === "number"
+    ? { count: c.count, lastPushAt: c.lastPushAt }
+    : null;
+}
+
+/** A turn's `created_at`, epoch seconds, or null. */
+export function turnCreatedAt(turn: unknown): number | null {
+  const v = (turn as { created_at?: unknown } | null)?.created_at;
+  return typeof v === "number" ? v : null;
 }
 
 /** The text a finished turn would show: its result, or its error. */

@@ -42,7 +42,7 @@ than a couple of weeks, or the work it ranks has moved, redo it.
    id, so the prompts now put the title first and say ids are for tools only.
 3. **Notification flood after a computer wakes**, *done 2026-11-12*. Replies
    share one tag and a backlog folds into one counted notification; the
-   server has no per-device read state, so "already read" is judged by age.
+   server has no per-device read state, so a push that arrives late is quiet.
 
 ### Bigger features that add capability
 

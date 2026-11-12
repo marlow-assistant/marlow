@@ -408,6 +408,12 @@ export class ChatStore {
     this.saveEffort(effort);
   }
 
+  /** After Settings' pick reached the box: shown now, not at the next /health
+   * (which then reports the same). */
+  setServerModel(model: string): void {
+    this.set({ serverModel: model });
+  }
+
   // --- sending ---------------------------------------------------------------
 
   /** CMP-1/CMP-2/SND-1. `images` are already-downscaled JPEGs. Returns false

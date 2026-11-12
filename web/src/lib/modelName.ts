@@ -17,3 +17,20 @@ export function capitalizedModelName(model: string): string {
   if (parts.length === 1) return capitalized(parts[0]);
   return model;
 }
+
+/** The models a user can pick, in the box's order (server/preferences.py
+ * MODELS; docs/tasks/model-picker.md). One per box: chat and every scheduled
+ * job run on it. */
+export type ModelChoice = "sonnet" | "opus";
+export const MODEL_CHOICES: { value: ModelChoice; label: string }[] = [
+  { value: "sonnet", label: "Sonnet" },
+  { value: "opus", label: "Opus" },
+];
+
+/** Which pickable model `/health`'s model is, or null when it is neither
+ * (not yet known, or an operator's MARLOW_MODEL outside the two). */
+export function modelChoice(serverModel: string | null): ModelChoice | null {
+  if (!serverModel) return null;
+  const tier = capitalizedModelName(serverModel).toLowerCase();
+  return MODEL_CHOICES.find((m) => m.value === tier)?.value ?? null;
+}

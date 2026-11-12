@@ -42,7 +42,7 @@ const headings = () => screen.getAllByRole("heading", { level: 3 }).map((h) => h
 describe("Settings › layout", () => {
   it("keeps server and build detail off the main pane, behind two rows at the bottom", () => {
     open();
-    expect(headings()).toEqual(["Appearance and voice", "Intelligence", "Location"]);
+    expect(headings()).toEqual(["Appearance and voice", "Model", "Think time", "Location"]);
     expect(screen.queryByText("marlow.test")).toBeNull();
     expect(screen.queryByRole("button", { name: "Unpair" })).toBeNull();
     const rows = screen.getAllByRole("button").map((b) => b.textContent);
@@ -64,7 +64,7 @@ describe("Settings › panes", () => {
     const heading = screen.getByRole("heading", { level: 2, name: "About" });
     expect(document.activeElement).toBe(heading);
     expect(screen.queryByRole("button", { name: "Done" })).toBeNull();
-    expect(screen.queryByRole("region", { name: "Intelligence" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Model" })).toBeNull();
     expect(screen.getByRole("dialog", { name: "Settings" })).toBeTruthy();
   });
 
@@ -79,7 +79,7 @@ describe("Settings › panes", () => {
 
   it("returns to where the main pane was scrolled, the rows being at the bottom of it", () => {
     open();
-    const body = screen.getByRole("region", { name: "Intelligence" }).closest(".sheet-body") as HTMLElement;
+    const body = screen.getByRole("region", { name: "Model" }).closest(".sheet-body") as HTMLElement;
     body.scrollTop = 640;
     fireEvent.click(row("About"));
     body.scrollTop = 0; // Hiding the pane drops it in a real browser.

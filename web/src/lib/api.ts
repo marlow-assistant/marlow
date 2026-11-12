@@ -486,6 +486,12 @@ export class Api {
     await this.json("/v1/preferences", { method: "POST", body: update, signal });
   }
 
+  /** The box-wide model (docs/tasks/model-picker.md). Throws if the box
+   * didn't take it; there is no device copy to fall back on. */
+  async setModel(model: "sonnet" | "opus", signal?: AbortSignal): Promise<void> {
+    await this.json("/v1/preferences", { method: "POST", body: { model }, signal });
+  }
+
   /** `GET /v1/preferences`, the "Your day" half. Server state only: unlike
    * face and effort there is no device copy, so Settings asks each time it
    * opens. A box that predates the setting has no such fields: DecodeError. */

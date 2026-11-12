@@ -38,13 +38,7 @@ enum ThinkingEffort: String, CaseIterable, Identifiable, Sendable {
     }
 
     /// The activity row's "High effort": technical, and the same as web's.
-    var activityWord: String {
-        switch self {
-        case .low: return "Low"
-        case .medium: return "Medium"
-        case .high: return "High"
-        }
-    }
+    var activityWord: String { rawValue.capitalized }
 
     /// Matches the server-side default from piece 1, so an untouched app and an
     /// unconfigured server agree rather than disagreeing invisibly. Medium

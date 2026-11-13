@@ -219,7 +219,9 @@ def test_do_it_puts_the_idea_in_the_prompt_and_quotes_it_on_the_bubble(headers, 
         )
         assert resp.status_code == 202
         rows = client.get("/v1/transcript", headers=headers).json()
-    assert prompts[0].startswith("[Idea: the user tapped Do it on your idea `van-budget-gap`")
+    assert prompts[0].startswith("[Idea: the user tapped Do it on your idea \"")
+    # Title first, id last, as for to-dos (todos.ID_RULE).
+    assert "`van-budget-gap`" not in prompts[0] and "(id van-budget-gap)" in prompts[0]
     assert prompts[0].endswith("\n\nDo it")
     user_rows = [row for row in rows["rows"] if row["role"] == "user"]
     assert user_rows[0]["text"] == "Do it"

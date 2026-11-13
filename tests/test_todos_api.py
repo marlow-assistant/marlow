@@ -131,7 +131,7 @@ def test_talking_about_an_item_puts_it_in_the_prompt_and_quotes_it(headers, monk
         rows = client.get("/v1/transcript", headers=headers).json()["rows"]
     context, _, text = prompts[0].partition("\n\n")
     assert text == "Can you find a slot?"
-    assert context.startswith("[To-do: the user tapped `t1` on their to-do list, \"Book the dentist\" (open, due 2030-11-06).")
+    assert context.startswith("[To-do: the user tapped an item on their to-do list, \"Book the dentist\" (open, due 2030-11-06, id t1).")
     # The notes can't close the block or start a line of their own.
     assert "\n" not in context and context.count("]") == 1 and context.endswith("]")
     assert rows[0]["quote"] == {"todo_id": "t1", "emoji": "☑️", "title": "Book the dentist"}

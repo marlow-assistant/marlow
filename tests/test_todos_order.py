@@ -335,7 +335,7 @@ def test_todo_list_shows_open_items_in_their_order_then_proposals(store) -> None
     _call("todo_move", id="t3", before="t1")
     text, err = _call("todo_list")
     assert not err
-    assert [row.split(" · ")[2] for row in text.splitlines()] == ["b", "a", "suggested"]
+    assert [row.split(" · ")[0] for row in text.splitlines()] == ["b", "a", "suggested"]
 
 
 def test_todo_move_is_offered_and_vetted_everywhere() -> None:

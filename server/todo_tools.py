@@ -47,11 +47,14 @@ def format_when(text: str) -> str:
 
 
 def line(item: dict[str, Any], *, notes: bool = False) -> str:
-    parts = [item["id"], item["state"], item["title"]]
+    # Title first, id last: with the id leading, Marlow repeated it to the
+    # user (todos.ID_RULE).
+    parts = [item["title"], item["state"]]
     if item.get("due"):
         parts.append(f"due {format_when(item['due'])}")
     if item.get("snoozed_until"):
         parts.append(f"snoozed until {format_when(item['snoozed_until'])}")
+    parts.append(f"id {item['id']}")
     text = " · ".join(parts)
     if notes and item.get("notes"):
         text += "\n  notes: " + item["notes"].replace("\n", "\n  ")
@@ -60,9 +63,10 @@ def line(item: dict[str, Any], *, notes: bool = False) -> str:
 
 def _add(a: dict[str, Any]) -> str:
     item = todo_store.add(a["title"], notes=a.get("notes"), due=a.get("due"), source=a["source"])
-    text = f"Added {item['id']} ({item['state']}): {item['title']}"
+    text = f"Added ({item['state']}): {item['title']}"
     if item["due"]:
         text += f" · due {format_when(item['due'])}"
+    text += f" · id {item['id']}"
     if item["state"] == "proposed":
         text += (" — a proposal: it won't be reminded until they accept it."
                  " If it matters, ask them about it now.")

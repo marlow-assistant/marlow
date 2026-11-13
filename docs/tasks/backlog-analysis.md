@@ -37,9 +37,9 @@ than a couple of weeks, or the work it ranks has moved, redo it.
    a box-wide Sonnet/Opus choice in Settings instead of a per-job model: one
    model for every turn keeps the UI honest and avoids rewriting the day's
    cache when `consolidate` resumes chat.
-2. **Stop showing to-do ids in replies** (`backlog.md`). The fix
-   exists only on Mike's box. One line in `identity/CLAUDE.md` "To-dos"
-   delivers it to every box, plus a `changes.json` entry.
+2. **Stop showing to-do ids in replies**, *done 2026-11-12*. A one-line
+   identity rule wasn't enough: every prompt that names an item led with its
+   id, so the prompts now put the title first and say ids are for tools only.
 3. **Notification flood after a computer wakes**, *done 2026-11-12*. Replies
    share one tag and a backlog folds into one counted notification; the
    server has no per-device read state, so a push that arrives late is quiet.

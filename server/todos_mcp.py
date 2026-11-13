@@ -33,7 +33,7 @@ ENDPOINT = "/internal/todos/tool"
 # server, and the turn should hear so rather than wait.
 TIMEOUT_SECONDS = 15.0
 
-_ID = {"type": "string", "description": "the to-do's id, like t12"}
+_ID = {"type": "string", "description": "the to-do's id, like t12; for this tool only, never written to the user"}
 _DUE = {
     "type": ["string", "null"],
     "description": (

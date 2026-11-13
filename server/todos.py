@@ -166,6 +166,12 @@ def _same_title(a: str, b: str) -> bool:
     return " ".join(a.casefold().split()) == " ".join(b.casefold().split())
 
 
+# Every prompt line that names an item carries this, and puts the title first
+# and the id last. With the id leading in backticks, like a label, Marlow
+# wrote "t13" in replies and briefs, which the app never shows (2026-11-10).
+ID_RULE = "Ids are for the to-do tools only: in anything you write, name an item by what it is, never by its id."
+
+
 def todo_context(item: dict[str, Any]) -> str:
     """The line that tells a turn which to-do the user tapped to talk about.
 
@@ -179,13 +185,14 @@ def todo_context(item: dict[str, Any]) -> str:
     facts = [item["state"]]
     if item.get("due"):
         facts.append(f"due {item['due']}")
+    facts.append(f"id {item['id']}")
     text = (
-        f"[To-do: the user tapped `{item['id']}` on their to-do list,"
+        f"[To-do: the user tapped an item on their to-do list,"
         f" \"{flat(item['title'])}\" ({', '.join(facts)})."
     )
     if item.get("notes"):
         text += f" Its notes: {flat(item['notes'])}"
-    return text + " Their message is about it; change it only through the to-do tools.]"
+    return text + f" Their message is about it; change it only through the to-do tools. {ID_RULE}]"
 
 
 class TodoStore:

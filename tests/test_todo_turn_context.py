@@ -53,12 +53,12 @@ def test_the_briefing_block_lists_open_and_proposed_and_marks_overdue(store, clo
     clock.at = T0 + timedelta(hours=2)
     block = todo_reminders.briefing_block()
     assert block.startswith("[To-do list") and block.endswith("]")
-    assert "`t1` \"Book the dentist\" (due Wed 2026-11-04 11:00; overdue). Notes: the cleaning" in block
-    assert "`t2` \"Renew the passport\" (due Mon 2026-11-02; overdue)" in block
-    assert "`t3` \"Call the bank\"" in block
-    assert "`t4` \"Pay the water bill\"" in block
+    assert "- \"Book the dentist\" (due Wed 2026-11-04 11:00; overdue; id t1). Notes: the cleaning" in block
+    assert "\"Renew the passport\" (due Mon 2026-11-02; overdue; id t2)" in block
+    assert "\"Call the bank\" (id t3)" in block
+    assert "\"Pay the water bill\" (id t4)" in block
     # Proposals in a part of their own, after the open items.
-    assert block.index("`t4`") > block.index("`t3`") and "proposed" in block.lower()[block.index("`t3`"):block.index("`t4`")]
+    assert block.index("id t4") > block.index("id t3") and "proposed" in block.lower()[block.index("id t3"):block.index("id t4")]
     assert "Old thing" not in block and "Never mind" not in block
 
 
@@ -86,7 +86,7 @@ def test_the_briefing_jobs_get_the_list_in_front_of_their_prompt(store, monkeypa
     with TestClient(internal_app) as client:
         assert client.post("/internal/cron/message", json={"job": job, "text": "Good morning."}).status_code == 202
     assert prompts[0].endswith("Good morning.")
-    assert ("`t1` \"Call the bank\"" in prompts[0]) is listed
+    assert ("\"Call the bank\" (id t1)" in prompts[0]) is listed
 
 
 def test_a_user_entry_named_morning_does_not_get_the_list(store, monkeypatch) -> None:
@@ -107,7 +107,7 @@ def test_a_proposal_two_days_old_is_raised_once_on_a_chat_turn(store, clock) -> 
     # Not on an unattended turn: nobody is there to answer the question.
     assert "Pay the water bill" not in turn_context.build_turn_context(resume=False, source="cron")
     first = turn_context.build_turn_context(resume=False, source="ios")
-    assert "`t1` \"Pay the water bill\"" in first and "todo_accept" in first
+    assert "\"Pay the water bill\" (id t1)" in first and "todo_accept" in first
     assert "Pay the water bill" not in turn_context.build_turn_context(resume=False, source="ios")
 
 

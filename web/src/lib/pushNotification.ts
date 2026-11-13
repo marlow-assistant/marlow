@@ -2,7 +2,7 @@
 // it can be tested without a worker. The payload mirrors push.py's
 // PushPayload: {type, ref}, plus alert_body for `notify` and
 // `permission_request`, and alert_title for `permission_request`
-// (server/approval_summary.push_text). A `turn_ready`
+// (server/approval_summary.push_text); webpush.py adds `sent_at` to every one. A `turn_ready`
 // carries no text (the push service never sees the reply), so its body comes
 // from /v1/turn/{ref}, fetched with the stored token, the same design as iOS's
 // NotificationService. If that fails the body is a generic line: never an
@@ -24,6 +24,8 @@ export interface PushPayloadData {
   ref?: string;
   alert_body?: string;
   alert_title?: string;
+  /** When the box sent it, epoch seconds (webpush.py). */
+  sent_at?: number;
 }
 
 export interface NotificationPlan {
@@ -57,6 +59,7 @@ export function decodePushData(raw: unknown): PushPayloadData {
     ref: typeof r.ref === "string" ? r.ref : undefined,
     alert_body: typeof r.alert_body === "string" ? r.alert_body : undefined,
     alert_title: typeof r.alert_title === "string" ? r.alert_title : undefined,
+    sent_at: typeof r.sent_at === "number" ? r.sent_at : undefined,
   };
 }
 
@@ -111,7 +114,7 @@ async function planFor(
         const text = data.ref ? await fetchTurnText(data.ref).catch(() => null) : null;
         body = preview(text);
       }
-      return { notification: { title: "Marlow", body, tag: `turn-${data.ref ?? "unknown"}` }, badge: true };
+      return { notification: { title: "Marlow", body, tag: REPLY_TAG }, badge: true };
     }
     case "permission_request":
       // The only path that reaches an idle desktop (PRM-4). Review and Deny,
@@ -169,6 +172,79 @@ async function planFor(
  * queue runs one turn at a time, so any prompt it raised is settled by then. */
 export function settlesPermissionPrompts(data: PushPayloadData): boolean {
   return data.type === "turn_ready" || data.type === "notify";
+}
+
+/** Every reply notification (`turn_ready`, `notify`) shares this tag, so a
+ * newer one replaces the older instead of stacking. A tag per turn turned a
+ * computer waking from sleep into minutes of back-to-back toasts: the push
+ * service holds a day of pushes (webpush.py's TTL) and delivers them all at
+ * once (raised 2026-11-10). */
+export const REPLY_TAG = "marlow-reply";
+/** A push that reaches the worker this long after it left the box was held
+ * by the push service: the machine was asleep or offline, and the reply was
+ * very likely read on another device meanwhile. It is shown without a sound.
+ * The server keeps no read state per device, so lateness is the signal. Five
+ * minutes leaves room for a computer clock that is off by a little. */
+export const LATE_MS = 5 * 60_000;
+
+/** What a reply notification remembers in its data, for the next one. */
+export interface ReplyCollapse {
+  count: number;
+  /** The last reply's ref, so a repeated push for it isn't counted twice. */
+  lastRef: string;
+}
+
+export interface CollapsedReply extends NotificationPlan {
+  renotify?: boolean;
+  collapse: ReplyCollapse;
+}
+
+/** Folds a reply into the one already showing, if any. `earlier` is that
+ * notification's `collapse` data (anything else counts as none); `sentAt` is
+ * the push's `sent_at`, epoch seconds, when the box sent one. Never sets both
+ * `silent` and `renotify`: showNotification throws on that pair. */
+export function collapseReply(
+  plan: NotificationPlan,
+  earlier: unknown,
+  now: number,
+  sentAt: number | null,
+  ref: string,
+): CollapsedReply {
+  const prev = asCollapse(earlier);
+  const repeat = prev !== null && prev.lastRef === ref;
+  const count = repeat ? prev.count : (prev?.count ?? 0) + 1;
+  const lateArrival = sentAt !== null && now - sentAt * 1000 > LATE_MS;
+  const quiet = repeat || lateArrival;
+  return {
+    ...plan,
+    title: count > 1 ? `Marlow · ${count} new` : plan.title,
+    silent: quiet || undefined,
+    // Without it, replacing a showing notification makes no sound or toast.
+    renotify: (!quiet && prev !== null) || undefined,
+    collapse: { count, lastRef: ref },
+  };
+}
+
+/** A runner that starts each step only after the previous one has settled.
+ * The worker handles pushes concurrently, and each awaits its reply fetch, so
+ * a wake-up backlog would otherwise read the showing reply notification
+ * together and fold into it as though each were the first ("2 new" for
+ * eight). One failed step doesn't stop the next. */
+export function oneAtATime(): (step: () => Promise<void>) => Promise<void> {
+  let tail: Promise<void> = Promise.resolve();
+  return (step) => {
+    const next = tail.then(step, step);
+    tail = next.catch(() => {});
+    return next;
+  };
+}
+
+function asCollapse(v: unknown): ReplyCollapse | null {
+  if (!v || typeof v !== "object") return null;
+  const c = v as Record<string, unknown>;
+  return typeof c.count === "number" && typeof c.lastRef === "string"
+    ? { count: c.count, lastRef: c.lastRef }
+    : null;
 }
 
 /** The text a finished turn would show: its result, or its error. */

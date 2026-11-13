@@ -98,7 +98,7 @@ the emulator's page.
   minutes. If that also holds pushes until wake, look at how the push service
   treats `Urgency` for web pushes.
 - **Diagnostics that worked:** `adb shell dumpsys notification --noredact |
-  grep -i "turn-"` lists Marlow's notifications (tag `turn-<turn id>`) without
+  grep -i "marlow-"` lists Marlow's notifications (replies share the tag `marlow-reply`) without
   waking the device; `adb shell dumpsys deviceidle get deep` confirms Doze;
   `adb logcat -v time` captured during the test shows the FCM side.
 - **Streaming that looks absent** is not the client: the box's

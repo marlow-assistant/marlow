@@ -9,11 +9,16 @@
 
 import {
   chosenFaceIcon,
+  collapseReply,
   DENY_ACTION,
   decodePushData,
   mustShowEveryPush,
+  oneAtATime,
+  type NotificationPlan,
   PERMISSION_TAG_PREFIX,
   planNotification,
+  REPLY_TAG,
+  type PushPayloadData,
   settlesPermissionPrompts,
   turnText,
 } from "./lib/pushNotification";
@@ -58,15 +63,37 @@ async function handlePush(event: PushEvent): Promise<void> {
   );
   if (plan.badge) await setBadge();
   if (plan.notification) {
-    const { title, closeImmediately, requestId, ...rest } = plan.notification;
-    await self.registration.showNotification(title, {
-      ...rest,
-      icon: await chosenFaceIcon(() => kvGet(KV_FACE)),
-      data: { url: "/", requestId },
-    } as NotificationOptions);
-    if (closeImmediately) {
-      for (const n of await self.registration.getNotifications({ tag: rest.tag })) n.close();
-    }
+    const notification = plan.notification;
+    await showInTurn(() => show(notification, data));
+  }
+}
+
+/** Reading the showing reply notification, folding and showing run one push
+ * at a time (see `oneAtATime`). */
+const showInTurn = oneAtATime();
+
+async function show(plan: NotificationPlan, data: PushPayloadData): Promise<void> {
+  let shown: NotificationPlan & { renotify?: boolean } = plan;
+  let collapse: unknown;
+  if (shown.tag === REPLY_TAG) {
+    const [earlier] = await self.registration.getNotifications({ tag: REPLY_TAG });
+    const folded = collapseReply(
+      shown,
+      (earlier?.data as { collapse?: unknown } | null)?.collapse,
+      Date.now(),
+      data.sent_at ?? null,
+      data.ref ?? "",
+    );
+    ({ collapse, ...shown } = folded);
+  }
+  const { title, closeImmediately, requestId, ...rest } = shown;
+  await self.registration.showNotification(title, {
+    ...rest,
+    icon: await chosenFaceIcon(() => kvGet(KV_FACE)),
+    data: { url: "/", requestId, collapse },
+  } as NotificationOptions);
+  if (closeImmediately) {
+    for (const n of await self.registration.getNotifications({ tag: rest.tag })) n.close();
   }
 }
 

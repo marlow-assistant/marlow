@@ -114,17 +114,6 @@ these. Each task doc lists exactly what is unseen.
 Sketches: the symptom, what we already know, and the first step. None is a
 spec, and the order means nothing.
 
-### Notification flood after a computer wakes (raised 2026-11-10)
-
-After Mike's PC sleeps, waking it brings minutes of back-to-back Marlow
-toasts, one per message already read on the phone. Likely the push service
-delivering everything it queued while the machine slept, with
-`web/src/sw.ts` showing each because no window is focused. Direction:
-the service worker drops a push older than a few minutes, or one for a
-message another device has already read, and collapses a backlog into one
-notification (`tag` replacement). Read `web-push-on-screen.md` and
-`web-double-notification.md` first; the latter's cause turned out not to be
-the web client.
 
 ### Garmin connection (raised 2026-10-22)
 

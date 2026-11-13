@@ -79,7 +79,8 @@ class _Sender:
 
     @property
     def payloads(self):
-        return [json.loads(c["data"]) for c in self.calls]
+        """The payloads without `sent_at`, which only its own test pins."""
+        return [{k: v for k, v in json.loads(c["data"]).items() if k != "sent_at"} for c in self.calls]
 
 
 @pytest.fixture
@@ -239,6 +240,14 @@ def test_bad_keys_and_shapes_are_rejected_with_400(paired_device_token, body):
 
 
 # --- sending -------------------------------------------------------------------
+
+def test_every_web_push_says_when_it_was_sent(paired_device_token, sender, monkeypatch):
+    # The worker tells a push held while the machine slept from a fresh one
+    # by this, so a wake-up backlog arrives quietly (web/src/sw.ts).
+    monkeypatch.setattr(webpush_module.time, "time", lambda: 1_800_000_000.25)
+    _register(paired_device_token)
+    asyncio.run(dispatch_web(paired_device_token, PushPayload(type=PushType.TURN_READY, ref="turn-1")))
+    assert json.loads(sender.calls[0]["data"])["sent_at"] == 1_800_000_000.25
 
 def test_turn_ready_payload_carries_no_text(paired_device_token, sender):
     _register(paired_device_token)

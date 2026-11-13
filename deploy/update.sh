@@ -284,6 +284,15 @@ rollback_reasons() {
     sudo -u "$MARLOW_USER" -H git -C "$repo" rev-parse --verify --quiet "$target^{commit}" >/dev/null || return 0
     head="$(sudo -u "$MARLOW_USER" -H git -C "$repo" rev-parse --short HEAD)"
     sudo -u "$MARLOW_USER" -H git -C "$repo" merge-base --is-ancestor "$head" "$target" || rc=$?
+    # A squash merge gives the trial branch's work new hashes, so main never
+    # contains the commit checked out (Mike, 2026-11-13: --force after every
+    # squash merge). If merging HEAD into the target would change nothing, the
+    # target already has all of it. A conflict, or a git too old for
+    # `merge-tree --write-tree` (2.38), keeps the refusal.
+    if [[ "$rc" -eq 1 ]] && [[ "$(sudo -u "$MARLOW_USER" -H git -C "$repo" merge-tree --write-tree "$target" "$head" 2>/dev/null | head -n 1)" \
+            == "$(sudo -u "$MARLOW_USER" -H git -C "$repo" rev-parse "$target^{tree}")" ]]; then
+        rc=0
+    fi
     if [[ "$rc" -eq 1 ]]; then
         echo "$target does not contain the commit checked out now ($head)"
     elif [[ "$rc" -ne 0 ]]; then

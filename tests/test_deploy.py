@@ -1512,6 +1512,41 @@ def test_a_run_migration_missing_from_the_target_refuses_alone(tmp_path, history
     ]
 
 
+def _squash_trial(repo: Path, merged: list[str]) -> None:
+    """The box runs `try`, a trial branch with two changes off main. Of those,
+    the files in `merged` land on main as one squash commit (new hash, same
+    content), and main then moves on with an unrelated commit."""
+    _git(repo, "switch", "-q", "-c", "try", "main")
+    for name in ("one.txt", "two.txt"):
+        (repo / name).write_text(f"{name}\n")
+        _git(repo, "add", name)
+        _git(repo, "commit", "-qm", name)
+    _git(repo, "switch", "-q", "main")
+    for name in merged:
+        (repo / name).write_text(f"{name}\n")
+        _git(repo, "add", name)
+    _git(repo, "commit", "-qm", "squash")
+    (repo / "later.txt").write_text("")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "later")
+    _git(repo, "switch", "-q", "try")
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
+def test_a_squash_merged_trial_branch_is_not_a_rollback(tmp_path, history) -> None:
+    """Mike, 2026-11-13: every squash merge of a trial branch meant --force,
+    though main had all of it under new hashes."""
+    _squash_trial(history, ["one.txt", "two.txt"])
+    assert _rollback_reasons(tmp_path, history, "main", ["0001-a", "0002-b"]) == []
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
+def test_a_trial_branch_only_partly_merged_is_still_a_rollback(tmp_path, history) -> None:
+    _squash_trial(history, ["one.txt"])
+    reasons = _rollback_reasons(tmp_path, history, "main", ["0001-a", "0002-b"])
+    assert len(reasons) == 1 and "main does not contain the commit checked out now" in reasons[0]
+
+
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
 def test_no_migration_record_still_checks_ancestry(tmp_path, history) -> None:
     """A fresh install has no record yet; the ancestry check still applies."""

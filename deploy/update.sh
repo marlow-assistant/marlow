@@ -269,6 +269,7 @@ fi
 #   - the target does not contain the commit checked out now. Catches the
 #     same branch-cut-too-early mistake before any migration is involved,
 #     and also a trial branch being dropped by going back to an unmerged main.
+#     A trial branch squash-merged whole is not dropped, so it passes.
 # `--force` deploys anyway, for a rollback that is meant. It is not carried
 # into the re-exec below: the target's own copy may predate the flag and
 # would refuse it as a usage error, after the checkout had already moved.
@@ -286,11 +287,15 @@ rollback_reasons() {
     sudo -u "$MARLOW_USER" -H git -C "$repo" merge-base --is-ancestor "$head" "$target" || rc=$?
     # A squash merge gives the trial branch's work new hashes, so main never
     # contains the commit checked out (Mike, 2026-11-13: --force after every
-    # squash merge). If merging HEAD into the target would change nothing, the
-    # target already has all of it. A conflict, or a git too old for
-    # `merge-tree --write-tree` (2.38), keeps the refusal.
-    if [[ "$rc" -eq 1 ]] && [[ "$(sudo -u "$MARLOW_USER" -H git -C "$repo" merge-tree --write-tree "$target" "$head" 2>/dev/null | head -n 1)" \
-            == "$(sudo -u "$MARLOW_USER" -H git -C "$repo" rev-parse "$target^{tree}")" ]]; then
+    # squash merge). If merging HEAD into the target is clean and changes
+    # nothing, the target already has all of it. A conflict keeps the refusal
+    # even when its tree matches: a deletion the target later edited comes
+    # out as the target's file (review 2026-11-13). So does a git too old for
+    # `merge-tree --write-tree` (2.38).
+    local merged
+    if [[ "$rc" -eq 1 ]] \
+            && merged="$(sudo -u "$MARLOW_USER" -H git -C "$repo" merge-tree --write-tree "$target" "$head" 2>/dev/null)" \
+            && [[ "$merged" == "$(sudo -u "$MARLOW_USER" -H git -C "$repo" rev-parse "$target^{tree}")" ]]; then
         rc=0
     fi
     if [[ "$rc" -eq 1 ]]; then

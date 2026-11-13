@@ -1548,6 +1548,25 @@ def test_a_trial_branch_only_partly_merged_is_still_a_rollback(tmp_path, history
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
+def test_a_trial_branch_whose_deletion_conflicts_with_main_is_still_a_rollback(tmp_path, history) -> None:
+    """The trial deleted a file that main went on to edit. A conflicted merge
+    keeps main's copy, so its tree equals main's -- but deploying main brings
+    the deleted file back. Only a clean merge counts (review 2026-11-13)."""
+    (history / "gone.txt").write_text("v1\n")
+    _git(history, "add", ".")
+    _git(history, "commit", "-qm", "gone v1")
+    _git(history, "switch", "-q", "-c", "try")
+    _git(history, "rm", "-q", "gone.txt")
+    _git(history, "commit", "-qm", "delete gone")
+    _git(history, "switch", "-q", "main")
+    (history / "gone.txt").write_text("v2\n")
+    _git(history, "commit", "-qam", "edit gone")
+    _git(history, "switch", "-q", "try")
+    reasons = _rollback_reasons(tmp_path, history, "main", ["0001-a", "0002-b"])
+    assert len(reasons) == 1 and "main does not contain the commit checked out now" in reasons[0]
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
 def test_no_migration_record_still_checks_ancestry(tmp_path, history) -> None:
     """A fresh install has no record yet; the ancestry check still applies."""
     reasons = _rollback_reasons(tmp_path, history, "early", None)

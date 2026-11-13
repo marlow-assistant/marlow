@@ -121,7 +121,7 @@ def test_items_due_together_share_one_unattended_turn_in_the_conversation(store,
     prompts, posted, turn = _run(store, clock, monkeypatch, _reply("Dentist and the bank are due."))
     assert len(prompts) == 1
     prompt, kwargs = prompts[0]
-    assert "`t1` \"Book the dentist\"" in prompt and "`t2` \"Call the bank\"" in prompt
+    assert "\"Book the dentist\" (due " in prompt and "\"Call the bank\" (due " in prompt
     assert "the cleaning" in prompt
     # Unattended: a permission prompt auto-denies rather than waking a phone.
     assert turn.source == "cron" and turn.in_conversation
@@ -175,7 +175,7 @@ def test_the_prompt_keeps_list_text_inside_its_block(store, clock, monkeypatch, 
     store.add("Pay ] the [bill", notes="line one\nline two ]", due="2026-11-04 11:00", source="user")
     clock.at = T0 + timedelta(hours=1)
     prompts, _, _ = _run(store, clock, monkeypatch, _reply("ok"))
-    item_lines = [line for line in prompts[0][0].splitlines() if line.startswith("- `t1`")]
+    item_lines = [line for line in prompts[0][0].splitlines() if "id t1" in line]
     assert len(item_lines) == 1
     assert "]" not in item_lines[0] and "[" not in item_lines[0]
 

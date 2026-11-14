@@ -22,10 +22,11 @@ import base64
 import binascii
 import os
 import stat
+import unicodedata
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, NamedTuple
 
 import uvicorn
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
@@ -36,7 +37,17 @@ from server import active_turn, activity_log, changes, deny_detail, health, idea
 from server.auth_monitor import auth_watcher
 from server.body_limit import BodyLimitMiddleware
 from server.request_deadline import RequestDeadlineProtocol
-from server.attachments import cleanup_attachment, write_attachments
+from server.attachments import (
+    ConversionError,
+    FileAttachment,
+    Kind,
+    archive_refusal,
+    cleanup_attachment,
+    convert_office,
+    sniff,
+    write_attachments,
+    write_files,
+)
 from server.config import settings
 from server.identity import build_identity_context
 from server.todos import TODO_QUOTE_EMOJI, TodoError, TodoNotFound, todo_context, todo_store
@@ -198,7 +209,7 @@ class MessageRequest(BaseModel):
     # Images, inline (docs/tasks/ios-image-input.md — inline base64 beats a
     # separate upload endpoint: one round trip, one idempotency key, no
     # orphaned-upload problem). `images` is the multi-image form
-    # ([{"b64", "mime"}], at most _MAX_IMAGES); `image_b64`/`image_mime` is the
+    # ([{"b64", "mime"}], at most _MAX_ITEMS); `image_b64`/`image_mime` is the
     # original single-image pair, still accepted so an older client keeps
     # working. All optional; the pair is both-or-neither and the two forms are
     # exclusive. Checked in _decode_images rather than here, and `images` is a
@@ -207,6 +218,13 @@ class MessageRequest(BaseModel):
     image_b64: str | None = None
     image_mime: str | None = None
     images: list[dict[str, Any]] | None = None
+    # Files of any type, beside the photos (docs/tasks/share-and-files.md, wire
+    # contract in docs/tasks/share-and-files-wire.md): [{"b64", "mime",
+    # "name"}]. Loose dicts for the same reason as `images`. The `mime` is the
+    # client's guess and decides nothing: the server sniffs the bytes
+    # (attachments.sniff), so no client carries a type list. `name` is display
+    # text only. Photos and files share one count and one byte total.
+    files: list[dict[str, Any]] | None = None
     # Where the device is, at the precision the user picked
     # (docs/tasks/message-location.md). A loose dict, not a nested model, on
     # purpose: a nested model turns a malformed location into a 422 that
@@ -273,16 +291,23 @@ _MAX_IMAGE_BYTES = 6 * 1024 * 1024
 # Multi-image messages (Mike, 2026-10-23): at most 6 images, and a ceiling on
 # their decoded total. Like the 6MB this is a bound against a hostile or buggy
 # client, not what the app sends (~300KB each after the on-device downscale).
-_MAX_IMAGES = 6
-_MAX_TOTAL_IMAGE_BYTES = 12 * 1024 * 1024
+# Files joined them on 2026-11-14 (docs/tasks/share-and-files.md): the same six
+# slots, photos and files together, and one decoded total for the message,
+# raised from 12MB to 25MB to fit a single big PDF. A file may be up to 20MB;
+# a photo keeps its 6MB. The clients mirror the counts and sizes (never a type
+# list) and name this file as the authority.
+_MAX_ITEMS = 6
+_MAX_FILE_BYTES = 20 * 1024 * 1024
+_MAX_TOTAL_BYTES = 25 * 1024 * 1024
+_MAX_NAME_CHARS = 120
 
-# The largest legitimate body is a full six-image message: the decoded ceiling
-# as base64 (4/3), plus room for the caption and the rest of the JSON. Derived
-# from the limits above so they can't drift apart. Refused before any route
-# runs (server/body_limit.py), and only with a valid device token: every other
+# The largest legitimate body is a full message: the decoded ceiling as base64
+# (4/3), plus room for the caption and the rest of the JSON. Derived from the
+# limits above so they can't drift apart. Refused before any route runs
+# (server/body_limit.py), and only with a valid device token: every other
 # request, and these two without one, gets the small default. Pairing is the
 # route a stranger can reach, so it gets a tiny cap.
-_MAX_BODY_BYTES = _MAX_TOTAL_IMAGE_BYTES * 4 // 3 + 256 * 1024
+_MAX_BODY_BYTES = _MAX_TOTAL_BYTES * 4 // 3 + 256 * 1024
 _MAX_SMALL_BODY_BYTES = 64 * 1024
 _MAX_PAIR_BODY_BYTES = 4 * 1024
 # Without a valid token, the whole body inside this, or 408. At most 64 KiB, so
@@ -357,8 +382,8 @@ def _decode_images(body: MessageRequest) -> list[bytes]:
 
     if not body.images:
         raise HTTPException(status_code=400, detail="images must not be empty")
-    if len(body.images) > _MAX_IMAGES:
-        raise HTTPException(status_code=400, detail=f"at most {_MAX_IMAGES} images per message")
+    if len(body.images) > _MAX_ITEMS:
+        raise HTTPException(status_code=400, detail=f"at most {_MAX_ITEMS} items per message")
     decoded: list[bytes] = []
     for i, item in enumerate(body.images):
         b64, mime = item.get("b64"), item.get("mime")
@@ -367,8 +392,75 @@ def _decode_images(body: MessageRequest) -> list[bytes]:
         decoded.append(_decode_image(b64, mime, f"images[{i}]"))
         # Running total, so a hostile body stops costing memory at the image
         # that crosses the line rather than after all six are decoded.
-        if sum(len(d) for d in decoded) > _MAX_TOTAL_IMAGE_BYTES:
-            raise HTTPException(status_code=413, detail="images exceed the 12MB decoded total limit")
+        if sum(len(d) for d in decoded) > _MAX_TOTAL_BYTES:
+            raise HTTPException(status_code=413, detail="message exceeds the 25MB decoded total limit")
+    return decoded
+
+
+class _DecodedFile(NamedTuple):
+    data: bytes
+    kind: Kind
+    name: str
+
+
+def _clean_name(raw: str) -> str:
+    """A file's display name, safe to quote on one line of the prompt and to
+    show in a bubble: control and format characters (every Unicode category
+    starting with C, which takes newlines, NUL and bidi overrides) and line and
+    paragraph separators removed, `[`, `]` and `"` removed (they are what would
+    let a name pose as the line around it), at most 120 characters, "file" if
+    nothing is left. Display only: it is never part of a path, which the
+    server names from a number and the sniffed kind."""
+    kept = "".join(
+        ch for ch in raw
+        if unicodedata.category(ch)[0] != "C"
+        and unicodedata.category(ch) not in ("Zl", "Zp")
+        and ch not in '[]"'
+    )
+    return kept[:_MAX_NAME_CHARS].strip() or "file"
+
+
+def _decode_files(body: MessageRequest, images: list[bytes]) -> list[_DecodedFile]:
+    """Every file on the request, decoded, sniffed and validated, or an
+    HTTPException; nothing is written. Same all-or-nothing rule as the photos
+    (contract CMP-4), and `files[i]` is named in every error. No type is ever
+    refused: an unfamiliar one is sniffed as Other and told to Marlow as such.
+    The one refusal that looks like a type is an Office file that cannot be
+    read (a zip bomb here, a failed conversion later), because sending it
+    labelled unreadable would hide a bug."""
+    if body.files is None:
+        return []
+    if not body.files:
+        raise HTTPException(status_code=400, detail="files must not be empty")
+    if len(images) + len(body.files) > _MAX_ITEMS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"at most {_MAX_ITEMS} items per message, photos and files together",
+        )
+    total = sum(len(d) for d in images)
+    decoded: list[_DecodedFile] = []
+    for i, item in enumerate(body.files):
+        label = f"files[{i}]"
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=400, detail=f"{label} needs string b64, mime and name")
+        b64, mime, name = item.get("b64"), item.get("mime"), item.get("name")
+        if not isinstance(b64, str) or not isinstance(mime, str) or not isinstance(name, str):
+            raise HTTPException(status_code=400, detail=f"{label} needs string b64, mime and name")
+        try:
+            data = base64.b64decode(b64, validate=True)
+        except (binascii.Error, ValueError) as e:
+            raise HTTPException(status_code=400, detail=f"{label} is not valid base64") from e
+        if not data:
+            raise HTTPException(status_code=400, detail=f"{label} decoded to zero bytes")
+        if len(data) > _MAX_FILE_BYTES:
+            raise HTTPException(status_code=413, detail=f"{label} exceeds the 20MB decoded limit")
+        total += len(data)
+        if total > _MAX_TOTAL_BYTES:
+            raise HTTPException(status_code=413, detail="message exceeds the 25MB decoded total limit")
+        kind = sniff(data)
+        if kind.converter and archive_refusal(data):
+            raise HTTPException(status_code=422, detail=f"{label} could not be read")
+        decoded.append(_DecodedFile(data, kind, _clean_name(name)))
     return decoded
 
 
@@ -435,7 +527,7 @@ async def post_message(
     # (`/code-review high` finding, 2026-08-27). Acceptable at one phone; if a
     # second attended client ever exists, give this its own bounded executor
     # rather than widening the default one.
-    attachment_turn_id, attachment_paths, effort = await asyncio.to_thread(
+    attachment_turn_id, attachment_paths, file_attachments, effort = await asyncio.to_thread(
         _prepare_message, body, token
     )
 
@@ -461,7 +553,7 @@ async def post_message(
         await asyncio.to_thread(_tapped_todo, body.todo_id) if body.todo_id and idea is None else None
     )
     row_turn_id = await asyncio.to_thread(
-        _record_user_message, body, new_turn_id, attachment_paths, idea, todo
+        _record_user_message, body, new_turn_id, attachment_paths, file_attachments, idea, todo
     )
     if idea is not None:
         prompt = f"{ideas.accepted_context(idea)}\n\n{body.text}"
@@ -477,6 +569,7 @@ async def post_message(
         client_msg_id=body.client_msg_id,
         turn_id=new_turn_id,
         attachment_paths=attachment_paths,
+        file_attachments=file_attachments,
         effort=effort,
         spoken=body.spoken is True,
         # A retry whose row already existed under another turn_id (the first
@@ -518,24 +611,30 @@ def _record_user_message(
     body: MessageRequest,
     turn_id: str,
     attachment_paths: tuple[str, ...],
+    file_attachments: tuple[FileAttachment, ...] = (),
     idea: ideas.Idea | None = None,
     todo: dict[str, Any] | None = None,
 ) -> str | None:
-    """Write the transcript's user row, and copy the image beside it. Runs in a
-    worker thread: it is SQLite and file I/O. Returns the turn_id the row
-    carries -- `turn_id` for a new row, the first send's for a dedup -- or None
-    if the transcript could not be written.
+    """Write the transcript's user row, and copy the images and files beside
+    it. Runs in a worker thread: it is SQLite and file I/O. Returns the
+    turn_id the row carries -- `turn_id` for a new row, the first send's for a
+    dedup -- or None if the transcript could not be written.
 
-    The image is copied from the attachment `_prepare_message` already wrote
+    The files are copied from the attachments `_prepare_message` already wrote
     rather than re-decoded, and BEFORE the turn is enqueued, so the copy
-    cannot lose a race with the drain's `cleanup_attachment`. `append_user` never raises: a transcript that cannot be written must
-    not cost Mike the message he sent."""
+    cannot lose a race with the drain's `cleanup_attachment`. It is the
+    ORIGINAL file that is kept (never the `.md`), under the kind's mime, never
+    the client's. `append_user` never raises: a transcript that cannot be
+    written must not cost Mike the message he sent."""
     row = transcript.append_user(
         turn_id=turn_id,
         text=body.text,
         source="chat",
         client_msg_id=body.client_msg_id,
-        attachments=[(path, _ALLOWED_IMAGE_MIME) for path in attachment_paths],
+        attachments=[
+            *((path, _ALLOWED_IMAGE_MIME, None, _size_or_none(path)) for path in attachment_paths),
+            *((a.path, a.mime, a.name, a.size) for a in file_attachments),
+        ],
         quote=(
             {"idea_id": idea.id, "emoji": idea.emoji, "title": idea.title} if idea
             else {"todo_id": todo["id"], "emoji": TODO_QUOTE_EMOJI, "title": todo["title"]} if todo
@@ -545,9 +644,16 @@ def _record_user_message(
     return row["turn_id"] if row else None
 
 
+def _size_or_none(path: str) -> int | None:
+    try:
+        return os.path.getsize(path)
+    except OSError:
+        return None
+
+
 def _prepare_message(
     body: MessageRequest, token: str
-) -> tuple[str | None, str | None, str | None]:
+) -> tuple[str | None, tuple[str, ...], tuple[FileAttachment, ...], str | None]:
     """Blocking validation/persistence performed off the server event loop."""
     effort: str | None = None
     if body.effort is not None:
@@ -583,12 +689,14 @@ def _prepare_message(
     # entry, which is how Off takes effect at once.
     location_store.report(token, _parse_location(body.location))
 
-    # Decode and validate EVERY image before writing any of them.
+    # Decode and validate EVERY image and file before writing any of them.
     images = _decode_images(body)
+    files = _decode_files(body, images)
 
     attachment_turn_id: str | None = None
     attachment_paths: tuple[str, ...] = ()
-    if images:
+    file_attachments: tuple[FileAttachment, ...] = ()
+    if images or files:
         # Minted here, not left to enqueue(), because the files have to exist at
         # these paths BEFORE the turn is queued (docs/tasks/ios-image-input.md
         # §2) — the worker could otherwise reach the turn before the write
@@ -596,7 +704,13 @@ def _prepare_message(
         # paths are handed back to the event-loop-owned enqueue operation.
         attachment_turn_id = str(uuid.uuid4())
         try:
-            attachment_paths = write_attachments(attachment_turn_id, images)
+            attachment_paths = write_attachments(attachment_turn_id, images) if images else ()
+            file_attachments = _store_files(attachment_turn_id, files, first_index=len(images))
+        except HTTPException:
+            # A conversion that failed (a 422 naming the file): nothing was
+            # enqueued, so remove what was written, same as the OSError below.
+            cleanup_attachment(attachment_turn_id)
+            raise
         except OSError as e:
             # Nothing was enqueued yet, so cleanup_attachment's usual trigger
             # (the drain loop, on a terminal turn) never runs for whatever
@@ -606,7 +720,29 @@ def _prepare_message(
             logger.exception("failed to write attachment for turn %s", attachment_turn_id)
             raise HTTPException(status_code=500, detail="failed to store attachment") from e
 
-    return attachment_turn_id, attachment_paths, effort
+    return attachment_turn_id, attachment_paths, file_attachments, effort
+
+
+def _store_files(
+    turn_id: str, files: list[_DecodedFile], first_index: int
+) -> tuple[FileAttachment, ...]:
+    """Writes the files beside the photos and, for an Office kind, its text
+    version. A conversion that fails is a 422 naming the file; the caller
+    removes the turn's directory, so a refusal leaves nothing behind."""
+    if not files:
+        return ()
+    paths = write_files(turn_id, [(f.data, f.kind) for f in files], first_index)
+    stored: list[FileAttachment] = []
+    for i, (f, path) in enumerate(zip(files, paths)):
+        text_path = None
+        if f.kind.converter:
+            try:
+                text_path = convert_office(f.kind.converter, path)
+            except ConversionError as e:
+                logger.warning("files[%d] (%s) could not be converted: %s", i, f.kind.converter, e)
+                raise HTTPException(status_code=422, detail=f"files[{i}] could not be read") from e
+        stored.append(FileAttachment(path, f.name, f.kind.label, len(f.data), text_path, f.kind.mime))
+    return tuple(stored)
 
 
 @public_app.get("/v1/ideas")

@@ -3,9 +3,11 @@ import { useMenuDismiss } from "./CopyMenu";
 import type { Api } from "../lib/api";
 import type { ChatStore } from "../lib/chatStore";
 import { Dictation, PartialTranscriptError, transcribeErrorText } from "../lib/dictation";
-import { MicIcon, StopIcon, WaveformIcon } from "./Icons";
-import { downscaleToJpeg, ImageUnsupportedError, MAX_IMAGES } from "../lib/imageDownscale";
+import { FileIcon, MicIcon, PaperclipIcon, StopIcon, WaveformIcon } from "./Icons";
+import { fileKind, formatSize } from "../lib/fileInfo";
+import { MAX_ITEMS, stageBatch, type StagedItem } from "../lib/staging";
 import { Microphone } from "../lib/segmentRecorder";
+import { shareCaption, sweepShares, takeShare } from "../lib/shareTarget";
 import type { Todo } from "../lib/apiModels";
 import { unlockAudio } from "./feedback";
 import { quoteOf, TALK_TEXT } from "./TodosPanel";
@@ -23,10 +25,19 @@ export interface ComposerVoice {
   onDictating: (on: boolean) => void;
 }
 
-interface StagedImage {
-  id: string;
-  blob: Blob;
-  url: string;
+/** A photo carries the object URL its thumbnail is drawn from; a file, a chip,
+ * has none. */
+type Staged = StagedItem & { url?: string };
+
+/** The name without its extension, so a long one can be cut there and still
+ * say what it is. A leading dot (".env") is not an extension. */
+function stemOf(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 && dot < name.length - 1 ? name.slice(0, dot) : name;
+}
+
+function revokeThumb(item: Staged): void {
+  if (item.url) URL.revokeObjectURL(item.url);
 }
 
 type Dictating = "idle" | "recording" | "transcribing";
@@ -46,8 +57,9 @@ function enterSends(): boolean {
  * input was assumed to offer Camera in Android Chrome's chooser; on a current
  * phone it opens the system photo picker, which has none (seen on the Android
  * user's phone, 2026-10-23). So a touch device gets a menu with a separate
- * `capture` input. A desktop keeps the one-click file dialog: it ignores
- * `capture`, and "Take photo" would open the same dialog again. */
+ * `capture` input, and a third item for any file. A desktop keeps the
+ * one-click file dialog, now unrestricted (photos and files alike: it ignores
+ * `capture`, and "Take photo" would open the same dialog again). */
 function offersCamera(): boolean {
   return typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 }
@@ -56,11 +68,13 @@ function AttachMenu({
   wrapRef,
   onCamera,
   onLibrary,
+  onFile,
   onClose,
 }: {
   wrapRef: RefObject<HTMLDivElement | null>;
   onCamera: () => void;
   onLibrary: () => void;
+  onFile: () => void;
   onClose: () => void;
 }) {
   // Dismissal watches the wrapper, not just the menu, so a tap on "+" itself
@@ -83,6 +97,10 @@ function AttachMenu({
           <path d="m3.5 17 4.5-4.5 3.5 3.5 2-2 3.5 3" />
         </svg>
         Choose photo
+      </button>
+      <button type="button" role="menuitem" onClick={onFile}>
+        <PaperclipIcon />
+        Choose file
       </button>
     </div>
   );
@@ -107,12 +125,16 @@ export function Composer({
   const dictatingRef = useRef<Dictating>("idle");
   dictatingRef.current = dictating;
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [images, setImages] = useState<StagedImage[]>([]);
-  const imagesRef = useRef<StagedImage[]>([]);
-  imagesRef.current = images;
+  // Photos and files, in the order they were added: one list, one cap.
+  const [staged, setStaged] = useState<Staged[]>([]);
+  const stagedRef = useRef<Staged[]>([]);
+  stagedRef.current = staged;
   const [imageError, setImageError] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  /** No `accept`: anything. What the browser can decode as an image becomes a
+   * photo whichever input picked it (lib/staging.ts). */
+  const anyRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const attachWrapRef = useRef<HTMLDivElement>(null);
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
@@ -137,9 +159,9 @@ export function Composer({
   // Object URLs are revoked when a thumbnail is removed or sent, and here
   // when the composer goes away; not on every list change, because a refused
   // send puts the same thumbnails back.
-  useEffect(() => () => imagesRef.current.forEach((i) => URL.revokeObjectURL(i.url)), []);
+  useEffect(() => () => stagedRef.current.forEach(revokeThumb), []);
 
-  const canSend = (text.trim() !== "" || images.length > 0 || todo !== null) && dictating === "idle";
+  const canSend = (text.trim() !== "" || staged.length > 0 || todo !== null) && dictating === "idle";
 
   // A staged to-do means they're about to say something about it.
   useEffect(() => {
@@ -230,77 +252,95 @@ export function Composer({
     if (message) noticeTimer.current = setTimeout(() => setImageError(null), ms);
   }
 
-  /** Appends, up to MAX_IMAGES. Over the cap the first ones that fit are
-   * kept and a notice says the rest were left out. */
+  /** Stages what was picked, pasted or shared: photos and files, counted
+   * together (lib/staging.ts has the rules and the notices). */
   async function attach(files: (File | Blob)[]) {
     showNotice(null);
-    const room = Math.max(0, MAX_IMAGES - imagesRef.current.length);
-    // Kept so a per-file failure below doesn't replace it: the user must still
-    // learn the rest were left out.
-    let capNote = "";
-    if (files.length > room) {
-      capNote =
-        room === 0
-          ? `You can attach up to ${MAX_IMAGES} photos.`
-          : `Only the first ${room} added: up to ${MAX_IMAGES} photos per message.`;
-      showNotice(capNote, 4000);
-    }
-    for (const file of files.slice(0, room)) {
-      try {
-        const blob = await downscaleToJpeg(file);
-        const url = URL.createObjectURL(blob);
-        const accepted = imagesRef.current.length < MAX_IMAGES;
-        if (!accepted) {
-          URL.revokeObjectURL(url);
-          break;
-        }
+    const notice = await stageBatch(
+      files,
+      () => stagedRef.current,
+      (item) => {
         // The ref moves on at once, so a second pick landing before React
         // renders still sees this one when it counts.
-        imagesRef.current = [...imagesRef.current, { id: crypto.randomUUID(), blob, url }];
-        setImages(imagesRef.current);
-      } catch (e) {
-        const why = e instanceof ImageUnsupportedError ? e.message : "Couldn't read that image.";
-        showNotice(capNote ? `${why} ${capNote}` : why, capNote ? 4000 : 3000);
-      }
-    }
+        stagedRef.current = [
+          ...stagedRef.current,
+          item.kind === "photo" ? { ...item, url: URL.createObjectURL(item.blob) } : item,
+        ];
+        setStaged(stagedRef.current);
+      },
+    );
+    if (notice) showNotice(notice, 4000);
   }
 
-  function removeImage(id: string) {
-    const gone = imagesRef.current.find((i) => i.id === id);
-    if (gone) URL.revokeObjectURL(gone.url);
-    imagesRef.current = imagesRef.current.filter((i) => i.id !== id);
-    setImages(imagesRef.current);
+  function removeStaged(id: string) {
+    const gone = stagedRef.current.find((i) => i.id === id);
+    if (gone) revokeThumb(gone);
+    stagedRef.current = stagedRef.current.filter((i) => i.id !== id);
+    setStaged(stagedRef.current);
   }
 
   async function send() {
     if (!canSend) return;
     unlockAudio();
-    // CMP-1: read and clear text and images in one step; put both back if the
-    // send refuses.
+    // CMP-1: read and clear text and attachments in one step; put both back
+    // if the send refuses.
     const draft = text;
-    const staged = imagesRef.current;
+    const sending = stagedRef.current;
     const about = todo;
     setText("");
-    imagesRef.current = [];
-    setImages([]);
+    stagedRef.current = [];
+    setStaged([]);
     if (about) onTodo(null);
-    const blobs = staged.map((i) => i.blob);
+    const photos = sending.filter((i) => i.kind === "photo").map((i) => i.blob);
+    const files = sending.filter((i) => i.kind === "file").map((i) => ({ blob: i.blob, name: i.name }));
     const ok = about
-      ? await store.send(draft.trim() ? draft : TALK_TEXT, blobs, quoteOf(about))
-      : await store.send(draft, blobs);
-    if (ok) staged.forEach((i) => URL.revokeObjectURL(i.url));
+      ? await store.send(draft.trim() ? draft : TALK_TEXT, photos, quoteOf(about), files)
+      : await store.send(draft, photos, undefined, files);
+    if (ok) sending.forEach(revokeThumb);
     else {
       setText(draft);
       if (about) onTodo(about);
-      const merged = [...staged, ...imagesRef.current];
-      // Photos added while the send was in flight can push past the cap: drop
+      const merged = [...sending, ...stagedRef.current];
+      // Items added while the send was in flight can push past the cap: drop
       // the newest, free their blob URLs, and say so.
-      merged.slice(MAX_IMAGES).forEach((i) => URL.revokeObjectURL(i.url));
-      if (merged.length > MAX_IMAGES) showNotice(`Only ${MAX_IMAGES} photos fit; the last ones were removed.`, 4000);
-      imagesRef.current = merged.slice(0, MAX_IMAGES);
-      setImages(imagesRef.current);
+      merged.slice(MAX_ITEMS).forEach(revokeThumb);
+      if (merged.length > MAX_ITEMS) showNotice(`Only ${MAX_ITEMS} items fit; the last ones were removed.`, 4000);
+      stagedRef.current = merged.slice(0, MAX_ITEMS);
+      setStaged(stagedRef.current);
     }
   }
+
+  // Android's share sheet (docs/tasks/share-and-files.md, Phase 4): the service
+  // worker kept what was shared and redirected here with `?share=<id>`. Staged
+  // through the same path as a pick, so the same count and size checks and
+  // notices apply, with the caption pre-filled. Never sent for the user: they
+  // see what was shared, add a note and tap Send. Once only, though React may
+  // run this effect twice in development.
+  const shareTaken = useRef(false);
+  useEffect(() => {
+    if (shareTaken.current) return;
+    const params = new URLSearchParams(location.search);
+    const id = params.get("share");
+    if (!id) return;
+    shareTaken.current = true;
+    params.delete("share");
+    const rest = params.toString();
+    history.replaceState(null, "", location.pathname + (rest ? `?${rest}` : "") + location.hash);
+    void (async () => {
+      void sweepShares();
+      const entry = await takeShare(id);
+      if (!entry) {
+        showNotice("Couldn't find what you shared.", 4000);
+        return;
+      }
+      const caption = shareCaption(entry);
+      if (caption) setText((t) => (t.trim() ? `${t.trimEnd()}\n${caption}` : caption));
+      if (entry.files.length > 0) await attach(entry.files);
+      taRef.current?.focus();
+    })();
+    // Once, on mount: `attach` only reads refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing || e.keyCode === 229) return;
@@ -309,8 +349,8 @@ export function Composer({
     void send();
   }
 
-  /** Both file inputs, the library and the camera, land here. The camera
-   * input has no `multiple`, so it hands over one file. */
+  /** All three inputs, the library, the camera and any file, land here. The
+   * camera input has no `multiple`, so it hands over one file. */
   function onPicked(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (files.length > 0) void attach(files);
@@ -348,21 +388,50 @@ export function Composer({
           </button>
         </div>
       )}
-      {images.length > 0 && (
+      {staged.length > 0 && (
+        // Photos are tiles, three across; files are rows under them, one per
+        // line, so the name is readable before sending (Mike, 2026-11-14: a
+        // 64px tile cut it to a few letters).
         <div className="preview-row" data-testid="preview-row">
-          {images.map((image) => (
-            <div className="preview" data-testid="preview" key={image.id}>
-              <img src={image.url} alt="Attached" width={44} height={44} />
-              <button
-                type="button"
-                className="preview-remove"
-                aria-label="Remove photo"
-                onClick={() => removeImage(image.id)}
-              >
-                ×
-              </button>
+          {staged.some((i) => i.kind === "photo") && (
+            <div className="preview-grid">
+              {staged.map((item) =>
+                item.kind === "photo" ? (
+                  <div className="preview" data-testid="preview" key={item.id}>
+                    <img src={item.url} alt="Attached" width={44} height={44} />
+                    <button
+                      type="button"
+                      className="preview-remove"
+                      aria-label="Remove photo"
+                      onClick={() => removeStaged(item.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : null,
+              )}
             </div>
-          ))}
+          )}
+          {staged.map((item) =>
+            item.kind === "file" ? (
+              <div className="staged-file" data-testid="file-chip" key={item.id} title={item.name}>
+                <FileIcon kind={fileKind(item.name)} />
+                <span className="staged-file-name">
+                  <span className="staged-file-stem">{stemOf(item.name)}</span>
+                  <span className="staged-file-ext">{item.name.slice(stemOf(item.name).length)}</span>
+                </span>
+                <span className="staged-file-size">{formatSize(item.blob.size)}</span>
+                <button
+                  type="button"
+                  className="staged-file-remove"
+                  aria-label={`Remove ${item.name}`}
+                  onClick={() => removeStaged(item.id)}
+                >
+                  ×
+                </button>
+              </div>
+            ) : null,
+          )}
         </div>
       )}
       <div className="composer-row">
@@ -370,10 +439,10 @@ export function Composer({
           <button
             type="button"
             className="attach"
-            aria-label="Add a photo"
+            aria-label="Attach"
             aria-haspopup={offersCamera() ? "menu" : undefined}
             aria-expanded={offersCamera() ? attachMenuOpen : undefined}
-            onClick={() => (offersCamera() ? setAttachMenuOpen((o) => !o) : fileRef.current?.click())}
+            onClick={() => (offersCamera() ? setAttachMenuOpen((o) => !o) : anyRef.current?.click())}
           >
             +
           </button>
@@ -388,11 +457,16 @@ export function Composer({
                 setAttachMenuOpen(false);
                 fileRef.current?.click();
               }}
+              onFile={() => {
+                setAttachMenuOpen(false);
+                anyRef.current?.click();
+              }}
               onClose={() => setAttachMenuOpen(false)}
             />
           )}
         </div>
         <input ref={fileRef} type="file" accept="image/*" multiple hidden data-testid="file-input" onChange={onPicked} />
+        <input ref={anyRef} type="file" multiple hidden data-testid="attach-input" onChange={onPicked} />
         <input
           ref={cameraRef}
           type="file"

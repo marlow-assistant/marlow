@@ -87,6 +87,8 @@ export function isTransportFailure(e: unknown): boolean {
  * than a JSON page. */
 export const DEFAULT_TIMEOUT_MS = 20_000;
 export const ATTACHMENT_TIMEOUT_MS = 60_000;
+/** A send that carries files (up to 25MB of them). */
+export const UPLOAD_TIMEOUT_MS = 120_000;
 /** A segment waits behind any other being transcribed on the box, one at a
  * time, and a 25 s segment took ~4 s on the slowest box measured. */
 export const TRANSCRIBE_TIMEOUT_MS = 45_000;
@@ -129,6 +131,11 @@ export interface SendMessageBody {
    * what it holds. Never null, never an empty object (message-location.md). */
   location?: { latitude: number; longitude: number; accuracy_m?: number };
   images?: { b64: string; mime: "image/jpeg" }[];
+  /** Anything that is not a photo (docs/tasks/share-and-files-wire.md). `mime`
+   * is the platform's guess, possibly "": the server sniffs and the guess
+   * decides nothing. `name` is for display. Absent when there are none; an
+   * empty list is a 400. */
+  files?: { b64: string; mime: string; name: string }[];
   /** "Do it" on an idea (docs/tasks/ideas-panel.md). Absent for a normal
    * send; the server warns and drops an id that is not open, and still sends. */
   idea_id?: string;
@@ -277,7 +284,15 @@ export class Api {
   // --- chat --------------------------------------------------------------------
 
   async sendMessage(body: SendMessageBody, signal?: AbortSignal): Promise<string> {
-    const r = await this.json("/v1/message", { method: "POST", body, signal });
+    // Files can be 25MB: at the flat 20s that needs ~10 Mbit/s up, which a
+    // phone on a poor link doesn't give, and the send would retry itself into
+    // an error. A text or photo send keeps the flat bound (SND-2).
+    const r = await this.json("/v1/message", {
+      method: "POST",
+      body,
+      signal,
+      ...(body.files ? { timeoutMs: UPLOAD_TIMEOUT_MS } : {}),
+    });
     return field(r, "turn_id");
   }
 

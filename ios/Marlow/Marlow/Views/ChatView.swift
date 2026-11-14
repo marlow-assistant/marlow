@@ -1,5 +1,6 @@
 import AudioToolbox
 import PhotosUI
+import QuickLook
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -71,13 +72,13 @@ struct ChatView: View {
     @FocusState private var draftFocused: Bool
     @Environment(\.scenePhase) private var scenePhase
 
-    /// Already-downscaled JPEG bytes waiting to go out with the next send, in
-    /// attach order, at most `ChatMessage.maxImages` — appended to by the photo
-    /// picker, camera and paste, cleared by `submitDraft()` in the same
-    /// run-loop hop as `draft` (docs/tasks/ios-image-input.md trap #3:
-    /// captured and cleared together, or a send could carry the text without
-    /// the images or vice versa).
-    @State private var pendingImages: [Data] = []
+    /// What waits to go out with the next send, in attach order, at most
+    /// `AttachmentLimits.maxItems` photos and files together: downscaled JPEGs
+    /// from the photo picker, camera and paste, and files from the file
+    /// importer. Cleared by `submitDraft()` in the same run-loop hop as `draft`
+    /// (docs/tasks/ios-image-input.md trap #3: captured and cleared together,
+    /// or a send could carry the text without the attachments or vice versa).
+    @State private var pendingAttachments = StagedAttachments()
     /// The to-do a Talk about it tap staged above the composer, sent with the
     /// next message (typed, dictated, or the chip alone) and cleared with it.
     @State private var pendingTodo: Todo?
@@ -88,6 +89,8 @@ struct ChatView: View {
     /// the tap), so the menu item raises this and the
     /// `.photosPicker(isPresented:)` modifier on the composer presents it.
     @State private var showingPhotoPicker = false
+    /// Presents the Files picker, raised from the same menu for the same reason.
+    @State private var showingFileImporter = false
     /// Presents the camera, raised from the same menu for the same reason.
     @State private var showingCamera = false
     /// Set when an assistant message completes while the transcript is
@@ -309,6 +312,7 @@ struct ChatView: View {
             if newPhase == .active {
                 clearUnreadBadge()
                 store.handleDidBecomeActive()
+                Task { await store.drainShareOutbox() }
                 Task { await ideasStore.refresh() }
                 Task { await todosStore.refresh() }
                 Task { await pullPreferences() }
@@ -344,6 +348,12 @@ struct ChatView: View {
             if open { reader.stop() }
         }
         .task { Self.ensureDictationAssets() }
+        // What the share extension left while the box was out of reach.
+        // Launch; later foregrounds go through `onChange(of: scenePhase)`.
+        .task { await store.drainShareOutbox() }
+        #if DEBUG
+        .task { if UIFixture.state == .files { pendingAttachments = UIFixture.stagedAttachments() } }
+        #endif
         // Launch fetch; later foregrounds go through `onChange(of: scenePhase)`.
         .task { await ideasStore.refresh() }
         .task { await todosStore.refresh() }
@@ -417,7 +427,7 @@ struct ChatView: View {
             }
 
             pendingTodoChip
-            pendingImageTray
+            StagedAttachmentTray(items: pendingAttachments.items) { pendingAttachments.remove(id: $0) }
 
             // The spotlight: the one idea Marlow thinks is worth interrupting
             // for (docs/tasks/ideas-panel.md). Between the transcript and the
@@ -509,6 +519,7 @@ struct ChatView: View {
                                 MessageRow(
                                     message: message, onRetry: { store.retry($0) },
                                     loadImage: { store.loadedImage(filename: $0) },
+                                    openFile: { await store.previewURL(for: $0) },
                                     failedReplyId: failedReplies[message.id],
                                     isAttachedFailure: message.clientMsgId
                                         .flatMap(UUID.init(uuidString:))
@@ -865,64 +876,6 @@ struct ChatView: View {
         }
     }
 
-    @ViewBuilder private var pendingImageTray: some View {
-        if !pendingImages.isEmpty {
-            // One 64x64 thumbnail per staged image, three across, so six
-            // are two rows (CMP-5). A single row of six at 44pt left a
-            // remove control too small to hit with confidence on a phone
-            // (Mike, 2026-10-24); three across leaves room for both.
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.fixed(64), spacing: 18), count: 3),
-                alignment: .leading, spacing: 18
-            ) {
-                    ForEach(Array(pendingImages.enumerated()), id: \.offset) { index, data in
-                        // A staged image that will not decode still counts
-                        // toward the cap and is still sent, so it still
-                        // gets a tile and a remove control: a gray one.
-                        Group {
-                            if let preview = UIImage(data: data) {
-                                Image(uiImage: preview)
-                                    .resizable()
-                                    .scaledToFill()
-                            } else {
-                                Color.gray.opacity(0.25)
-                            }
-                        }
-                        .frame(width: 64, height: 64)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                        .overlay(alignment: .topTrailing) {
-                            Button {
-                                // By content, not the captured index: a
-                                // second tap before the re-render would
-                                // otherwise remove whichever image has
-                                // slid into this slot.
-                                if let at = pendingImages.firstIndex(of: data) {
-                                    pendingImages.remove(at: at)
-                                }
-                            } label: {
-                                // A 36pt target centred on the corner, as
-                                // on the web: a 44pt one over the tile
-                                // covered most of it, so touching a photo
-                                // removed it. The grid's 18pt spacing keeps
-                                // it off the next tile.
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 26))
-                                    .symbolRenderingMode(.palette)
-                                    .foregroundStyle(.white, .black.opacity(0.65))
-                                    .frame(width: 36, height: 36)
-                                    .contentShape(Rectangle())
-                            }
-                            .offset(x: 18, y: -18)
-                            .accessibilityLabel("Remove image \(index + 1) of \(pendingImages.count)")
-                        }
-                    }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-    }
-
     private var composer: some View {
         // spacing 0, because each control below carries its own 34x44 tap
         // target — the transparent margin inside those frames *is* the gap
@@ -956,7 +909,7 @@ struct ChatView: View {
                 Menu {
                     if CameraPicker.isAvailable {
                         Button {
-                            if hasRoomForAnotherImage() { showingCamera = true }
+                            if hasRoomForAnotherItem() { showingCamera = true }
                         } label: {
                             Label("Take Photo", systemImage: "camera")
                         }
@@ -964,12 +917,22 @@ struct ChatView: View {
                         .accessibilityHint("Attaches a photo from the camera")
                     }
                     Button {
-                        if hasRoomForAnotherImage() { showingPhotoPicker = true }
+                        if hasRoomForAnotherItem() { showingPhotoPicker = true }
                     } label: {
                         Label("Photo Library", systemImage: "photo.on.rectangle")
                     }
                     .accessibilityLabel("Choose a photo")
                     .accessibilityHint("Attaches an image from the photo library")
+                    // Any file: no type list here, because the server sniffs
+                    // the bytes and decides how Marlow reads them
+                    // (docs/tasks/share-and-files.md, "The type rule").
+                    Button {
+                        if hasRoomForAnotherItem() { showingFileImporter = true }
+                    } label: {
+                        Label("Choose File", systemImage: "doc")
+                    }
+                    .accessibilityLabel("Choose a file")
+                    .accessibilityHint("Attaches a file from the Files app")
                     // Still reads the pasteboard only when tapped, never
                     // reactively — the original reasoning survives the move: a
                     // `UIPasteboard.general.hasImages` check would have to be
@@ -977,10 +940,10 @@ struct ChatView: View {
                     // it to grey out an item that is a harmless no-op when
                     // empty.
                     Button {
-                        if hasRoomForAnotherImage(),
+                        if hasRoomForAnotherItem(),
                            let image = UIPasteboard.general.image,
                            let downscaled = ImageDownscaler.downscaledJPEG(from: image) {
-                            appendPendingImages([downscaled])
+                            stagePhotos([downscaled])
                         }
                     } label: {
                         Label("Paste Image", systemImage: "doc.on.clipboard")
@@ -995,8 +958,8 @@ struct ChatView: View {
                 }
                 .accessibilityLabel("Add attachment")
                 .accessibilityHint(CameraPicker.isAvailable
-                    ? "Attach an image from the camera, the photo library or the clipboard"
-                    : "Attach an image from the photo library or the clipboard")
+                    ? "Attach an image or a file from the camera, the photo library, the Files app or the clipboard"
+                    : "Attach an image or a file from the photo library, the Files app or the clipboard")
             }
             // Swaps in for the text field while dictating — the Claude
             // iOS app does the same thing: replace the thing you'd type
@@ -1120,8 +1083,14 @@ struct ChatView: View {
         // usage-description string needed either way.
         .photosPicker(
             isPresented: $showingPhotoPicker, selection: $selectedPhotoItems,
-            maxSelectionCount: max(1, ChatMessage.maxImages - pendingImages.count), matching: .images
+            maxSelectionCount: max(1, AttachmentLimits.maxItems - pendingAttachments.count), matching: .images
         )
+        .fileImporter(
+            isPresented: $showingFileImporter, allowedContentTypes: [.item], allowsMultipleSelection: true
+        ) { result in
+            guard case .success(let urls) = result, !urls.isEmpty else { return }
+            stageFiles(at: urls)
+        }
         .onChange(of: selectedPhotoItems) { _, items in
             guard !items.isEmpty else { return }
             Task {
@@ -1136,7 +1105,7 @@ struct ChatView: View {
                         loaded.append(downscaled)
                     }
                 }
-                appendPendingImages(loaded)
+                stagePhotos(loaded)
                 let failed = items.count - loaded.count
                 if failed > 0 {
                     store.showPermissionNotice(
@@ -1157,7 +1126,7 @@ struct ChatView: View {
                     Task.detached(priority: .userInitiated) {
                         let downscaled = ImageDownscaler.downscaledJPEG(from: image)
                         await MainActor.run {
-                            if let downscaled { appendPendingImages([downscaled]) }
+                            if let downscaled { stagePhotos([downscaled]) }
                         }
                     }
                 },
@@ -1191,12 +1160,12 @@ struct ChatView: View {
             // (docs/tasks/ios-image-input.md trap #3) — an attached image
             // must ride the same run-loop hop as the text it was cleared
             // alongside, or a send could carry one without the other.
-            let images = pendingImages
+            let attachments = pendingAttachments
             let todo = pendingTodo
             draft = ""
-            pendingImages = []
+            pendingAttachments = StagedAttachments()
             pendingTodo = nil
-            if sendStaged(text: text, images: images, todo: todo) {
+            if sendStaged(text: text, attachments: attachments, todo: todo) {
                 ChatSoundPlayer.playSent()
                 ChatHaptics.sent()
                 scrollToBottomRequest += 1
@@ -1204,7 +1173,7 @@ struct ChatView: View {
                 // `send` refused (nothing sendable once a photo failed to
                 // save). Put what was staged back rather than swallowing it.
                 draft = text
-                pendingImages = images
+                pendingAttachments = attachments
                 pendingTodo = todo
             }
         }
@@ -1246,10 +1215,13 @@ struct ChatView: View {
     /// its id and quote, and the words fall back to `TodoFormat.talkAboutText`
     /// when nothing was typed. Its details don't ride in the text: `todo_id`
     /// lets the server quote the item into the turn.
-    private func sendStaged(text: String, images: [Data], todo: Todo?) -> Bool {
-        guard let todo else { return store.send(text: text, images: images) }
+    private func sendStaged(text: String, attachments: StagedAttachments, todo: Todo?) -> Bool {
+        guard let todo else {
+            return store.send(text: text, images: attachments.photos, files: attachments.files)
+        }
         return store.send(
-            text: TodoFormat.talkAboutText(text), images: images, todoId: todo.id, quote: IdeaQuote(todo)
+            text: TodoFormat.talkAboutText(text), images: attachments.photos, files: attachments.files,
+            todoId: todo.id, quote: IdeaQuote(todo)
         )
     }
 
@@ -1304,27 +1276,70 @@ struct ChatView: View {
     private var canSend: Bool {
         if dictation.isTranscribing { return false }
         if dictation.isRecording { return true }
-        return !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingImages.isEmpty
+        return !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !pendingAttachments.isEmpty
             || pendingTodo != nil
     }
 
-    /// Whether another image can be staged; says so when it cannot. The cap is
-    /// `ChatMessage.maxImages`, the server's own limit (a 7th would be a 400
-    /// after the upload).
-    private func hasRoomForAnotherImage() -> Bool {
-        guard pendingImages.count >= ChatMessage.maxImages else { return true }
-        store.showPermissionNotice("You can attach up to \(ChatMessage.maxImages) photos to a message.")
+    /// Whether another item can be staged; says so when it cannot. The cap is
+    /// `AttachmentLimits.maxItems`, the server's own limit (a 7th would be a
+    /// 400 after the upload), photos and files together.
+    private func hasRoomForAnotherItem() -> Bool {
+        guard pendingAttachments.count >= AttachmentLimits.maxItems else { return true }
+        store.showPermissionNotice(StagedAttachments.Refusal.tooMany.notice)
         return false
     }
 
     /// Appends, never replaces, up to the cap; anything past it is dropped with
-    /// the same notice. The picker's own `maxSelectionCount` already stops that
-    /// in the common case; this covers the camera finishing late and a stale count.
-    private func appendPendingImages(_ images: [Data]) {
-        let room = max(0, ChatMessage.maxImages - pendingImages.count)
-        pendingImages.append(contentsOf: images.prefix(room))
-        if images.count > room {
-            store.showPermissionNotice("You can attach up to \(ChatMessage.maxImages) photos to a message.")
+    /// a notice. The picker's own `maxSelectionCount` already stops that in
+    /// the common case; this covers the camera finishing late and a stale count.
+    private func stagePhotos(_ jpegs: [Data]) {
+        var refusal: StagedAttachments.Refusal?
+        for jpeg in jpegs {
+            refusal = pendingAttachments.addPhoto(jpeg) ?? refusal
+        }
+        if let refusal { store.showPermissionNotice(refusal.notice) }
+    }
+
+    /// The Files picker's result. Each URL is security-scoped, and only open
+    /// while this holds it, so the bytes are read inside the scope. Off the
+    /// main thread (a 20MB file is a read), and one at a time so the size
+    /// check can refuse before the next is loaded.
+    ///
+    /// What decodes as an image takes the photo path whichever picker chose
+    /// it (`AttachmentIntake`); everything else is a file, whatever its type.
+    /// The only refusals are the count and the sizes, and each says so.
+    private func stageFiles(at urls: [URL]) {
+        Task {
+            var firstRefusal: StagedAttachments.Refusal?
+            var unreadable = 0
+            for url in urls {
+                if pendingAttachments.count >= AttachmentLimits.maxItems {
+                    firstRefusal = firstRefusal ?? .tooMany
+                    break
+                }
+                let outcome = await Task.detached(priority: .userInitiated) { () -> AttachmentIntake.Outcome in
+                    let scoped = url.startAccessingSecurityScopedResource()
+                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                    return AttachmentIntake.read(fileAt: url)
+                }.value
+                let refusal: StagedAttachments.Refusal?
+                switch outcome {
+                case .photo(let jpeg): refusal = pendingAttachments.addPhoto(jpeg)
+                case .file(let file): refusal = pendingAttachments.addFile(file)
+                case .tooLarge(let name): refusal = .fileTooLarge(name: name)
+                case .unreadable:
+                    unreadable += 1
+                    refusal = nil
+                }
+                firstRefusal = firstRefusal ?? refusal
+            }
+            if let firstRefusal {
+                store.showPermissionNotice(firstRefusal.notice)
+            } else if unreadable > 0 {
+                store.showPermissionNotice(
+                    unreadable == 1 ? "Couldn't read that file." : "Couldn't read \(unreadable) of those files."
+                )
+            }
         }
     }
 
@@ -1342,12 +1357,12 @@ struct ChatView: View {
             // silently prepends to the *next* message, one turn later and
             // impossible to attribute.
             let outgoing = joined(draft, text)
-            let images = pendingImages
+            let attachments = pendingAttachments
             let todo = pendingTodo
             draft = ""
-            pendingImages = []
+            pendingAttachments = StagedAttachments()
             pendingTodo = nil
-            if sendStaged(text: outgoing, images: images, todo: todo) {
+            if sendStaged(text: outgoing, attachments: attachments, todo: todo) {
                 ChatSoundPlayer.playSent()
                 ChatHaptics.sent()
                 scrollToBottomRequest += 1
@@ -1356,7 +1371,7 @@ struct ChatView: View {
                 // dropping it — a minute of speech must never vanish.
                 // Restores the combined text, which is what he'd want to retry.
                 draft = outgoing
-                pendingImages = images
+                pendingAttachments = attachments
                 pendingTodo = todo
             }
         }
@@ -2108,6 +2123,13 @@ private struct MessageRow: View {
     let message: ChatMessage
     let onRetry: (UUID) -> Void
     let loadImage: (String) -> UIImage?
+    /// A file chip's tap: a local copy for QuickLook, made now (from the saved
+    /// copy, or downloaded) rather than when the bubble is drawn, or nil.
+    let openFile: (MessageFile) async -> URL?
+    /// The copy QuickLook is showing, while it is.
+    @State private var previewURL: URL?
+    /// The chip whose download is in flight, for its spinner.
+    @State private var openingFileId: String?
     /// On Mike's bubble: the failed reply to retry from the arrow beside it.
     var failedReplyId: UUID? = nil
     /// On the failed reply: its bubble is on screen and carries the arrow,
@@ -2339,9 +2361,62 @@ private struct MessageRow: View {
         }
     }
 
+    /// One row per file after the photo grid: icon, name (truncated in the
+    /// middle, where the extension is) and size. An old row has neither name
+    /// nor size, and shows a generic one rather than nothing. Tapping opens
+    /// QuickLook on a local copy; the bytes of a file from another device are
+    /// fetched then, not now.
+    @ViewBuilder
+    private var fileChips: some View {
+        if let files = message.files, !files.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(files) { file in
+                    Button {
+                        guard openingFileId == nil else { return }
+                        openingFileId = file.id
+                        Task {
+                            previewURL = await openFile(file)
+                            openingFileId = nil
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: FileDisplay.symbol(forName: file.name))
+                                .font(.system(size: 20))
+                                .foregroundStyle(.secondary)
+                                .frame(width: 24)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(file.name ?? "Attachment")
+                                    .font(.subheadline)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                if let size = FileDisplay.sizeText(file.size) {
+                                    Text(size)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                            if openingFileId == file.id { ProgressView().controlSize(.small) }
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .frame(maxWidth: 220, alignment: .leading)
+                        .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel([file.name ?? "Attachment", FileDisplay.sizeText(file.size)].compactMap { $0 }.joined(separator: ", "))
+                    .accessibilityHint("Opens the file")
+                }
+            }
+            .quickLookPreview($previewURL)
+        }
+    }
+
     private var bubble: some View {
         VStack(alignment: .leading, spacing: 8) {
             imageGrid
+            fileChips
             if let quote = message.quote, isUser {
                 IdeaQuoteBlock(quote: quote)
             }

@@ -1251,7 +1251,7 @@ def test_a_message_without_a_timezone_still_works():
 @pytest.mark.parametrize("effort", ["low", "medium", "high"])
 def test_prepare_message_accepts_allowed_effort(effort):
     prepared = _prepare_message(MessageRequest(text="hi", effort=effort), "unused-token")
-    assert prepared == (None, (), effort)
+    assert prepared == (None, (), (), effort)
 
 
 @pytest.mark.parametrize(
@@ -1263,7 +1263,7 @@ def test_prepare_message_drops_and_warns_for_bad_effort(effort, caplog):
     with caplog.at_level(logging.WARNING, logger="server.app"):
         prepared = _prepare_message(MessageRequest(text="hi", effort=effort), "unused-token")
 
-    assert prepared == (None, (), None)
+    assert prepared == (None, (), (), None)
     assert "ignoring unsupported effort" in caplog.text
 
 
@@ -1538,28 +1538,33 @@ def test_a_bad_image_error_names_which_one(paired_device_token):
 
 
 def test_too_many_images_is_a_400_and_the_cap_itself_is_accepted(paired_device_token):
-    from server.app import _MAX_IMAGES
+    from server.app import _MAX_ITEMS
 
     with TestClient(public_app) as client:
         headers = {"Authorization": f"Bearer {paired_device_token}"}
         over = client.post(
-            "/v1/message", json={"text": "hi", "images": _images(*[b"x"] * (_MAX_IMAGES + 1))}, headers=headers
+            "/v1/message", json={"text": "hi", "images": _images(*[b"x"] * (_MAX_ITEMS + 1))}, headers=headers
         )
         assert over.status_code == 400
         at_cap = client.post(
-            "/v1/message", json={"text": "hi", "images": _images(*[b"x"] * _MAX_IMAGES)}, headers=headers
+            "/v1/message", json={"text": "hi", "images": _images(*[b"x"] * _MAX_ITEMS)}, headers=headers
         )
         assert at_cap.status_code == 202
         empty = client.post("/v1/message", json={"text": "hi", "images": []}, headers=headers)
         assert empty.status_code == 400
 
 
-def test_images_over_the_total_decoded_limit_are_a_413_though_each_is_under_6mb(paired_device_token):
-    big = b"x" * (5 * 1024 * 1024)
+def test_images_over_the_total_decoded_limit_are_a_413_though_each_is_under_6mb(
+    paired_device_token, monkeypatch
+):
+    # The ceiling is the message's 25MB, shared with files; a small one stands
+    # in so the test does not push 25MB through the client.
+    monkeypatch.setattr(app_module, "_MAX_TOTAL_BYTES", 2 * 1024 * 1024)
+    big = b"x" * (1024 * 1024 + 1)
     with TestClient(public_app) as client:
         headers = {"Authorization": f"Bearer {paired_device_token}"}
         resp = client.post(
-            "/v1/message", json={"text": "hi", "images": _images(big, big, big)}, headers=headers
+            "/v1/message", json={"text": "hi", "images": _images(big, big)}, headers=headers
         )
         assert resp.status_code == 413
 

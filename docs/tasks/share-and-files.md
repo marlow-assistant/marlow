@@ -1,9 +1,12 @@
 # Task — "Share to Marlow", and files beyond photos
 
-**Status:** not started. Specced 2026-10-24 for implementor sessions; the
-type rule was rewritten 2026-11-14 (below). It builds on multi-image messages
-(merged 2026-10-24), so it is ready to start. It is four phases, and each one
-is its own PR.
+**Status:** shipped 2026-11-14, all four phases in one PR, on both clients.
+Tried by Mike on the box: iOS (Choose File and the share extension), web,
+PDFs, an SVG, a Word file, and a `.pages` refused as unreadable. Not yet seen
+on a device: the Android share target on an installed PWA. The wire contract
+is `share-and-files-wire.md`; where it and the phases below differ, it wins.
+Parked follow-ups are under "Not in scope"; reading Office files as more than
+their text is `document-fidelity.md`.
 
 ## Why (Mike, 2026-10-24)
 
@@ -14,7 +17,7 @@ Wanted:
 
 - **Marlow in the share sheet**, on iOS and on Android: share a PDF from
   Mail, a page from Safari, a spreadsheet from Files, or photos from Photos,
-  straight to Marlow with an optional note.
+  straight to Marlow with an optional message.
 - **Wider file types:** text, CSV and PDF, plus Office documents (Word,
   Excel, PowerPoint). Mike's view: accepting a wide range is worth adding a
   few conversion tools to the box, the same way Parakeet speech-to-text
@@ -292,7 +295,7 @@ The in-app path, and the chips the share flows will reuse.
   - web: the download endpoint, fetched with the token in the header (never
     in a URL), then:
     - **opened inline** in a new tab from a blob URL only when the row's
-      `mime` is `application/pdf`, `text/plain` or a raster image (JPEG,
+      `mime` is `text/plain` or a raster image (JPEG,
       PNG, GIF, WebP). The Blob is built with that `mime` taken from a fixed
       map in the client, never the response's `Content-Type`;
     - **downloaded** with an `<a download="<name>">` click otherwise, from a
@@ -449,6 +452,15 @@ system share sheet when its manifest declares `share_target`.
 - Sending files *from* Marlow to the user. Separate.
 - A share extension that waits for Marlow's reply. It sends and closes, and
   the reply arrives in the app with a push as usual.
+- Parked from the code review, 2026-11-14, until one is felt:
+  - UTF-16 text has NUL bytes, so it sniffs as Other. Transcoding it to
+    UTF-8 is the fix if a Windows export ever arrives that way.
+  - An image sent as a file is not downscaled, up to 20MB, and may exceed
+    what the CLI's Read accepts. The fix is to downscale it on the server.
+  - A resend under a live `client_msg_id` writes and converts its files
+    again before enqueue discards it. The 120s client deadlines make that a
+    retry after a real transport failure only. The fix is to skip
+    `_store_files` when `reusable_turn_id` matches.
 
 ## Done means (each phase)
 

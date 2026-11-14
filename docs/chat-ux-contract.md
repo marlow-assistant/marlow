@@ -852,6 +852,10 @@ a **hard** failure: one bad image rejects the whole message, nothing is written,
 client surfaces it. Never send the caption alone, or with some images missing. [unit]
 *Why:* a caption about an image Marlow never saw is worse than an error. The 6MB is a
 ceiling against a hostile or buggy client, not what the app sends.
+Files (`docs/tasks/share-and-files-wire.md`) share the cap: at most 6 items, photos
+and files together; 20MB decoded a file; 25MB a message. No type is refused: the
+server sniffs each file and tells Marlow what it is, including "a type you can't
+read". An Office file whose conversion fails rejects the whole message (422). [unit]
 
 **CMP-5. The preview** is 64x64 thumbnails three across (six make two rows), each with
 its own remove control on its corner, above the composer; paste, camera and file pick all append to it, up to the cap. [test]
@@ -874,6 +878,31 @@ without them and says so ("Couldn't find the photo to resend — sending without
 [unit]
 *Why:* what is sent and what is saved for retry must agree, or a retry silently drops
 an image the first attempt carried.
+
+**CMP-10. Any file stages; only count and size are checked.** "Choose File" (iOS
+`.fileImporter([.item])`, web an input with no `accept`) and the share flows stage
+anything. A file the client can decode as an image takes the CMP-3 path; anything
+else is a row under the CMP-5 photos, one per line: type icon from the name's
+extension, the name (a long one cut at the end of its stem, so the extension
+shows), its size, a remove control. The share screen lays out the same tray
+above a "Message Marlow" field. Over 6 items, 20MB a file or 25MB a
+message gets a notice and is not staged. The CMP-6 retry save covers files. [test]
+*Why:* a type list in a client ships in an app build, so every new type would be a
+release and every odd file a refusal screen (Mike, 2026-11-14). The server decides.
+Rows, not tiles, because a 64pt tile cut the name to a few letters, and on the share
+screen "Add a note" read as annotating the file rather than writing to Marlow (Mike,
+on device, 2026-11-14).
+
+**CMP-11. A file chip opens safely.** In the bubble, after the photo grid, one chip
+per file with icon, name and size; it downloads on tap, never eagerly. iOS opens it
+in QuickLook from a local copy named with the stored type's extension. The web
+fetches it with the bearer header and opens it in a new tab from a blob URL **only**
+for `text/plain` and raster images, typing the Blob from a fixed map on the row's
+`mime`; anything else, PDF included, downloads as `application/octet-stream`. [test]
+*Why:* a blob URL runs in the web client's origin, beside the device token, so an
+HTML or SVG file opened with its own type is script with the token. The server
+already records those as `text/plain`; the map is the second wall. PDF is out because a
+blob document inherits the page CSP, whose `object-src 'none'` can block the viewer.
 
 **CMP-7. Every message carries `timezone` (IANA) and `effort`.** `effort` is the level
 the header shows, sent on **every** message, never sticky, read per attempt so a retry

@@ -12,8 +12,10 @@ purpose: no edits, no deletes from clients, and the only removal is `prune`.
 
 **Attachments are their own table** (`transcript_attachments`), not a column on
 the row, because a message will carry several files and not only pictures
-(Mike, 2026-10-01). `POST /v1/message` is still single-image today, which is
-simply one attachment at idx 0. The file lives at
+(Mike, 2026-10-01). Photos come first in `idx`, then files in the order sent
+(docs/tasks/share-and-files.md); a file's `name` (the user's display name,
+sanitized) and `size` (bytes of the original) are columns, NULL on a photo's
+name and on every row from before they existed. The file lives at
 `data_dir/transcript-attachments/<attachment id>` with NO extension: the stored
 `mime` is the only thing that says what it is, so a name can never talk a
 client or a browser into a different type than the one the server recorded.
@@ -107,7 +109,9 @@ CREATE TABLE IF NOT EXISTS transcript_attachments (
     row_id     TEXT    NOT NULL REFERENCES transcript (id),
     idx        INTEGER NOT NULL,
     mime       TEXT    NOT NULL,
-    created_at REAL    NOT NULL
+    created_at REAL    NOT NULL,
+    name       TEXT,
+    size       INTEGER
 );
 CREATE INDEX IF NOT EXISTS transcript_attachments_row ON transcript_attachments (row_id, idx);
 """
@@ -172,6 +176,15 @@ def _initialise(path: Path) -> None:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(transcript)")}
             if "quote" not in columns:
                 conn.execute("ALTER TABLE transcript ADD COLUMN quote TEXT")
+            # Added 2026-11-14, the same way: both nullable, an old row is a
+            # photo with no name.
+            attachment_columns = {
+                row[1] for row in conn.execute("PRAGMA table_info(transcript_attachments)")
+            }
+            if "name" not in attachment_columns:
+                conn.execute("ALTER TABLE transcript_attachments ADD COLUMN name TEXT")
+            if "size" not in attachment_columns:
+                conn.execute("ALTER TABLE transcript_attachments ADD COLUMN size INTEGER")
         _initialised.add(key)
 
 
@@ -184,18 +197,20 @@ def _connect() -> sqlite3.Connection:
 
 
 def _attach(conn: sqlite3.Connection, rows: Sequence[sqlite3.Row]) -> list[dict[str, Any]]:
-    """Row dicts with `attachments: [{id, mime}]` in idx order, [] for none.
-    One query for the page, not one per row."""
-    by_row: dict[str, list[dict[str, str]]] = {}
+    """Row dicts with `attachments: [{id, mime, name, size}]` in idx order, []
+    for none. One query for the page, not one per row."""
+    by_row: dict[str, list[dict[str, Any]]] = {}
     ids = [r["id"] for r in rows]
     if ids:
         marks = ",".join("?" * len(ids))
         for att in conn.execute(
-            f"SELECT id, row_id, mime FROM transcript_attachments"
+            f"SELECT id, row_id, mime, name, size FROM transcript_attachments"
             f" WHERE row_id IN ({marks}) ORDER BY row_id, idx",
             ids,
         ):
-            by_row.setdefault(att["row_id"], []).append({"id": att["id"], "mime": att["mime"]})
+            by_row.setdefault(att["row_id"], []).append(
+                {"id": att["id"], "mime": att["mime"], "name": att["name"], "size": att["size"]}
+            )
     out = []
     for row in rows:
         item = {key: row[key] for key in row.keys()}
@@ -226,7 +241,7 @@ def append_user(
     text: str,
     source: str,
     client_msg_id: str | None,
-    attachments: Sequence[tuple[str, str]] = (),
+    attachments: Sequence[tuple[str, str, str | None, int | None]] = (),
     quote: dict[str, str] | None = None,
     now: float | None = None,
 ) -> dict[str, Any] | None:
@@ -238,7 +253,8 @@ def append_user(
     hands back the cached turn_id. Coalesced (later MERGED) messages are
     separate sends and each get their own row.
 
-    `attachments` is `(source file path, mime)` pairs, in display order. Each
+    `attachments` is `(source file path, mime, name, size)` tuples, in display
+    order: photos first, then files. `name` is None for a photo. Each
     is copied to `transcript-attachments/<new id>` BEFORE the row is inserted,
     so a row never lists a file that failed to land; the cost is stray files if
     the insert then loses an idempotency race, which are unlinked below. A file
@@ -248,10 +264,11 @@ def append_user(
     """
     now = time.time() if now is None else now
     row_id = str(uuid.uuid4())
-    copied: list[tuple[str, str]] = []  # (attachment id, mime), landed on disk
+    # (attachment id, mime, name, size), landed on disk
+    copied: list[tuple[str, str, str | None, int | None]] = []
 
     def _discard_copies() -> None:
-        for att_id, _ in copied:
+        for att_id, *_ in copied:
             path = attachment_path(att_id)
             if path is not None:
                 path.unlink(missing_ok=True)
@@ -263,14 +280,14 @@ def append_user(
                 existing = _fetch_one(conn, "client_msg_id", client_msg_id)
                 if existing is not None:
                     return existing
-            for src, mime in attachments:
+            for src, mime, name, size in attachments:
                 att_id = str(uuid.uuid4())
                 try:
                     dest = attachment_path(att_id)
                     assert dest is not None  # a fresh uuid4 is always canonical
                     dest.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
                     shutil.copyfile(src, dest)
-                    copied.append((att_id, mime))
+                    copied.append((att_id, mime, name, size))
                 except OSError:
                     logger.exception("transcript: could not copy attachment for turn %s", turn_id)
             try:
@@ -283,9 +300,13 @@ def append_user(
                          json.dumps(quote, ensure_ascii=False) if quote else None),
                     )
                     conn.executemany(
-                        "INSERT INTO transcript_attachments (id, row_id, idx, mime, created_at)"
-                        " VALUES (?, ?, ?, ?, ?)",
-                        [(att_id, row_id, idx, mime, now) for idx, (att_id, mime) in enumerate(copied)],
+                        "INSERT INTO transcript_attachments"
+                        " (id, row_id, idx, mime, created_at, name, size)"
+                        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        [
+                            (att_id, row_id, idx, mime, now, name, size)
+                            for idx, (att_id, mime, name, size) in enumerate(copied)
+                        ],
                     )
             except sqlite3.IntegrityError:
                 # Lost a race with the same client_msg_id between the SELECT

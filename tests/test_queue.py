@@ -1948,3 +1948,94 @@ def test_a_turn_without_a_step_line_never_counts(tmp_path, monkeypatch):
     _note_onboarding(turn, None)
 
     assert onboarding.load(record, user).turns == 0
+
+
+# --- files beside the photos (docs/tasks/share-and-files.md) --------------------
+
+
+def _file_attachment(turn_id: str = "t-file", name: str = "Notes.pdf"):
+    from server.attachments import FileAttachment
+
+    base = f"/home/marlow/.marlow/attachments/{turn_id}"
+    return FileAttachment(f"{base}/0.pdf", name, "PDF", 1234, None, "application/pdf")
+
+
+def test_file_attachments_are_threaded_to_run_claude(monkeypatch):
+    calls = []
+
+    async def fake_run(prompt, **kwargs):
+        calls.append(kwargs["file_attachments"])
+        return _success()
+
+    monkeypatch.setattr("server.queue.run_claude", fake_run)
+    monkeypatch.setattr("server.queue.cleanup_attachment", lambda turn_id: None)
+    att = _file_attachment()
+
+    async def _body():
+        wq = WorkQueue()
+        wq.start()
+        plain = wq.enqueue("no files", source="chat")
+        with_file = wq.enqueue("a file", source="chat", turn_id="t-file", file_attachments=(att,))
+        for t in (plain, with_file):
+            await _run_to_completion(wq, t)
+        await wq.stop()
+
+    asyncio.run(_body())
+    assert calls == [(), (att,)]
+
+
+def test_a_turn_with_files_is_never_absorbed_or_absorbing(monkeypatch):
+    calls = []
+
+    async def fake_run(prompt, **kwargs):
+        calls.append((prompt, kwargs["file_attachments"]))
+        return _success()
+
+    monkeypatch.setattr("server.queue.run_claude", fake_run)
+    monkeypatch.setattr("server.queue.cleanup_attachment", lambda turn_id: None)
+    att = _file_attachment()
+
+    async def _body():
+        wq = WorkQueue()
+        wq.start()
+        before = wq.enqueue("before", session_id="s", resume=True, source="chat")
+        filed = wq.enqueue(
+            "filed", session_id="s", resume=True, source="chat", turn_id="t-file", file_attachments=(att,)
+        )
+        after = wq.enqueue("after", session_id="s", resume=True, source="chat")
+        for t in (before, filed, after):
+            await _run_to_completion(wq, t)
+        await wq.stop()
+        assert not WorkQueue._can_coalesce(wq.get_turn(filed))
+        assert WorkQueue._can_coalesce(wq.get_turn(before))
+
+    asyncio.run(_body())
+    # Three runs, each alone: nothing was merged into, or out of, the file turn.
+    assert [c[0] for c in calls] == ["before", "filed", "after"]
+
+
+def test_the_new_turn_field_is_classified_for_coalescing():
+    assert "file_attachments" in _COALESCING_CLASSIFIED_TURN_FIELDS
+
+
+def test_a_turn_with_only_files_still_cleans_its_directory_up(monkeypatch):
+    # attachment_paths is empty for a files-only message, so the drain's
+    # cleanup cannot key on it alone.
+    from server.attachments import FileAttachment, sniff, write_files
+
+    [path] = write_files("t-files-only", [(b"%PDF-1.4 x", sniff(b"%PDF-1.4 x"))], 0)
+    att = FileAttachment(path, "a.pdf", "PDF", 10, None, "application/pdf")
+
+    async def _body():
+        wq = WorkQueue()
+        wq.start()
+        turn_id = wq.enqueue("hello", source="chat", turn_id="t-files-only", file_attachments=(att,))
+        turn = await _run_to_completion(wq, turn_id)
+        assert turn.status == TurnStatus.DONE
+        await _wait_for(
+            lambda: not os.path.exists(turn_attachment_dir("t-files-only")), "attachment cleanup"
+        )
+        await wq.stop()
+
+    asyncio.run(_body())
+    assert not os.path.exists(turn_attachment_dir("t-files-only"))

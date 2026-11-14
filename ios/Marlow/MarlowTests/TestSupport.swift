@@ -69,7 +69,7 @@ actor FakeChatAPI: ChatAPI {
     // Recorded calls.
     private(set) var sentMessages: [(
         text: String, clientMsgId: String?,
-        imagesBase64: [String], effort: ThinkingEffort,
+        imagesBase64: [String], files: [OutgoingFile], effort: ThinkingEffort,
         location: OutgoingLocation?, ideaId: String?, todoId: String?, spoken: Bool, timeout: TimeInterval?,
         deviceToken: String
     )] = []
@@ -128,13 +128,13 @@ actor FakeChatAPI: ChatAPI {
 
     func sendMessage(
         text: String, clientMsgId: String?,
-        imagesBase64: [String], effort: ThinkingEffort,
+        imagesBase64: [String], files: [OutgoingFile], effort: ThinkingEffort,
         location: OutgoingLocation?, ideaId: String?, todoId: String?, spoken: Bool, timeout: TimeInterval?,
         deviceToken: String
     ) async throws -> MessageResponse {
         sentMessages.append((
             text: text, clientMsgId: clientMsgId,
-            imagesBase64: imagesBase64, effort: effort,
+            imagesBase64: imagesBase64, files: files, effort: effort,
             location: location, ideaId: ideaId, todoId: todoId, spoken: spoken, timeout: timeout,
             deviceToken: deviceToken
         ))

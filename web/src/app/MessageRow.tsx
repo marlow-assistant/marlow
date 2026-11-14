@@ -2,9 +2,12 @@ import { memo } from "react";
 import { describesUnseenWork, THINKING, WRITING } from "../lib/activity";
 import type { ChatStore } from "../lib/chatStore";
 import { segments } from "../lib/partialText";
-import { attachmentIdsOf, imageKeysOf, type ChatMessage } from "../lib/types";
+import { fileKind, formatSize, truncateMiddle } from "../lib/fileInfo";
+import { browserOpenDeps, openAttachment } from "../lib/openAttachment";
+import { attachmentIdsOf, imageKeysOf, type ChatMessage, type FileAttachment } from "../lib/types";
 import { Markdown, SettledMarkdown } from "../markdown/Markdown";
 import { Copyable } from "./CopyMenu";
+import { FileIcon } from "./Icons";
 import { useImageUrl, useStream } from "./hooks";
 import { useReadAloud } from "./ReadAloud";
 
@@ -64,6 +67,41 @@ function BubbleImage({
   );
 }
 
+/** A file in a bubble: its icon, name and size. Tapping it fetches the file
+ * (not before: it can be large and the bubble doesn't need it) and opens or
+ * saves it by the fixed rule in lib/openAttachment.ts. Until the server has
+ * the row there is no id to fetch with, so the chip waits. */
+function FileChip({ file, store }: { file: FileAttachment; store: ChatStore }) {
+  const name = file.name ?? "File";
+  const size = formatSize(file.size);
+  const { id } = file;
+  return (
+    <button
+      type="button"
+      className="bubble-file"
+      data-testid="bubble-file"
+      title={name}
+      disabled={!id}
+      onClick={() => {
+        if (!id) return;
+        void openAttachment(
+          { id, mime: file.mime, name: file.name },
+          browserOpenDeps((attachmentId) => store.fetchFile(attachmentId), (m) => store.showNotice(m)),
+        );
+      }}
+    >
+      <FileIcon kind={fileKind(name)} size={28} />
+      <span className="bubble-file-text">
+        <span className="bubble-file-name">{truncateMiddle(name, BUBBLE_NAME_CHARS)}</span>
+        {size && <span className="bubble-file-size">{size}</span>}
+      </span>
+    </button>
+  );
+}
+
+/** Characters of a file's name shown in its chip row. */
+const BUBBLE_NAME_CHARS = 28;
+
 function UserBubble({ message, store, failedReply, onImageLoad }: RowProps) {
   // A server row's slots follow its attachment ids (so a bubble shows a
   // placeholder per photo still arriving); this client's own send has keys only.
@@ -101,6 +139,9 @@ function UserBubble({ message, store, failedReply, onImageLoad }: RowProps) {
               ))}
             </div>
           )}
+          {message.files?.map((file, i) => (
+            <FileChip key={file.id ?? i} file={file} store={store} />
+          ))}
           {message.quote && (
             <blockquote className="user-quote" data-testid="user-quote">
               <span className="user-quote-emoji" aria-hidden="true">

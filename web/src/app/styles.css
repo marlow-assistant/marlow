@@ -654,6 +654,53 @@ button {
   height: auto;
 }
 
+/* A file in a bubble: one row with its icon, name and size, after any photos.
+   A button, because tapping it fetches and opens the file. */
+.bubble-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  margin-bottom: 6px;
+  padding: 6px 10px 6px 6px;
+  border: 0;
+  border-radius: 10px;
+  /* Grey at low alpha reads on the accent bubble in dark and light alike. */
+  background: rgba(127, 127, 127, 0.22);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.bubble-file:last-child {
+  margin-bottom: 0;
+}
+
+.bubble-file:disabled {
+  opacity: 0.7;
+}
+
+.bubble-file svg {
+  flex: none;
+}
+
+.bubble-file-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bubble-file-name {
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+
+.bubble-file-size {
+  font-size: 0.75rem;
+  opacity: 0.7;
+}
+
 /* SND-8: red circular arrow beside the bubble, vertically centred. */
 /* Glyphs in fixed circles (this, .jump, .send, .mic, .preview-remove,
    .staged-todo-remove) stay in px:
@@ -1068,11 +1115,18 @@ button {
 }
 
 .preview-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 6px 44px;
+  padding: 14px 14px 0 0;
+}
+
+.preview-grid {
   display: grid;
   grid-template-columns: repeat(3, 64px);
   gap: 18px;
-  margin: 0 0 6px 44px;
-  padding: 14px 14px 0 0;
+  margin-bottom: 6px;
 }
 
 .preview {
@@ -1086,6 +1140,59 @@ button {
   height: 64px;
   object-fit: cover;
   border-radius: 10px;
+}
+
+/* A file staged under the photos: one row each, icon, name, size and a
+   remove control, so the name can be read before sending. A long name is
+   cut at the end of its stem and keeps its extension. */
+.staged-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 4px 0 12px;
+  border-radius: 10px;
+  background: var(--bg-2);
+  color: var(--text-2);
+}
+
+.staged-file > svg {
+  flex: none;
+}
+
+.staged-file-name {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+}
+
+.staged-file-stem {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.staged-file-ext {
+  flex: none;
+  white-space: nowrap;
+}
+
+.staged-file-size {
+  flex: none;
+  font-size: 0.8125rem;
+}
+
+/* 44px square, the same tap target the tile's corner X gets from its ::before. */
+.staged-file-remove {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: 1.25rem;
+  padding: 0;
 }
 
 .preview-remove {

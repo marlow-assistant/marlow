@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { HttpError, type Api } from "../lib/api";
 import type { Effort } from "../lib/chatStore";
+import { isInstalledApp } from "../lib/installed";
 import {
   CHECKIN_HOURS,
   CHECKIN_SAVE_FAILED,
@@ -381,6 +382,16 @@ export function Settings(p: SettingsProps) {
         <NotificationsSection api={p.api} />
 
         {p.whatsNew && <UpdatesSection whatsNew={p.whatsNew} />}
+
+        {!isInstalledApp() && (
+          // Only an installed app is in Android's share sheet. No heading: it is
+          // one line of guidance, and it goes away once the app is installed.
+          <section className="settings-section">
+            <p className="settings-footer" data-testid="install-hint">
+              Install Marlow to your home screen to share to it.
+            </p>
+          </section>
+        )}
 
         <section className="settings-section">
           <div className="settings-group">

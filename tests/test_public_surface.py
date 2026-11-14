@@ -70,7 +70,7 @@ def test_allowlisted_routes_exist():
 
 def test_the_cap_covers_a_full_six_image_message():
     # 12 MiB decoded, as base64, plus the JSON around it.
-    assert app_module._MAX_BODY_BYTES > app_module._MAX_TOTAL_IMAGE_BYTES * 4 // 3
+    assert app_module._MAX_BODY_BYTES > app_module._MAX_TOTAL_BYTES * 4 // 3
     assert app_module._MAX_SMALL_BODY_BYTES < app_module._MAX_BODY_BYTES
 
 

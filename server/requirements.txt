@@ -2,3 +2,9 @@ fastapi
 uvicorn[standard]
 aioapns
 pywebpush
+# server/convert.py: Office files to text, run confined. defusedxml is not imported
+# there; openpyxl uses it for its XML when it is installed.
+python-docx
+openpyxl
+python-pptx
+defusedxml

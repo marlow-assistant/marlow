@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from server import active_turn, activity_log, auth_monitor, onboarding, transcript
-from server.attachments import cleanup_attachment, sweep_orphaned_attachments
+from server.attachments import FileAttachment, cleanup_attachment, sweep_orphaned_attachments
 from server.config import settings
 from server.identity_git import commit_after_turn
 from server.idle_compaction import SOURCE as COMPACTION_SOURCE
@@ -121,8 +121,13 @@ class Turn:
     # in a session with no memory of the day it's asked to review.
     require_session: bool = False
     # Paths written by server/app.py before this turn was enqueued
-    # (docs/tasks/ios-image-input.md); up to _MAX_IMAGES, in attach order.
+    # (docs/tasks/ios-image-input.md); photos only, up to server/app.py's
+    # _MAX_ITEMS together with the files, in attach order.
     attachment_paths: tuple[str, ...] = ()
+    # The files of the same message (docs/tasks/share-and-files.md), written
+    # beside the photos. A parallel field, not more paths: each carries the
+    # name, the server's kind, and for an Office file the path of its text.
+    file_attachments: tuple[FileAttachment, ...] = ()
     # Validated per-turn phone preference; None means the configured default.
     # See docs/tasks/effort-toggle-server-half.md.
     effort: str | None = None
@@ -260,6 +265,7 @@ _COALESCING_CLASSIFIED_TURN_FIELDS = frozenset(
         "source",
         "require_session",
         "attachment_paths",
+        "file_attachments",
         "retire_session_on_success",
         "cancelled",
         # Must match the head; enforced by the collection loop.
@@ -585,6 +591,7 @@ class WorkQueue:
         require_session: bool = False,
         turn_id: str | None = None,
         attachment_paths: tuple[str, ...] = (),
+        file_attachments: tuple[FileAttachment, ...] = (),
         effort: str | None = None,
         spoken: bool = False,
         retire_session_on_success: bool = False,
@@ -610,7 +617,7 @@ class WorkQueue:
         written to `<attachments_dir>/<turn_id>/<n>.jpg` BEFORE this call, so the
         id has to be known ahead of it rather than generated inside. A resend
         that hits the client_msg_id dedup below ignores this turn_id (and the
-        attachment_paths that go with it) entirely — the file just-written for
+        attachment_paths and file_attachments that go with it) entirely — the file just-written for
         it becomes an orphan, cleaned up by the 24h sweep rather than by this
         call, which matches the accepted cost in the build spec's "one to
         challenge" section (wasted transfer, not a duplicate turn).
@@ -648,6 +655,7 @@ class WorkQueue:
             client_msg_id=client_msg_id,
             require_session=require_session,
             attachment_paths=attachment_paths,
+            file_attachments=file_attachments,
             effort=effort,
             spoken=spoken,
             retire_session_on_success=retire_session_on_success,
@@ -1001,6 +1009,7 @@ class WorkQueue:
         return (
             turn.source in active_turn.CHAT_SOURCES
             and not turn.attachment_paths
+            and not turn.file_attachments
             and not turn.cancelled
             and not turn.require_session
             and not turn.retire_session_on_success
@@ -1156,6 +1165,7 @@ class WorkQueue:
                     queue_wait_seconds=queue_wait_seconds,
                     require_session=turn.require_session,
                     attachment_paths=turn.attachment_paths,
+                    file_attachments=turn.file_attachments,
                     effort=turn.effort,
                     spoken=turn.spoken,
                     raw_prompt=turn.raw_prompt,
@@ -1365,7 +1375,7 @@ class WorkQueue:
             # raises, but guarded anyway rather than resting the only consumer
             # task in the process on that promise (same reasoning as the
             # identity-commit guard below).
-            if turn.attachment_paths:
+            if turn.attachment_paths or turn.file_attachments:
                 try:
                     cleanup_attachment(turn_id)
                 except Exception:

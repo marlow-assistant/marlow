@@ -99,13 +99,19 @@ enum TranscriptMerge {
         )
         user.seq = row.seq
         user.quote = row.quote
-        // Every image, in row order -- not just the first. A non-image
-        // attachment is skipped, as before.
+        // Every image, in row order -- not just the first -- fetched now, to
+        // draw the grid.
         let imageIds = row.attachments.filter { $0.mime.hasPrefix("image/") }.map(\.id)
         if !imageIds.isEmpty {
             user.attachmentIds = imageIds
             effects.fetchAttachments.append((messageId: id, attachmentIds: imageIds))
         }
+        // Anything else is a file: a chip, whose bytes are fetched when it is
+        // tapped. No fetch effect, on purpose.
+        let files = row.attachments.filter { !$0.mime.hasPrefix("image/") }.map {
+            MessageFile(id: $0.id, name: $0.name, mime: $0.mime, size: $0.size, attachmentId: $0.id)
+        }
+        if !files.isEmpty { user.files = files }
         let index = insertionIndex(forSeq: row.seq, in: messages)
         messages.insert(user, at: index)
 

@@ -58,15 +58,15 @@ test("the gear opens Settings; the effort control is bound and persists", async 
   await settings.getByRole("button", { name: "About" }).click();
   await expect(settings.getByRole("region", { name: "Build" })).toContainText("App");
   await settings.getByRole("button", { name: "Back" }).click();
-  await settings.getByRole("radio", { name: "High" }).click();
-  await expect(settings.getByRole("radio", { name: "High" })).toHaveAttribute("aria-checked", "true");
+  await settings.getByRole("radio", { name: "Thorough" }).click();
+  await expect(settings.getByRole("radio", { name: "Thorough" })).toHaveAttribute("aria-checked", "true");
   await settings.getByRole("button", { name: "Done" }).click();
 
-  // Still High on reopening; then put it back so later tests run at the default.
+  // Still Thorough on reopening; then put it back so later tests run at the default.
   await page.getByRole("button", { name: "Settings" }).click();
-  await expect(page.getByRole("radio", { name: "High" })).toHaveAttribute("aria-checked", "true");
-  await page.getByRole("radio", { name: "Low" }).click();
-  await expect(page.getByRole("radio", { name: "Low" })).toHaveAttribute("aria-checked", "true");
+  await expect(page.getByRole("radio", { name: "Thorough" })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("radio", { name: "Quick" }).click();
+  await expect(page.getByRole("radio", { name: "Quick" })).toHaveAttribute("aria-checked", "true");
   await page.getByRole("button", { name: "Done" }).click();
 });
 

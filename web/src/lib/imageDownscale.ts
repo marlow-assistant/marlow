@@ -3,8 +3,8 @@
 // quality 0.6 (about 300KB for a phone photo), EXIF orientation applied,
 // never upscaled. iOS: `ImageDownscaler`.
 
-/** Images per message; the server refuses more (MAX_IMAGES in server/app.py). */
-export const MAX_IMAGES = 6;
+// The per-message cap on photos is now one cap on photos and files together:
+// MAX_ITEMS in staging.ts.
 export const LONG_EDGE = 1568;
 export const JPEG_QUALITY = 0.6;
 

@@ -429,7 +429,7 @@ describe("CMP-6 images", () => {
     h.store.retry(placeholderOf(h).id);
     await flush();
     expect(posts()[1].body).not.toHaveProperty("images");
-    expect(state().notice).toBe(TEXT.photoMissing);
+    expect(state().notice).toBe(TEXT.attachmentMissing);
   });
 
   it("if saving any one image fails the message goes text-only, not with some images", async () => {
@@ -442,7 +442,7 @@ describe("CMP-6 images", () => {
     };
     await h.store.send("two", [new Blob([new Uint8Array([1])]), new Blob([new Uint8Array([2])])]);
     expect(posts()[0].body).not.toHaveProperty("images");
-    expect(state().notice).toBe(TEXT.photoSaveFailed);
+    expect(state().notice).toBe(TEXT.attachmentSaveFailed);
     expect(state().messages[0].imageKeys).toBeUndefined();
   });
 
@@ -465,7 +465,7 @@ describe("CMP-6 images", () => {
     h.persist.failPutImage = true;
     await h.store.send("see", [new Blob([bytes])]);
     expect(posts()[0].body).not.toHaveProperty("images");
-    expect(state().notice).toBe(TEXT.photoSaveFailed);
+    expect(state().notice).toBe(TEXT.attachmentSaveFailed);
     expect(state().messages[0].imageKeys).toBeUndefined();
   });
 
@@ -487,7 +487,146 @@ describe("CMP-6 images", () => {
     await flush();
     expect(posts()).toHaveLength(2);
     expect(posts()[1].body).not.toHaveProperty("images");
-    expect(state().notice).toBe(TEXT.photoMissing);
+    expect(state().notice).toBe(TEXT.attachmentMissing);
+  });
+});
+
+describe("CMP-6 files", () => {
+  const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0, 255, 128]);
+  const pdf = () => ({ blob: new Blob([pdfBytes], { type: "application/pdf" }), name: "Plan.pdf" });
+  const numbers = () => ({ blob: new Blob([new Uint8Array([9, 9])]), name: "Budget.numbers" }); // type ""
+  const b64 = (b: Uint8Array) => Buffer.from(b).toString("base64");
+
+  it("a file send carries files: [{b64, mime (the client's guess, or empty), name}]", async () => {
+    h = makeHarness();
+    await h.store.send("see", [], undefined, [pdf(), numbers()]);
+    await flush();
+    expect(posts()[0].body.files).toEqual([
+      { b64: b64(pdfBytes), mime: "application/pdf", name: "Plan.pdf" },
+      { b64: b64(new Uint8Array([9, 9])), mime: "", name: "Budget.numbers" },
+    ]);
+    expect(posts()[0].body).not.toHaveProperty("images");
+  });
+
+  it("images and files ride the same request, saved under <id> and <id>:f<i> for retry", async () => {
+    h = makeHarness();
+    await h.store.send("both", [new Blob([new Uint8Array([1])]), new Blob([new Uint8Array([2])])], undefined, [pdf(), numbers()]);
+    await flush();
+    const id = userIdOf(h);
+    expect(posts()).toHaveLength(1);
+    expect(posts()[0].body.images).toHaveLength(2);
+    expect(posts()[0].body.files).toHaveLength(2);
+    const user = state().messages[0];
+    expect(user.imageKeys).toEqual([id, `${id}:1`]);
+    expect(user.fileKeys).toEqual([`${id}:f0`, `${id}:f1`]);
+    expect([...h.persist.images.keys()].sort()).toEqual([id, `${id}:1`, `${id}:f0`, `${id}:f1`].sort());
+    // What the bubble draws until the server row says more: name and size.
+    expect(user.files).toEqual([
+      { mime: "application/pdf", name: "Plan.pdf", size: pdfBytes.length },
+      { mime: "", name: "Budget.numbers", size: 2 },
+    ]);
+  });
+
+  it("a file with no caption still sends", async () => {
+    h = makeHarness();
+    expect(await h.store.send("", [], undefined, [pdf()])).toBe(true);
+    await flush();
+    expect(posts()[0].body.text).toBe("");
+    expect(posts()[0].body.files).toHaveLength(1);
+  });
+
+  it("an attempt that carries files gets 120s, not the flat 20s: up to 25MB can't go up in 20", async () => {
+    h = makeHarness();
+    h.server.script("POST /v1/message", hang());
+    await h.store.send("see", [], undefined, [pdf()]);
+    await advance(100_000);
+    expect(posts()).toHaveLength(1);
+    expect(placeholderOf(h).status).toBe("sending");
+    await advance(20_000); // 120s: aborted as a transport failure, then 4s of backoff
+    await advance(4_000);
+    expect(posts()).toHaveLength(2);
+  });
+
+  it("a retry resends every saved file with its name and type, same bytes", async () => {
+    h = makeHarness();
+    h.server.script("POST /v1/message", json({ detail: "nope" }, 400));
+    await h.store.send("two", [new Blob([new Uint8Array([1])])], undefined, [pdf(), numbers()]);
+    await flush();
+    h.store.retry(placeholderOf(h).id);
+    await flush();
+    expect(posts()).toHaveLength(2);
+    expect(posts()[1].body.files).toEqual(posts()[0].body.files);
+    expect(posts()[1].body.images).toEqual(posts()[0].body.images);
+  });
+
+  it("if any file is gone on retry it sends none, photos included, and says so (CMP-6 all-or-nothing)", async () => {
+    h = makeHarness();
+    h.server.script("POST /v1/message", json({ detail: "nope" }, 400));
+    await h.store.send("two", [new Blob([new Uint8Array([1])])], undefined, [pdf(), numbers()]);
+    await flush();
+    h.persist.images.delete(`${userIdOf(h)}:f1`);
+    h.store.retry(placeholderOf(h).id);
+    await flush();
+    expect(posts()[1].body).not.toHaveProperty("files");
+    expect(posts()[1].body).not.toHaveProperty("images");
+    expect(state().notice).toBe(TEXT.attachmentMissing);
+  });
+
+  it("if saving any one file fails the message goes text-only, not with some of its attachments", async () => {
+    h = makeHarness();
+    let n = 0;
+    const put = h.persist.putImage.bind(h.persist);
+    h.persist.putImage = async (k: string, b: Blob) => {
+      if (++n === 2) throw new Error("quota");
+      return put(k, b);
+    };
+    await h.store.send("two", [new Blob([new Uint8Array([1])])], undefined, [pdf()]);
+    expect(posts()[0].body).not.toHaveProperty("images");
+    expect(posts()[0].body).not.toHaveProperty("files");
+    expect(state().notice).toBe(TEXT.attachmentSaveFailed);
+    expect(state().messages[0].fileKeys).toBeUndefined();
+    expect(state().messages[0].files).toBeUndefined();
+  });
+
+  it("a failed save with no caption has nothing to send", async () => {
+    h = makeHarness();
+    h.persist.failPutImage = true;
+    expect(await h.store.send("", [], undefined, [pdf()])).toBe(false);
+    expect(posts()).toHaveLength(0);
+    expect(state().messages).toEqual([]);
+  });
+
+  it("a message restored from before files existed still retries with its photos alone", async () => {
+    h = makeHarness({
+      persist: new MemPersistence({
+        messages: [
+          msg({ id: "u1", seq: 1, imageKeys: ["u1"], text: "old" }),
+          msg({ id: "p1", role: "assistant", status: "error", seq: 2, clientMsgId: "u1", text: "x" }),
+        ],
+        cursor: { latestSeq: 2, hasOlderOnServer: false },
+      }),
+    });
+    h.persist.images.set("u1", new Blob([new Uint8Array([7])]));
+    await h.store.start();
+    await flush();
+    h.store.retry("p1");
+    await flush();
+    expect(posts()[0].body.images).toHaveLength(1);
+    expect(posts()[0].body).not.toHaveProperty("files");
+  });
+
+  it("a file's saved copy is kept when the cache is trimmed, an orphan is not", async () => {
+    h = makeHarness({
+      persist: new MemPersistence({
+        messages: [msg({ id: "u1", seq: 1, fileKeys: ["u1:f0"], files: [{ mime: "", name: "a.bin", size: 1 }] })],
+        cursor: { latestSeq: 1, hasOlderOnServer: false },
+      }),
+    });
+    h.persist.images.set("u1:f0", new Blob([new Uint8Array([1])]));
+    h.persist.images.set("orphan:f0", new Blob([new Uint8Array([2])]));
+    await h.store.start();
+    await flush();
+    expect([...h.persist.images.keys()]).toEqual(["u1:f0"]);
   });
 });
 

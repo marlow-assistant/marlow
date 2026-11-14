@@ -837,7 +837,7 @@ describe("Chat and the to-dos panel", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "can this wait a week?" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(store.send).toHaveBeenCalledTimes(1));
-    expect(store.send).toHaveBeenCalledWith("can this wait a week?", [], { todo_id: "t3", emoji: "☑️", title: "Book the dentist" });
+    expect(store.send).toHaveBeenCalledWith("can this wait a week?", [], { todo_id: "t3", emoji: "☑️", title: "Book the dentist" }, []);
     await waitFor(() => expect(screen.queryByTestId("staged-todo")).toBeNull());
   });
 
@@ -845,7 +845,7 @@ describe("Chat and the to-dos panel", () => {
     const store = await stageTalk(chat(fakeApi([todo("t4", { state: "proposed", title: "Pay the water bill" })])), "Pay the water bill");
     expect(TALK_TEXT).toBe("About this to-do");
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    await waitFor(() => expect(store.send).toHaveBeenCalledWith("About this to-do", [], { todo_id: "t4", emoji: "☑️", title: "Pay the water bill" }));
+    await waitFor(() => expect(store.send).toHaveBeenCalledWith("About this to-do", [], { todo_id: "t4", emoji: "☑️", title: "Pay the water bill" }, []));
   });
 
   it("removing the chip unstages it, and the next message is an ordinary one", async () => {
@@ -855,7 +855,7 @@ describe("Chat and the to-dos panel", () => {
     expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
     fireEvent.change(screen.getByRole("textbox", { name: "Message" }), { target: { value: "hi" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    await waitFor(() => expect(store.send).toHaveBeenCalledWith("hi", []));
+    await waitFor(() => expect(store.send).toHaveBeenCalledWith("hi", [], undefined, []));
   });
 });
 

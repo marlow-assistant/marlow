@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { FileKind } from "../lib/fileInfo";
 
 /** The voice icons, after the SF Symbols iOS uses. Drawn rather than typed:
  * as text they came from each device's emoji font, a colour picture on one
@@ -61,3 +62,38 @@ export function SpeakerIcon({ size = 24 }: { size?: number | string }) {
     </Icon>
   );
 }
+
+/** `paperclip`: the "Choose file" item of the attach menu. */
+export function PaperclipIcon({ size = 20 }: { size?: number | string }) {
+  return (
+    <Icon name="paperclip" size={size}>
+      <path d="m20 11.5-8.2 8.2a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" />
+    </Icon>
+  );
+}
+
+/** A page with a mark that says roughly what is on it, from the name's
+ * extension (`fileKind`). Display only: it never decides what may be
+ * attached. */
+export function FileIcon({ kind, size = 24 }: { kind: FileKind; size?: number | string }) {
+  return (
+    <Icon name={`file-${kind}`} size={size} strokeWidth={1.5}>
+      <path d="M6 2.5h8.5L19 7v13a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 20V4A1.5 1.5 0 0 1 6 2.5z" />
+      <path d="M14.5 2.5V7H19" />
+      {FILE_MARKS[kind]}
+    </Icon>
+  );
+}
+
+const FILE_MARKS: Record<FileKind, ReactNode> = {
+  pdf: <path d="M8 17h8M8 14h3" />,
+  document: <path d="M8 11h8M8 14h8M8 17h5" />,
+  text: <path d="M8 11h8M8 14h8M8 17h5" />,
+  sheet: <path d="M8 11h8M8 14h8M8 17h8M11 11v6" />,
+  slides: <rect x="8" y="11" width="8" height="5.5" rx="1" />,
+  archive: <path d="M11 9h2M11 12h2M11 15h2M11 18h2" />,
+  audio: <path d="M10 17.5v-5.5l5-1.2v5.5M10 17.5a1.4 1.4 0 1 1-2.8 0 1.4 1.4 0 0 1 2.8 0zM15 16.3a1.4 1.4 0 1 1-2.8 0 1.4 1.4 0 0 1 2.8 0z" />,
+  video: <path d="M10 11.5v5l4.5-2.5z" />,
+  image: <path d="m8 17 2.7-3 2 2 1.3-1.5L16 17M9.5 11.5h.01" />,
+  other: <path d="M9 14h6" />,
+};

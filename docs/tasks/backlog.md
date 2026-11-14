@@ -22,8 +22,6 @@ Tags: *not started*, *specced* (ready for an implementor), *in progress*,
 
 - **Friends alpha** (`friends-alpha.md`): the polish pass, then invite the
   first one or two friends. *in progress*
-- **Share and files** (`share-and-files.md`): share sheet in, any file
-  type, four phases. *specced*
 - **Image viewer** (`image-viewer.md`): full-screen image view. *specced*
 - **Message retention setting** (`message-retention-setting.md`). *specced*
 - **Drive in the approval card** (`tool-approval-ux.md` pieces 2–3): show
@@ -42,6 +40,9 @@ Tags: *not started*, *specced* (ready for an implementor), *in progress*,
 - **Route permission requests to the right device**
   (`multi-device-permission-routing.md`). Placeholder.
 - **Side chats** (`side-chats.md`). *parked*
+- **Document fidelity** (`document-fidelity.md`): layout, pictures,
+  formulas and changes from Office files, beyond their text. *parked* until
+  Marlow misses something real.
 - **README demo clip** (`readme-demo-clip.md`). *parked*, a maybe.
 - **Hosted Marlow** (`hosted-marlow.md`). Far future.
 

@@ -51,6 +51,16 @@ export interface ChatMessage {
   /** Image-store keys this client holds for the row: its own send (`<id>`,
    * `<id>:1`, ...), or fetched attachments. */
   imageKeys?: string[];
+  /** The files (anything that is not a photo) this message carries, for its
+   * chips. Own send: name and size from the file, `mime` the client's guess
+   * (maybe ""), no `id` until the server row arrives and fills `id` and the
+   * stored `mime`. Another device's row: all four from the row. `name` and
+   * `size` are null on a row from before files existed. A file is fetched
+   * only when tapped (docs/tasks/share-and-files-wire.md). */
+  files?: FileAttachment[];
+  /** Image-store keys of this client's own send's files, `<id>:f<i>`, in
+   * order: what a retry re-reads (CMP-6). */
+  fileKeys?: string[];
   /** Before several images per message these were single values. They are
    * still read (a cache written by an earlier build) through `attachmentIdsOf`
    * and `imageKeysOf`, and never written. */
@@ -78,9 +88,35 @@ export function ownImageKey(messageId: string, index: number): string {
   return index === 0 ? messageId : `${messageId}:${index}`;
 }
 
+/** One chip: `id` once the server has it, `mime` the server's stored value
+ * (the client's guess before that). */
+export interface FileAttachment {
+  id?: string;
+  mime: string;
+  name: string | null;
+  size: number | null;
+}
+
+/** Per-file key in the image store for this client's own send's files. */
+export function ownFileKey(messageId: string, index: number): string {
+  return `${messageId}:f${index}`;
+}
+
+/** What a transcript row's attachment is drawn as a photo: the raster types
+ * the server stores for an image. Everything else, including an
+ * `image/svg+xml` a mis-recorded row might carry, is a file chip, which is
+ * only ever opened through `openAttachment`'s fixed map. */
+export function isPhotoMime(mime: string): boolean {
+  return mime === "image/jpeg" || mime === "image/png" || mime === "image/gif" || mime === "image/webp";
+}
+
+/** `name` and `size` are null on old rows (and on photos sent through
+ * `images`, for the name); absent from an older server's JSON, so optional. */
 export interface TranscriptAttachment {
   id: string;
   mime: string;
+  name?: string | null;
+  size?: number | null;
 }
 
 /** `role` is `"other"` for anything the server sends that this build does not
@@ -206,7 +242,12 @@ export function decodeRow(raw: unknown): TranscriptRow | null {
   const attachments = Array.isArray(r.attachments)
     ? r.attachments
         .filter((a): a is Record<string, unknown> => !!a && typeof a === "object")
-        .map((a) => ({ id: str(a.id), mime: str(a.mime) }))
+        .map((a) => ({
+          id: str(a.id),
+          mime: str(a.mime),
+          name: typeof a.name === "string" ? a.name : null,
+          size: typeof a.size === "number" && Number.isFinite(a.size) ? a.size : null,
+        }))
         .filter((a) => a.id !== "")
     : [];
   return {

@@ -1,8 +1,8 @@
 # Share and files — the wire contract (build sheet)
 
 Companion to `share-and-files.md`, pinned 2026-11-14 so the server and both
-clients could be built at the same time. Where the two disagree, this file
-wins; fold it into `share-and-files.md` when the work ships.
+clients could be built at the same time. It stays the reference for the
+wire: where the two disagree, this file wins.
 
 ## Request: `POST /v1/message`
 

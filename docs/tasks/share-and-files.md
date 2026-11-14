@@ -1,9 +1,12 @@
 # Task — "Share to Marlow", and files beyond photos
 
-**Status:** not started. Specced 2026-10-24 for implementor sessions; the
-type rule was rewritten 2026-11-14 (below). It builds on multi-image messages
-(merged 2026-10-24), so it is ready to start. It is four phases, and each one
-is its own PR.
+**Status:** shipped 2026-11-14, all four phases in one PR, on both clients.
+Tried by Mike on the box: iOS (Choose File and the share extension), web,
+PDFs, an SVG, a Word file, and a `.pages` refused as unreadable. Not yet seen
+on a device: the Android share target on an installed PWA. The wire contract
+is `share-and-files-wire.md`; where it and the phases below differ, it wins.
+Parked follow-ups are under "Not in scope"; reading Office files as more than
+their text is `document-fidelity.md`.
 
 ## Why (Mike, 2026-10-24)
 

@@ -89,7 +89,7 @@ weeks old or its picks have moved, redo the review as that file describes.
   clients, merged 2026-10-23; seen on Mike's iPhone, Android not yet. Next
   id is the highest in `changes.json` plus one. Its policy (what gets
   an entry) is now a working rule in `CLAUDE.md`.
-- **`ios-image-input.md`** (2026-10-23): camera shipped on both clients. Multi-image messages (up to 6, Mike's picks) shipped on both clients 2026-10-24, device-checked on the iPhone and the Android emulator's PWA. Follow-ups specced, not started: `image-viewer.md`, `message-retention-setting.md`, `share-and-files.md`.
+- **`ios-image-input.md`** (2026-10-23): camera shipped on both clients. Multi-image messages (up to 6, Mike's picks) shipped on both clients 2026-10-24, device-checked on the iPhone and the Android emulator's PWA. Follow-ups specced, not started: `image-viewer.md`, `message-retention-setting.md`. `share-and-files.md` (any file, and Share to Marlow) shipped on both clients 2026-11-14.
 - **`bare-default-risk.md`** (2026-10-19): watching, nothing to build. The
   docs say `--bare` will become the default for `-p`. It skips OAuth,
   connectors, hooks and CLAUDE.md, and there's no opt-out yet. Read the CLI

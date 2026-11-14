@@ -520,6 +520,7 @@ struct ChatView: View {
                                     message: message, onRetry: { store.retry($0) },
                                     loadImage: { store.loadedImage(filename: $0) },
                                     openFile: { await store.previewURL(for: $0) },
+                                    photoURL: { store.photoURL(filename: $0) },
                                     failedReplyId: failedReplies[message.id],
                                     isAttachedFailure: message.clientMsgId
                                         .flatMap(UUID.init(uuidString:))
@@ -2128,6 +2129,12 @@ private struct MessageRow: View {
     let openFile: (MessageFile) async -> URL?
     /// The copy QuickLook is showing, while it is.
     @State private var previewURL: URL?
+    /// A photo's tap (Mike, 2026-11-14): the JPEG on disk for a slot, or nil
+    /// while it downloads, so a grey tile opens nothing.
+    let photoURL: (String) -> URL?
+    /// The photo QuickLook is showing, and the message's others to swipe to.
+    @State private var photoPreviewURL: URL?
+    @State private var photoPreviewURLs: [URL] = []
     /// The chip whose download is in flight, for its spinner.
     @State private var openingFileId: String?
     /// On Mike's bubble: the failed reply to retry from the arrow beside it.
@@ -2312,18 +2319,18 @@ private struct MessageRow: View {
     /// download and a failed one stays a visible gray tile, as on the web.
     @ViewBuilder
     private var imageGrid: some View {
-        let slots: [String] = message.allAttachmentIds.isEmpty
-            ? message.allImageFilenames
-            : message.allAttachmentIds.map { "\($0).jpg" }
+        let slots = message.photoSlots
         let loaded: [UIImage?] = slots.map { loadImage($0) }
         let images: [UIImage?] = loaded
         if images.count == 1 {
             if let only = images[0] {
-                Image(uiImage: only)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: 220, maxHeight: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                photoButton(slots: slots, index: 0) {
+                    Image(uiImage: only)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxWidth: 220, maxHeight: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
             } else {
                 // Not downloaded yet: a gray square, as on the web (120px),
                 // rather than nothing and then a 220pt jump when it lands.
@@ -2335,19 +2342,19 @@ private struct MessageRow: View {
             let spacing: CGFloat = 4
             let columns = ChatMessage.gridColumns(forImageCount: images.count)
             let cell = (220 - spacing * CGFloat(columns - 1)) / CGFloat(columns)
-            let rows: [[UIImage?]] = stride(from: 0, to: images.count, by: columns).map {
-                Array(images[$0..<min($0 + columns, images.count)])
-            }
+            let rowStarts = Array(stride(from: 0, to: images.count, by: columns))
             VStack(alignment: .leading, spacing: spacing) {
-                ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                ForEach(rowStarts, id: \.self) { start in
                     HStack(spacing: spacing) {
-                        ForEach(Array(row.enumerated()), id: \.offset) { _, image in
-                            if let image {
-                                Image(uiImage: image)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: cell, height: cell)
-                                    .clipped()
+                        ForEach(start..<min(start + columns, images.count), id: \.self) { index in
+                            if let image = images[index] {
+                                photoButton(slots: slots, index: index) {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: cell, height: cell)
+                                        .clipped()
+                                }
                             } else {
                                 Rectangle()
                                     .fill(Color.gray.opacity(0.25))
@@ -2359,6 +2366,25 @@ private struct MessageRow: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
+    }
+
+    /// A loaded photo as a button that opens it full screen in QuickLook,
+    /// with the message's other loaded photos to swipe through, pinch-zoom
+    /// and the share sheet (Save Image) for free. Only loaded photos are
+    /// buttons: a grey tile has no file yet, so it stays inert.
+    private func photoButton<Label: View>(
+        slots: [String], index: Int, @ViewBuilder label: () -> Label
+    ) -> some View {
+        Button {
+            guard let tapped = photoURL(slots[index]) else { return }
+            photoPreviewURLs = slots.compactMap(photoURL)
+            photoPreviewURL = tapped
+        } label: {
+            label().contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(slots.count > 1 ? "Photo \(index + 1) of \(slots.count)" : "Photo")
+        .accessibilityHint("Opens the photo full screen")
     }
 
     /// One row per file after the photo grid: icon, name (truncated in the

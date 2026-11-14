@@ -49,9 +49,23 @@ enum ImageDownscaler {
     /// held whole in memory (the share extension runs in about 120MB). `nil`
     /// when the file is not an image ImageIO can decode, which is how a caller
     /// tells a photo from a file.
+    ///
+    /// "Can ImageIO draw it" is not "is it a photo": ImageIO renders a PDF's
+    /// first page, so a PDF picked in Files was staged as a nameless tile and
+    /// sent as a JPEG of page one (Mike, on device, 2026-11-14). The type
+    /// ImageIO says it opened has to be an image type as well.
     static func downscaledJPEG(fromFileAt url: URL) -> Data? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              isPhotoType(CGImageSourceGetType(source) as String?)
+        else { return nil }
         return downscaledJPEG(from: source)
+    }
+
+    /// A UTI that is an image format (JPEG, PNG, HEIC, GIF, ...), not a
+    /// document ImageIO can also draw.
+    static func isPhotoType(_ identifier: String?) -> Bool {
+        guard let identifier, let type = UTType(identifier) else { return false }
+        return type.conforms(to: .image)
     }
 
     /// The paste path: `UIPasteboard.general.image` hands back an already-

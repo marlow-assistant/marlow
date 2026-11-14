@@ -173,6 +173,38 @@ struct AttachmentIntakeTests {
         #expect(staged.data == bytes)
     }
 
+    /// A real, renderable PDF, not just its header (the test above): ImageIO
+    /// draws a PDF's first page, so "does it decode" alone turned it into a
+    /// nameless photo tile and sent a JPEG of page one (Mike, on device,
+    /// 2026-11-14). The header-only PDF above never reached that path.
+    @Test func aRealPDFThatImageIOCouldRenderIsStillAFile() throws {
+        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 612, height: 792))
+        let bytes = renderer.pdfData { context in
+            context.beginPage()
+            ("Booking" as NSString).draw(at: CGPoint(x: 72, y: 72), withAttributes: nil)
+        }
+        let url = try write(bytes, named: "Booking confirmation.pdf")
+
+        guard case .file(let staged) = AttachmentIntake.read(fileAt: url) else {
+            Issue.record("a PDF must stay a file, never a photo of its first page")
+            return
+        }
+        #expect(staged.name == "Booking confirmation.pdf")
+        #expect(staged.data == bytes)
+    }
+
+    /// What ImageIO says it opened decides the photo path, not whether it
+    /// managed to draw something: ImageIO renders a PDF's first page.
+    @Test func onlyAnImageTypeTakesThePhotoPath() {
+        #expect(ImageDownscaler.isPhotoType("public.jpeg"))
+        #expect(ImageDownscaler.isPhotoType("public.png"))
+        #expect(ImageDownscaler.isPhotoType("public.heic"))
+        #expect(ImageDownscaler.isPhotoType("com.compuserve.gif"))
+        #expect(!ImageDownscaler.isPhotoType("com.adobe.pdf"), "a PDF is a document, whatever ImageIO can draw of it")
+        #expect(!ImageDownscaler.isPhotoType(nil))
+        #expect(!ImageDownscaler.isPhotoType("not.a.real.type"))
+    }
+
     /// The platform has no mime for it: "" goes on the wire, and the server
     /// sniffs.
     @Test func anUnknownExtensionHasAnEmptyMime() throws {

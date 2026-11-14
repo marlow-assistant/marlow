@@ -67,7 +67,9 @@ and `X-Content-Type-Options: nosniff`.
   authority.
 - Anything the client can decode as an image goes through the existing
   downscaler and `images`, whichever button picked it. Everything else goes
-  in `files`.
+  in `files`. "An image" means an image format: iOS's ImageIO also draws a
+  PDF's first page, so the decoded type must conform to `public.image` too,
+  or a PDF goes out as a JPEG of page one.
 - **Opening a file chip:**
   - iOS: QuickLook on a local copy, named with an extension that matches
     the stored `mime` (`.pdf`, `.txt`, `.docx`, …) or the name's own

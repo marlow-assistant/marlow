@@ -64,6 +64,9 @@ final class SessionStore: ObservableObject {
         } else {
             SharedCredential.clear()
             TurnInbox.clear()
+            // Messages shared and waiting to be sent are content, and the
+            // token they would go out with is gone.
+            ShareOutbox.shared.clear()
         }
     }
 }

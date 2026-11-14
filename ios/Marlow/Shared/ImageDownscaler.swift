@@ -2,6 +2,9 @@ import ImageIO
 import UIKit
 import UniformTypeIdentifiers
 
+/// Compiled into the app and the share extension (a share sheet photo takes
+/// the same path as one from the composer).
+///
 /// Downscales an attached image before it ever reaches the network
 /// (docs/tasks/ios-image-input.md, decided 2026-08-11: on the device, not the
 /// server — 12MP HEIC over a van-dead-zone tailnet buys the model nothing).
@@ -27,6 +30,10 @@ enum ImageDownscaler {
     /// decoding a 12MP original into memory just to shrink it.
     static func downscaledJPEG(from data: Data) -> Data? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return downscaledJPEG(from: source)
+    }
+
+    private static func downscaledJPEG(from source: CGImageSource) -> Data? {
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceThumbnailMaxPixelSize: longEdge,
@@ -36,6 +43,15 @@ enum ImageDownscaler {
             return nil
         }
         return jpegData(from: thumbnail)
+    }
+
+    /// A file on disk: ImageIO reads it itself, so a 30MB original is never
+    /// held whole in memory (the share extension runs in about 120MB). `nil`
+    /// when the file is not an image ImageIO can decode, which is how a caller
+    /// tells a photo from a file.
+    static func downscaledJPEG(fromFileAt url: URL) -> Data? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return downscaledJPEG(from: source)
     }
 
     /// The paste path: `UIPasteboard.general.image` hands back an already-

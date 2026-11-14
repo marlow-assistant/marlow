@@ -448,6 +448,16 @@ final class ChatStore: ObservableObject {
     private let deviceToken: String
     private let persistURL: URL
     private let attachmentsDirectoryURL: URL
+    /// Where a tapped file chip's copy is made, named for the file so
+    /// QuickLook titles it properly. Caches, not Application Support: a copy
+    /// the system clears costs one more tap, and the bytes are still in
+    /// `attachmentsDirectoryURL` or on the server.
+    private let previewsDirectoryURL: URL
+    /// What the share extension left for this app to send
+    /// (docs/tasks/share-and-files.md, Phase 3). Injected like the directories:
+    /// the real one is in the App Group container, which a test host lacks.
+    private let shareOutbox: ShareOutbox
+    private var drainingShareOutbox = false
     private let policy: PollingPolicy
     /// Backing store for the chosen thinking effort. See `init`.
     private let preferences: UserDefaults
@@ -479,6 +489,8 @@ final class ChatStore: ObservableObject {
         client: ChatAPI = APIClient(),
         persistURL: URL = ChatStore.makePersistURL(),
         attachmentsDirectoryURL: URL = ChatStore.makeAttachmentsDirectoryURL(),
+        previewsDirectoryURL: URL = ChatStore.makePreviewsDirectoryURL(),
+        shareOutbox: ShareOutbox = .shared,
         policy: PollingPolicy = .default,
         // Injected for the same reason `client` and `persistURL` are: the
         // effort read on the send path would otherwise reach the process-wide
@@ -499,6 +511,8 @@ final class ChatStore: ObservableObject {
         self.client = client
         self.persistURL = persistURL
         self.attachmentsDirectoryURL = attachmentsDirectoryURL
+        self.previewsDirectoryURL = previewsDirectoryURL
+        self.shareOutbox = shareOutbox
         self.policy = policy
         self.preferences = preferences
         self.inbox = inbox
@@ -589,9 +603,10 @@ final class ChatStore: ObservableObject {
     /// caption"). At least one of the two must be present.
     @discardableResult
     func send(
-        text: String, images: [Data] = [], ideaId: String? = nil, todoId: String? = nil, quote: IdeaQuote? = nil
+        text: String, images: [Data] = [], files: [StagedFile] = [], ideaId: String? = nil, todoId: String? = nil,
+        quote: IdeaQuote? = nil
     ) -> Bool {
-        startSend(text: text, images: images, ideaId: ideaId, todoId: todoId, quote: quote) != nil
+        startSend(text: text, images: images, files: files, ideaId: ideaId, todoId: todoId, quote: quote) != nil
     }
 
     /// Voice mode's send (docs/tasks/voice-mode-hands-free.md): marked spoken
@@ -609,11 +624,11 @@ final class ChatStore: ObservableObject {
 
     /// The reply placeholder's id, or nil when there was nothing to send.
     private func startSend(
-        text: String, images: [Data] = [], ideaId: String? = nil, todoId: String? = nil, quote: IdeaQuote? = nil,
-        spoken: Bool = false
+        text: String, images: [Data] = [], files: [StagedFile] = [], ideaId: String? = nil, todoId: String? = nil,
+        quote: IdeaQuote? = nil, spoken: Bool = false
     ) -> UUID? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty || !images.isEmpty else { return nil }
+        guard !trimmed.isEmpty || !images.isEmpty || !files.isEmpty else { return nil }
 
         var userMessage = ChatMessage(
             id: UUID(), role: .user, text: trimmed, createdAt: Date(), turnId: nil, status: .done,
@@ -626,27 +641,45 @@ final class ChatStore: ObservableObject {
         // fails, send text-only on *this* attempt too rather than have the
         // two diverge, and say why: a caption with only some of its images is
         // the "reply about a picture Marlow never saw" failure (CMP-4/CMP-6).
+        //
+        // Files are saved the same way, as `<clientMsgId>-f<i>.<ext>` beside the
+        // photos, and one failed write of either kind sends text only: a
+        // caption with its photos but not its PDF is the same failure.
         var imagesToSend = images
+        var filesToSend = files
         var attachmentWriteFailed = false
-        if !images.isEmpty {
+        if !images.isEmpty || !files.isEmpty {
             var filenames: [String] = []
-            for (index, data) in images.enumerated() {
-                guard let filename = saveAttachment(data, clientMsgId: clientMsgId, index: index) else {
-                    filenames = []
-                    break
+            var saved: [MessageFile] = []
+            writing: do {
+                for (index, data) in images.enumerated() {
+                    guard let filename = saveAttachment(data, clientMsgId: clientMsgId, index: index) else {
+                        break writing
+                    }
+                    filenames.append(filename)
                 }
-                filenames.append(filename)
+                for (index, file) in files.enumerated() {
+                    guard let filename = saveFile(file, clientMsgId: clientMsgId, index: index) else {
+                        break writing
+                    }
+                    saved.append(MessageFile(
+                        id: filename, name: file.name, mime: file.mime, size: file.byteCount,
+                        localFilename: filename
+                    ))
+                }
             }
-            if filenames.count == images.count {
-                userMessage.imageFilenames = filenames
+            if filenames.count == images.count, saved.count == files.count {
+                if !filenames.isEmpty { userMessage.imageFilenames = filenames }
+                if !saved.isEmpty { userMessage.files = saved }
             } else {
                 // Files written before the failing one are orphans; the
                 // launch-time prune removes anything no message references.
                 imagesToSend = []
+                filesToSend = []
                 attachmentWriteFailed = true
             }
         }
-        guard !trimmed.isEmpty || !imagesToSend.isEmpty else { return nil }
+        guard !trimmed.isEmpty || !imagesToSend.isEmpty || !filesToSend.isEmpty else { return nil }
         // Only claim "sending without it" once we know the send is actually
         // going ahead (`/code-review medium` finding: with a blank caption,
         // a failed write used to trip this notice on the way to the guard
@@ -654,9 +687,13 @@ final class ChatStore: ObservableObject {
         // happened).
         if attachmentWriteFailed {
             showPermissionNotice(
-                images.count == 1
-                    ? "Couldn't save the photo — sending your message without it."
-                    : "Couldn't save the photos — sending your message without them."
+                files.isEmpty
+                    ? (images.count == 1
+                        ? "Couldn't save the photo — sending your message without it."
+                        : "Couldn't save the photos — sending your message without them.")
+                    : (images.count + files.count == 1
+                        ? "Couldn't save the file — sending your message without it."
+                        : "Couldn't save the attachments — sending your message without them.")
             )
         }
         let placeholder = ChatMessage(
@@ -669,7 +706,7 @@ final class ChatStore: ObservableObject {
 
         startSubmit(
             text: trimmed, clientMsgId: clientMsgId, placeholderId: placeholder.id,
-            images: imagesToSend, ideaId: ideaId, todoId: todoId, spoken: spoken
+            images: imagesToSend, files: filesToSend, ideaId: ideaId, todoId: todoId, spoken: spoken
         )
         return placeholder.id
     }
@@ -707,36 +744,60 @@ final class ChatStore: ObservableObject {
     /// bytes in memory and passes `images` directly instead.
     private func startSubmit(
         text: String, clientMsgId: String, placeholderId: UUID,
-        images: [Data] = [], imageFilenames: [String] = [], ideaId: String? = nil, todoId: String? = nil,
+        images: [Data] = [], files: [StagedFile] = [], imageFilenames: [String] = [],
+        savedFiles: [MessageFile] = [], ideaId: String? = nil, todoId: String? = nil,
         spoken: Bool = false
     ) {
         activeTasks[placeholderId] = Task { [weak self] in
             guard let self else { return }
             var resolvedImages = images
-            if resolvedImages.isEmpty, !imageFilenames.isEmpty {
+            var resolvedFiles = files
+            if resolvedImages.isEmpty, resolvedFiles.isEmpty, !imageFilenames.isEmpty || !savedFiles.isEmpty {
                 // All or nothing: one missing file sends the text alone, never
-                // the caption with some of its images (CMP-4, CMP-6).
+                // the caption with some of its images, or its photos without
+                // the PDF that went with them (CMP-4, CMP-6).
                 let loaded = imageFilenames.compactMap { self.loadAttachment(filename: $0) }
-                resolvedImages = loaded.count == imageFilenames.count ? loaded : []
-                if resolvedImages.isEmpty {
+                let loadedFiles = savedFiles.compactMap { saved -> StagedFile? in
+                    guard let filename = saved.localFilename,
+                          let data = self.loadAttachment(filename: filename) else { return nil }
+                    return StagedFile(name: saved.name ?? "file", mime: saved.mime, data: data)
+                }
+                if loaded.count == imageFilenames.count, loadedFiles.count == savedFiles.count {
+                    resolvedImages = loaded
+                    resolvedFiles = loadedFiles
+                } else {
                     // The paired send already told the user if *its* write
                     // failed; this is the separate case of the file having
                     // gone missing by the time a later retry/relaunch reads
                     // it back — same "don't resend silently" rule applies
                     // (`/code-review medium` finding).
-                    self.showPermissionNotice(
-                        imageFilenames.count == 1
-                            ? "Couldn't find the photo to resend — sending without it."
-                            : "Couldn't find the photos to resend — sending without them."
-                    )
+                    self.showPermissionNotice(Self.missingAttachmentNotice(
+                        photos: imageFilenames.count, files: savedFiles.count
+                    ))
                 }
             }
             await self.submit(
                 text: text, clientMsgId: clientMsgId, placeholderId: placeholderId,
-                images: resolvedImages, ideaId: ideaId, todoId: todoId, spoken: spoken
+                images: resolvedImages, files: resolvedFiles, ideaId: ideaId, todoId: todoId, spoken: spoken
             )
             self.activeTasks.removeValue(forKey: placeholderId)
         }
+    }
+
+    /// The photo-only wording is what it always was; a message with a file in it
+    /// says "file" or "attachments".
+    private static func missingAttachmentNotice(photos: Int, files: Int) -> String {
+        if files == 0 {
+            return photos == 1
+                ? "Couldn't find the photo to resend — sending without it."
+                : "Couldn't find the photos to resend — sending without them."
+        }
+        if photos == 0 {
+            return files == 1
+                ? "Couldn't find the file to resend — sending without it."
+                : "Couldn't find the files to resend — sending without them."
+        }
+        return "Couldn't find the attachments to resend — sending without them."
     }
 
     private func startPoll(turnId: String, placeholderId: UUID) {
@@ -751,17 +812,18 @@ final class ChatStore: ObservableObject {
     /// the retryable kind, so by the time a message shows red here, it's a
     /// real stopping point, not a blip the user needed to notice.
     private func submit(
-        text: String, clientMsgId: String, placeholderId: UUID, images: [Data] = [], ideaId: String? = nil,
-        todoId: String? = nil, spoken: Bool = false
+        text: String, clientMsgId: String, placeholderId: UUID, images: [Data] = [], files: [StagedFile] = [],
+        ideaId: String? = nil, todoId: String? = nil, spoken: Bool = false
     ) async {
         var attempt = 0
         // Encoded once, before the retry loop (CMP-3).
         let imagesBase64 = images.map { $0.base64EncodedString() }
+        let outgoingFiles = files.map(OutgoingFile.init)
         while true {
             do {
                 let response = try await sendMessageWithDeadline(
                     text: text, clientMsgId: clientMsgId,
-                    imagesBase64: imagesBase64,
+                    imagesBase64: imagesBase64, files: outgoingFiles,
                     ideaId: ideaId, todoId: todoId, spoken: spoken,
                     timeout: policy.sendAttemptTimeout
                 )
@@ -808,7 +870,8 @@ final class ChatStore: ObservableObject {
     /// would incorrectly make the first timed-out attempt terminal.
     private func sendMessageWithDeadline(
         text: String, clientMsgId: String?,
-        imagesBase64: [String], ideaId: String?, todoId: String?, spoken: Bool, timeout: TimeInterval
+        imagesBase64: [String], files: [OutgoingFile], ideaId: String?, todoId: String?, spoken: Bool,
+        timeout: TimeInterval
     ) async throws -> MessageResponse {
         // Read per attempt rather than captured once at submit(): a retry that
         // happens after Mike changes the picker should carry what the picker is
@@ -822,7 +885,7 @@ final class ChatStore: ObservableObject {
             group.addTask { [client, deviceToken] in
                 try await client.sendMessage(
                     text: text, clientMsgId: clientMsgId,
-                    imagesBase64: imagesBase64, effort: effort,
+                    imagesBase64: imagesBase64, files: files, effort: effort,
                     location: location, ideaId: ideaId, todoId: todoId, spoken: spoken, timeout: timeout,
                     deviceToken: deviceToken
                 )
@@ -849,24 +912,64 @@ final class ChatStore: ObservableObject {
     /// response to) just delays the same answer.
     private static func isTransientNetworkError(_ error: Error) -> Bool {
         if let urlError = error as? URLError {
-            switch urlError.code {
-            case .notConnectedToInternet, .networkConnectionLost, .timedOut,
-                 .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed,
-                 .dataNotAllowed, .internationalRoamingOff, .callIsActive,
-                 .secureConnectionFailed:
-                return true
-            default:
-                return false
-            }
+            return TransientFailure.isTransient(urlError.code)
         }
         if case APIError.server(let status, _) = error {
             // 0 is this client's own stand-in for "no HTTP response at all"
             // (`APIClient.send`) — a connection-level failure wearing an
             // APIError costume, not a real status code. 5xx is the server's
             // own transient trouble, not a rejection of this request.
-            return status == 0 || status >= 500
+            return TransientFailure.isTransient(status: status)
         }
         return false
+    }
+
+    // MARK: - Share outbox
+
+    /// Sends what the share extension saved because the box was out of reach,
+    /// oldest first, each under the `client_msg_id` the extension generated, so
+    /// the server's dedup makes a repeat harmless. Called on launch and on
+    /// becoming active.
+    ///
+    /// A 2xx or a 4xx deletes the entry, the 4xx with a notice (a retry can't
+    /// fix it); a transient failure keeps it and stops. A message sent here has
+    /// no bubble of its own: it arrives through the transcript sync as a row
+    /// from another device (`TranscriptMerge` inserts it, downloads its photos
+    /// and polls for the reply), and the sync is asked for at once rather than
+    /// at the next tick.
+    func drainShareOutbox() async {
+        // One drain at a time: becoming active can land while the launch drain
+        // is still working, and both would otherwise start with the same entry.
+        guard !drainingShareOutbox, !shareOutbox.pendingIds().isEmpty else { return }
+        drainingShareOutbox = true
+        defer { drainingShareOutbox = false }
+
+        let effort = EffortPreference.current(in: preferences)
+        let report = await shareOutbox.drain { entry in
+            do {
+                _ = try await self.client.sendMessage(
+                    text: entry.text, clientMsgId: entry.clientMsgId,
+                    imagesBase64: entry.photos.map { $0.base64EncodedString() },
+                    files: entry.files.map(OutgoingFile.init), effort: effort, location: nil,
+                    ideaId: nil, todoId: nil, spoken: false, timeout: nil, deviceToken: self.deviceToken
+                )
+                return .sent
+            } catch {
+                if Self.isTransientNetworkError(error) { return .transient }
+                // A cancelled drain (sign-out) must keep what it did not send.
+                if error is CancellationError || Task.isCancelled { return .transient }
+                if case APIError.server(_, let detail) = error { return .rejected(detail: detail) }
+                return .rejected(detail: nil)
+            }
+        }
+        if let first = report.rejected.first {
+            showPermissionNotice(
+                first.isEmpty
+                    ? "Marlow couldn\u{2019}t take something you shared."
+                    : "Marlow couldn\u{2019}t take something you shared: \(first)"
+            )
+        }
+        if report.sent > 0 { await syncTranscript() }
     }
 
     /// Resends a failed turn — manually, for whenever the automatic retry
@@ -886,7 +989,7 @@ final class ChatStore: ObservableObject {
         guard
             let message = messages.first(where: { $0.id == placeholderId }),
             message.status == .error,
-            let (clientMsgId, text, imageFilenames, ideaId, todoId) = resendable(message)
+            let (clientMsgId, text, imageFilenames, savedFiles, ideaId, todoId) = resendable(message)
         else { return }
         update(placeholderId) {
             $0.status = .sending
@@ -904,7 +1007,7 @@ final class ChatStore: ObservableObject {
         persist()
         startSubmit(
             text: text, clientMsgId: clientMsgId, placeholderId: placeholderId,
-            imageFilenames: imageFilenames, ideaId: ideaId, todoId: todoId
+            imageFilenames: imageFilenames, savedFiles: savedFiles, ideaId: ideaId, todoId: todoId
         )
     }
 
@@ -927,12 +1030,18 @@ final class ChatStore: ObservableObject {
     /// (`/code-review medium` finding).
     private func resendable(
         _ message: ChatMessage
-    ) -> (clientMsgId: String, text: String, imageFilenames: [String], ideaId: String?, todoId: String?)? {
+    ) -> (
+        clientMsgId: String, text: String, imageFilenames: [String], savedFiles: [MessageFile],
+        ideaId: String?, todoId: String?
+    )? {
         guard
             let clientMsgId = message.clientMsgId,
             let userMessage = messages.first(where: { $0.id.uuidString == clientMsgId })
         else { return nil }
-        return (clientMsgId, userMessage.text, userMessage.allImageFilenames, userMessage.ideaId, userMessage.todoId)
+        return (
+            clientMsgId, userMessage.text, userMessage.allImageFilenames, userMessage.files ?? [],
+            userMessage.ideaId, userMessage.todoId
+        )
     }
 
     /// Fast phase (`fastAttempts` at `fastInterval`, ~5min) covers normal
@@ -1278,7 +1387,7 @@ final class ChatStore: ObservableObject {
                 resumedPlaceholders.insert(message.id)
                 startPoll(turnId: turnId, placeholderId: message.id)
             case .sending:
-                guard let (clientMsgId, text, imageFilenames, ideaId, todoId) = resendable(message) else {
+                guard let (clientMsgId, text, imageFilenames, savedFiles, ideaId, todoId) = resendable(message) else {
                     update(message.id) {
                         $0.status = .error
                         $0.text = "Interrupted before sending — please resend."
@@ -1294,7 +1403,7 @@ final class ChatStore: ObservableObject {
                 }
                 startSubmit(
                     text: text, clientMsgId: clientMsgId, placeholderId: message.id,
-                    imageFilenames: imageFilenames, ideaId: ideaId, todoId: todoId
+                    imageFilenames: imageFilenames, savedFiles: savedFiles, ideaId: ideaId, todoId: todoId
                 )
             case .done, .error:
                 continue
@@ -1940,6 +2049,71 @@ final class ChatStore: ObservableObject {
         }
     }
 
+    /// The copy of a file saved for retry, `<clientMsgId>-f<index>.<ext>`
+    /// (CMP-6), with the same `nil`-on-failure contract as `saveAttachment`.
+    /// The extension comes from the name, only so the file is recognisable on
+    /// disk; nothing reads it back by type.
+    private func saveFile(_ file: StagedFile, clientMsgId: String, index: Int) -> String? {
+        let filename = "\(clientMsgId)-f\(index).\(AttachmentFileNaming.savedExtension(forName: file.name))"
+        do {
+            try FileManager.default.createDirectory(
+                at: attachmentsDirectoryURL, withIntermediateDirectories: true
+            )
+            try file.data.write(to: attachmentsDirectoryURL.appendingPathComponent(filename), options: .atomic)
+            return filename
+        } catch {
+            return nil
+        }
+    }
+
+    nonisolated static func makePreviewsDirectoryURL() -> URL {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("chat-file-previews", isDirectory: true)
+    }
+
+    /// A local copy of `file` for QuickLook, made when its chip is tapped:
+    /// from the copy saved for retry when this phone sent it, otherwise
+    /// downloaded from the server with the bearer header. Named
+    /// `<sanitized name>.<ext>` (`AttachmentFileNaming`) so the previewer
+    /// picks the right reader and titles it with the file's name. Nil, with a
+    /// notice, when neither source works.
+    func previewURL(for file: MessageFile) async -> URL? {
+        // The id becomes a directory name. The server only issues uuids and
+        // the saved copy's names are ours, but a path component is not a place
+        // to trust that.
+        let key = file.attachmentId ?? file.localFilename ?? file.id
+        guard !key.isEmpty, !key.contains(".."),
+              key.allSatisfy({ ($0.isASCII && ($0.isLetter || $0.isNumber)) || $0 == "-" || $0 == "_" || $0 == "." })
+        else {
+            showPermissionNotice("Couldn't open that file.")
+            return nil
+        }
+        let directory = previewsDirectoryURL.appendingPathComponent(key, isDirectory: true)
+        let target = directory.appendingPathComponent(
+            AttachmentFileNaming.previewFilename(name: file.name, mime: file.mime)
+        )
+        if FileManager.default.fileExists(atPath: target.path) { return target }
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            if let local = file.localFilename,
+               FileManager.default.fileExists(atPath: attachmentsDirectoryURL.appendingPathComponent(local).path) {
+                try FileManager.default.copyItem(
+                    at: attachmentsDirectoryURL.appendingPathComponent(local), to: target
+                )
+                return target
+            }
+            guard let attachmentId = file.attachmentId, UUID(uuidString: attachmentId) != nil else {
+                throw URLError(.fileDoesNotExist)
+            }
+            let data = try await client.transcriptAttachment(id: attachmentId, deviceToken: deviceToken)
+            try data.write(to: target, options: .atomic)
+            return target
+        } catch {
+            if !Task.isCancelled { showPermissionNotice("Couldn't open that file.") }
+            return nil
+        }
+    }
+
     /// Deletes attachment files that no message kept at load refers to: images
     /// of messages the 30-day cutoff just dropped, and everything the old
     /// phone-local transcript left behind. Nothing else ever removes them.
@@ -1955,6 +2129,7 @@ final class ChatStore: ObservableObject {
         var referenced = Set<String>()
         for message in messages {
             referenced.formUnion(message.allImageFilenames)
+            referenced.formUnion((message.files ?? []).compactMap(\.localFilename))
             // Downloads that have not finished yet will land under these names.
             for attachmentId in message.allAttachmentIds { referenced.insert("\(attachmentId).jpg") }
         }

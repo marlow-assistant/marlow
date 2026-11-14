@@ -48,11 +48,14 @@ import os
 /// `markdown` is `idle` plus a reply exercising the block renderer: a GFM
 /// table with alignment, inline formatting and cells too long for the bubble.
 ///
+/// `files` is `idle` plus a message carrying file chips: a PDF, a long Word
+/// name, a type with no reader and an old row with no name or size.
+///
 /// `whatsNew` is `idle` plus the "Marlow was updated" card, as on a device
 /// that has never shown it: one scripted server entry and this build's own.
 enum UIFixture {
     enum State: String {
-        case empty, idle, working, streaming, interrupted, failed, follow, approval, approvalBash, ideas, todos, markdown, whatsNew
+        case empty, idle, working, streaming, interrupted, failed, follow, approval, approvalBash, ideas, todos, markdown, whatsNew, files
     }
 
     /// Read from the launch argument, which UserDefaults exposes in its
@@ -570,7 +573,28 @@ enum UIFixture {
                 createdAt: at(3.5), turnId: "t3", status: .done
             ))
         }
-        guard state != .idle, state != .ideas, state != .todos, state != .markdown, state != .whatsNew else { return messages }
+        if state == .files {
+            var attached = ChatMessage(
+                id: UUID(), role: .user, text: "Here are the papers for the trip.",
+                createdAt: at(4), turnId: nil, status: .done
+            )
+            attached.files = [
+                MessageFile(id: "f1", name: "Booking confirmation.pdf", mime: "application/pdf", size: 52_113),
+                MessageFile(
+                    id: "f2", name: "Itinerary and notes for the whole family trip in May.docx",
+                    mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", size: 1_240_000
+                ),
+                MessageFile(id: "f3", name: "Budget.numbers", mime: "application/octet-stream", size: 2_100_000),
+                MessageFile(id: "f4", name: nil, mime: "application/pdf", size: nil),
+            ]
+            messages.append(attached)
+            messages.append(ChatMessage(
+                id: UUID(), role: .assistant, text: "Got them. The booking is for the 14th.",
+                createdAt: at(3.5), turnId: "t3", status: .done
+            ))
+        }
+        guard state != .idle, state != .ideas, state != .todos, state != .markdown, state != .whatsNew,
+              state != .files else { return messages }
         let userMessage = ChatMessage(
             id: UUID(), role: .user, text: "Can you find a cheaper quote for the insurance?",
             createdAt: at(0.2), turnId: nil, status: .done
@@ -629,7 +653,7 @@ private struct FixtureChatAPI: ChatAPI {
         let search = TurnActivity(kind: "tool_start", tool: "WebSearch", at: 1)
         let writing = TurnActivity(kind: "text", tool: nil, at: 2)
         let (activities, text): ([TurnActivity], String) = switch state {
-        case .empty, .idle, .working, .failed, .follow, .approval, .approvalBash, .ideas, .todos, .markdown, .whatsNew: ([search], "")
+        case .empty, .idle, .working, .failed, .follow, .approval, .approvalBash, .ideas, .todos, .markdown, .whatsNew, .files: ([search], "")
         case .streaming: ([writing], Self.streamed)
         case .interrupted: ([writing, TurnActivity(kind: "tool_start", tool: "WebSearch", at: 3)], Self.streamed)
         }
@@ -708,7 +732,7 @@ private struct FixtureChatAPI: ChatAPI {
     }
 
     func sendMessage(
-        text: String, clientMsgId: String?, imagesBase64: [String],
+        text: String, clientMsgId: String?, imagesBase64: [String], files: [OutgoingFile],
         effort: ThinkingEffort, location: OutgoingLocation?, ideaId: String?, todoId: String?, spoken: Bool,
         timeout: TimeInterval?, deviceToken: String
     ) async throws -> MessageResponse {

@@ -117,11 +117,18 @@ struct ChatMessage: Identifiable, Codable, Equatable {
     /// have (all of them, in row order); each lands as `<id>.jpg` and is added
     /// to `imageFilenames` once downloaded.
     var attachmentIds: [String]? = nil
+    /// The files of a `.user` message (docs/tasks/share-and-files.md), drawn
+    /// as chips after the photo grid. Photos are not here: they stay in
+    /// `imageFilenames` / `attachmentIds`. Optional for the same
+    /// decode-compatibility reason as the other additions; nil is every
+    /// message written before files existed, and every message without one.
+    var files: [MessageFile]? = nil
 
-    /// Images per message. One constant for the composer's cap, the picker's
-    /// `maxSelectionCount` and the tests; the server's `_MAX_IMAGES` is the same
-    /// number and the authority (chat-ux-contract.md CMP-3).
-    static let maxImages = 6
+    /// Items per message, photos and files together. One constant for the
+    /// composer's cap, the picker's `maxSelectionCount` and the tests; the
+    /// server's `_MAX_IMAGES` is the same number and the authority
+    /// (chat-ux-contract.md CMP-3), via `AttachmentLimits`.
+    static let maxImages = AttachmentLimits.maxItems
 
     /// Columns of the bubble's image grid for `count` images: one image is shown
     /// whole (a single column), 2 and 4 pair up, 3 and 5-6 run three across
@@ -152,4 +159,26 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         let have = Set(allImageFilenames)
         return allAttachmentIds.filter { !have.contains("\($0).jpg") }
     }
+}
+
+/// A file on a user message: the chip's name and size, and where its bytes are.
+///
+/// Sent from this phone, `localFilename` names the copy saved for retry
+/// (`<clientMsgId>-f<i>.<ext>`, CMP-6) and the chip opens from it. From another
+/// device, `attachmentId` names the server's copy, downloaded when the chip is
+/// tapped and not before: a file is not needed to draw the bubble, and it can
+/// be large.
+///
+/// `name` and `size` are optional because an old row, and a photo sent through
+/// `images`, has neither.
+struct MessageFile: Codable, Equatable, Identifiable {
+    /// The attachment id, or the saved copy's filename: stable across relaunches.
+    let id: String
+    var name: String?
+    /// The stored mime from the server (never the client's), or the platform's
+    /// guess for a file this phone has not had confirmed yet.
+    var mime: String
+    var size: Int?
+    var localFilename: String? = nil
+    var attachmentId: String? = nil
 }

@@ -328,7 +328,15 @@ struct TranscriptRow: Decodable, Equatable {
 
     struct Attachment: Decodable, Equatable {
         let id: String
+        /// The server's reading of the bytes, never the client's
+        /// (docs/tasks/share-and-files-wire.md): an `image/*` is a photo, a
+        /// file is anything else.
         let mime: String
+        /// Null on an old row and on a photo sent through `images`. `var` with
+        /// a default so the memberwise initializer keeps these optional.
+        var name: String? = nil
+        /// Bytes of the original; null on an old row.
+        var size: Int? = nil
     }
 
     let seq: Int

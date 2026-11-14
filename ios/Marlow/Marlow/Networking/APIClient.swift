@@ -81,6 +81,7 @@ final class APIClient {
     func sendMessage(
         text: String, clientMsgId: String? = nil,
         imagesBase64: [String] = [],
+        files: [OutgoingFile] = [],
         effort: ThinkingEffort = .default,
         location: OutgoingLocation? = nil,
         ideaId: String? = nil,
@@ -90,14 +91,13 @@ final class APIClient {
     ) async throws -> MessageResponse {
         var body: [String: Any] = ["text": text]
         if let clientMsgId { body["client_msg_id"] = clientMsgId }
-        // Absent when there are none, never an empty list: server/app.py
-        // rejects `images: []` with a 400. Always the `images` form now; the
-        // server still accepts the old `image_b64`/`image_mime` pair for older
-        // clients, but this client no longer sends it. Every image is JPEG
-        // (the downscaler's only output).
-        if !imagesBase64.isEmpty {
-            body["images"] = imagesBase64.map { ["b64": $0, "mime": "image/jpeg"] }
-        }
+        // `images` and `files`, each absent when there are none and never an
+        // empty list: server/app.py rejects either as a 400. Always the
+        // `images` form now; the server still accepts the old
+        // `image_b64`/`image_mime` pair for older clients, but this client no
+        // longer sends it. Every image is JPEG (the downscaler's only output).
+        // The shape is shared with the share extension (`MessageBody`).
+        body.merge(MessageBody.attachmentFields(imagesBase64: imagesBase64, files: files)) { _, new in new }
         // Sent fresh on every message, not registered once at pairing — a zone
         // captured at pairing is wrong after the first flight, and only the
         // phone knows where it currently is. Optional server-side, so this is

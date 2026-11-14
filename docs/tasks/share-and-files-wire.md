@@ -52,7 +52,7 @@ User rows' `attachments` entries become `{id, mime, name, size}`:
   photos sent through `images` (`name` null; `size` is filled for new ones).
 - Photos come first in `idx` order, then files, in the order sent.
 
-`GET /v1/transcript/attachments/{id}` is unchanged: it serves the stored
+`GET /v1/transcript/attachment/{id}` is unchanged: it serves the stored
 `mime`, with `Content-Disposition: attachment` for anything not `image/*`,
 and `X-Content-Type-Options: nosniff`.
 

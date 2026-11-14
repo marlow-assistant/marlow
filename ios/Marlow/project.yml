@@ -25,9 +25,9 @@ targets:
     platform: iOS
     sources:
       - path: Marlow
-      # Compiled into BOTH the app and the notification service extension.
-      # An extension is a separate executable and shares no code with the app
-      # unless it is listed in both places.
+      # Compiled into the app and BOTH extensions (the notification service and
+      # the share sheet). An extension is a separate executable and shares no
+      # code with the app unless it is listed in each place.
       - path: Shared
       # The app's half of What's new (docs/tasks/whats-new.md). The repo-root
       # file, not a copy: one list for the box, web and this build, so an
@@ -81,6 +81,9 @@ targets:
       # invokes it, which looks exactly like the spike failing.
       - target: MarlowNotificationService
         embed: true
+      # Same reason: the share sheet's "Marlow" is the .appex inside this app.
+      - target: MarlowShare
+        embed: true
       - package: FluidAudio
         product: FluidAudio
     postBuildScripts:
@@ -127,6 +130,58 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: YES
         SKIP_INSTALL: YES
+  # "Marlow" in the share sheet (docs/tasks/share-and-files.md, Phase 3): share
+  # a PDF, a page, a spreadsheet or photos to Marlow with an optional note.
+  # Sends straight to the box, or saves to the App Group for the app to send.
+  MarlowShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: MarlowShare
+      - path: Shared
+    info:
+      path: MarlowShare/Info.plist
+      properties:
+        # What the sheet lists: the app's name, not the extension's.
+        CFBundleDisplayName: Marlow
+        AppIdentifierPrefix: $(AppIdentifierPrefix)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            # A predicate string, not TRUEPREDICATE (App Review rejects it) and
+            # not a dictionary (which cannot say "one to six of anything"). A
+            # literal copy of `ShareActivation.predicate`: a build setting cannot
+            # call Swift, so ShareActivationTests reads this out of the built
+            # extension and fails if the two differ. Change both together.
+            NSExtensionActivationRule: >-
+              SUBQUERY (extensionItems, $extensionItem,
+              SUBQUERY ($extensionItem.attachments, $attachment,
+              ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count >= 1
+              AND SUBQUERY ($extensionItem.attachments, $attachment,
+              ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.item").@count <= 6).@count >= 1
+              OR SUBQUERY (extensionItems, $extensionItem,
+              SUBQUERY ($extensionItem.attachments, $attachment,
+              ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.url").@count >= 1).@count >= 1
+              OR SUBQUERY (extensionItems, $extensionItem,
+              SUBQUERY ($extensionItem.attachments, $attachment,
+              ANY $attachment.registeredTypeIdentifiers UTI-CONFORMS-TO "public.plain-text").@count >= 1).@count >= 1
+    settings:
+      base:
+        # Must be prefixed by the app's bundle id — iOS rejects an embedded
+        # extension whose identifier is not a child of its container app's.
+        PRODUCT_BUNDLE_IDENTIFIER: com.mikemason.Marlow.Share
+        CODE_SIGN_STYLE: Automatic
+        # The App Group and the shared Keychain group only. The app's own
+        # entitlements file is not touched: its keychain group order is
+        # load-bearing (read the comment there).
+        CODE_SIGN_ENTITLEMENTS: MarlowShare/MarlowShare.entitlements
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        SKIP_INSTALL: YES
   MarlowTests:
     type: bundle.unit-test
     platform: iOS
@@ -146,6 +201,7 @@ schemes:
       targets:
         Marlow: all
         MarlowNotificationService: all
+        MarlowShare: all
         MarlowTests: [test]
     test:
       config: Debug

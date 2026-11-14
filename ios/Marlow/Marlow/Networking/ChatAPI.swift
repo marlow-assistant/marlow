@@ -10,7 +10,7 @@ import Foundation
 protocol ChatAPI {
     func sendMessage(
         text: String, clientMsgId: String?,
-        imagesBase64: [String], effort: ThinkingEffort,
+        imagesBase64: [String], files: [OutgoingFile], effort: ThinkingEffort,
         location: OutgoingLocation?, ideaId: String?, todoId: String?, spoken: Bool, timeout: TimeInterval?,
         deviceToken: String
     ) async throws -> MessageResponse

@@ -88,6 +88,16 @@ struct AttachmentFileTests {
 
     // MARK: - Icon and size
 
+    /// A staged row cuts a long name at the end of its stem, so the extension
+    /// still says what the file is.
+    @Test func aNameSplitsIntoStemAndExtension() {
+        #expect(FileDisplay.stemAndExtension("Trip notes.docx") == ("Trip notes", ".docx"))
+        #expect(FileDisplay.stemAndExtension("archive.tar.gz") == ("archive.tar", ".gz"))
+        #expect(FileDisplay.stemAndExtension("README") == ("README", ""))
+        #expect(FileDisplay.stemAndExtension(".env") == (".env", ""), "a leading dot is not an extension")
+        #expect(FileDisplay.stemAndExtension("ends.") == ("ends.", ""))
+    }
+
     @Test func theIconComesFromTheNamesExtension() {
         #expect(FileDisplay.symbol(forName: "Booking.pdf") == "doc.richtext")
         #expect(FileDisplay.symbol(forName: "Trip notes.DOCX") == "doc.text")

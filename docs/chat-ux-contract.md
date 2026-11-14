@@ -882,11 +882,16 @@ an image the first attempt carried.
 **CMP-10. Any file stages; only count and size are checked.** "Choose File" (iOS
 `.fileImporter([.item])`, web an input with no `accept`) and the share flows stage
 anything. A file the client can decode as an image takes the CMP-3 path; anything
-else is a chip in the CMP-5 grid: type icon from the name's extension, the name
-truncated in the middle, a remove control. Over 6 items, 20MB a file or 25MB a
+else is a row under the CMP-5 photos, one per line: type icon from the name's
+extension, the name (a long one cut at the end of its stem, so the extension
+shows), its size, a remove control. The share screen lays out the same tray
+above a "Message Marlow" field. Over 6 items, 20MB a file or 25MB a
 message gets a notice and is not staged. The CMP-6 retry save covers files. [test]
 *Why:* a type list in a client ships in an app build, so every new type would be a
 release and every odd file a refusal screen (Mike, 2026-11-14). The server decides.
+Rows, not tiles, because a 64pt tile cut the name to a few letters, and on the share
+screen "Add a note" read as annotating the file rather than writing to Marlow (Mike,
+on device, 2026-11-14).
 
 **CMP-11. A file chip opens safely.** In the bubble, after the photo grid, one chip
 per file with icon, name and size; it downloads on tap, never eagerly. iOS opens it

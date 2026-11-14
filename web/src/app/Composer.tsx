@@ -4,7 +4,7 @@ import type { Api } from "../lib/api";
 import type { ChatStore } from "../lib/chatStore";
 import { Dictation, PartialTranscriptError, transcribeErrorText } from "../lib/dictation";
 import { FileIcon, MicIcon, PaperclipIcon, StopIcon, WaveformIcon } from "./Icons";
-import { fileKind, truncateMiddle } from "../lib/fileInfo";
+import { fileKind, formatSize } from "../lib/fileInfo";
 import { MAX_ITEMS, stageBatch, type StagedItem } from "../lib/staging";
 import { Microphone } from "../lib/segmentRecorder";
 import { shareCaption, sweepShares, takeShare } from "../lib/shareTarget";
@@ -29,8 +29,12 @@ export interface ComposerVoice {
  * has none. */
 type Staged = StagedItem & { url?: string };
 
-/** Characters of a file's name that fit its 64px tile. */
-const TILE_NAME_CHARS = 11;
+/** The name without its extension, so a long one can be cut there and still
+ * say what it is. A leading dot (".env") is not an extension. */
+function stemOf(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot > 0 && dot < name.length - 1 ? name.slice(0, dot) : name;
+}
 
 function revokeThumb(item: Staged): void {
   if (item.url) URL.revokeObjectURL(item.url);
@@ -385,34 +389,48 @@ export function Composer({
         </div>
       )}
       {staged.length > 0 && (
+        // Photos are tiles, three across; files are rows under them, one per
+        // line, so the name is readable before sending (Mike, 2026-11-14: a
+        // 64px tile cut it to a few letters).
         <div className="preview-row" data-testid="preview-row">
+          {staged.some((i) => i.kind === "photo") && (
+            <div className="preview-grid">
+              {staged.map((item) =>
+                item.kind === "photo" ? (
+                  <div className="preview" data-testid="preview" key={item.id}>
+                    <img src={item.url} alt="Attached" width={44} height={44} />
+                    <button
+                      type="button"
+                      className="preview-remove"
+                      aria-label="Remove photo"
+                      onClick={() => removeStaged(item.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ) : null,
+              )}
+            </div>
+          )}
           {staged.map((item) =>
-            item.kind === "photo" ? (
-              <div className="preview" data-testid="preview" key={item.id}>
-                <img src={item.url} alt="Attached" width={44} height={44} />
-                <button
-                  type="button"
-                  className="preview-remove"
-                  aria-label="Remove photo"
-                  onClick={() => removeStaged(item.id)}
-                >
-                  ×
-                </button>
-              </div>
-            ) : (
-              <div className="preview preview-file" data-testid="file-chip" key={item.id} title={item.name}>
+            item.kind === "file" ? (
+              <div className="staged-file" data-testid="file-chip" key={item.id} title={item.name}>
                 <FileIcon kind={fileKind(item.name)} />
-                <span className="preview-file-name">{truncateMiddle(item.name, TILE_NAME_CHARS)}</span>
+                <span className="staged-file-name">
+                  <span className="staged-file-stem">{stemOf(item.name)}</span>
+                  <span className="staged-file-ext">{item.name.slice(stemOf(item.name).length)}</span>
+                </span>
+                <span className="staged-file-size">{formatSize(item.blob.size)}</span>
                 <button
                   type="button"
-                  className="preview-remove"
+                  className="staged-file-remove"
                   aria-label={`Remove ${item.name}`}
                   onClick={() => removeStaged(item.id)}
                 >
                   ×
                 </button>
               </div>
-            ),
+            ) : null,
           )}
         </div>
       )}

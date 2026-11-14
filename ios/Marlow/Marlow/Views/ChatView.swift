@@ -351,6 +351,9 @@ struct ChatView: View {
         // What the share extension left while the box was out of reach.
         // Launch; later foregrounds go through `onChange(of: scenePhase)`.
         .task { await store.drainShareOutbox() }
+        #if DEBUG
+        .task { if UIFixture.state == .files { pendingAttachments = UIFixture.stagedAttachments() } }
+        #endif
         // Launch fetch; later foregrounds go through `onChange(of: scenePhase)`.
         .task { await ideasStore.refresh() }
         .task { await todosStore.refresh() }

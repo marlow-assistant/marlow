@@ -1115,11 +1115,18 @@ button {
 }
 
 .preview-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 6px 44px;
+  padding: 14px 14px 0 0;
+}
+
+.preview-grid {
   display: grid;
   grid-template-columns: repeat(3, 64px);
   gap: 18px;
-  margin: 0 0 6px 44px;
-  padding: 14px 14px 0 0;
+  margin-bottom: 6px;
 }
 
 .preview {
@@ -1135,27 +1142,57 @@ button {
   border-radius: 10px;
 }
 
-/* A file staged next to the photos: the same 64px tile, with its type icon
-   and its name cut in the middle (in the component) instead of a thumbnail. */
-.preview-file {
+/* A file staged under the photos: one row each, icon, name, size and a
+   remove control, so the name can be read before sending. A long name is
+   cut at the end of its stem and keeps its extension. */
+.staged-file {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 3px;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 4px 0 12px;
   border-radius: 10px;
   background: var(--bg-2);
   color: var(--text-2);
 }
 
-.preview-file-name {
-  max-width: 100%;
-  padding: 0 3px;
-  font-size: 0.625rem;
-  line-height: 1.1;
-  white-space: nowrap;
-  overflow: hidden;
+.staged-file > svg {
+  flex: none;
+}
+
+.staged-file-name {
+  display: flex;
+  flex: 1;
+  min-width: 0;
   color: var(--text);
+}
+
+.staged-file-stem {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.staged-file-ext {
+  flex: none;
+  white-space: nowrap;
+}
+
+.staged-file-size {
+  flex: none;
+  font-size: 0.8125rem;
+}
+
+/* 44px square, the same tap target the tile's corner X gets from its ::before. */
+.staged-file-remove {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: none;
+  color: var(--text-2);
+  font-size: 1.25rem;
+  padding: 0;
 }
 
 .preview-remove {

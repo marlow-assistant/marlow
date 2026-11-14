@@ -22,6 +22,15 @@ enum FileDisplay {
         }
     }
 
+    /// The name cut before its extension, for a row that truncates the stem
+    /// and keeps the extension. A leading dot is not an extension.
+    static func stemAndExtension(_ name: String) -> (stem: String, ext: String) {
+        guard let dot = name.lastIndex(of: "."), dot != name.startIndex,
+              name.index(after: dot) != name.endIndex
+        else { return (name, "") }
+        return (String(name[..<dot]), String(name[dot...]))
+    }
+
     /// "52 KB", "2.1 MB". Nil when the size is not known: an old row has none,
     /// and shows none rather than "0 bytes".
     static func sizeText(_ bytes: Int?) -> String? {

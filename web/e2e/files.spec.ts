@@ -47,29 +47,30 @@ async function mockSend(page: Page): Promise<void> {
   );
 }
 
-test("CMP-5: a PDF, a docx and a .numbers file stage as chips beside the photos, three across, each removable", async ({
+test("CMP-5: a PDF, a docx and a .numbers file stage as rows under the photos, one per line, named in full, each removable", async ({
   page,
 }) => {
   const input = page.getByTestId("attach-input");
   expect(await input.getAttribute("accept"), "no type filter on the file input").toBeNull();
-  await input.setInputFiles([pdf(), docx(), numbers()]);
+  await input.setInputFiles([png(), pdf(), docx(), numbers()]);
 
   const chips = page.getByTestId("file-chip");
   await expect(chips).toHaveCount(3);
   await expect(page.locator(".notice"), "an unfamiliar type is not refused").toHaveCount(0);
+  const photo = await rectOf(page.getByTestId("preview").first());
   const rects = await Promise.all([0, 1, 2].map((i) => rectOf(chips.nth(i))));
+  // Stacked: one per line, below the photo, each wider than a tile.
+  expect(rects[0].top).toBeGreaterThanOrEqual(photo.bottom);
+  expect(rects[1].top).toBeGreaterThanOrEqual(rects[0].bottom);
+  expect(rects[2].top).toBeGreaterThanOrEqual(rects[1].bottom);
   for (const r of rects) {
-    expect(r.width).toBe(64);
-    expect(r.height).toBe(64);
+    expect(Math.abs(r.left - rects[0].left)).toBeLessThan(1);
+    expect(r.width).toBeGreaterThan(200);
   }
-  expect(Math.abs(rects[0].top - rects[1].top)).toBeLessThan(1); // one row of three
-  expect(rects[1].left).toBeGreaterThan(rects[0].right);
+  // A name that fits is shown whole, beside its size and a type icon.
   await expect(chips.nth(0)).toContainText("Plan.pdf");
-  // The name is cut in the middle, so the start and the extension both show.
-  const long = await chips.nth(1).innerText();
-  expect(long).toContain("…");
-  expect(long.startsWith("Trip")).toBe(true);
-  expect(long).toContain("docx");
+  await expect(chips.nth(0)).toContainText("1.2 KB");
+  await expect(chips.nth(1)).toContainText("Trip notes.docx");
   await expect(chips.nth(1)).toHaveAttribute("title", "Trip notes.docx");
   await expect(chips.nth(0).locator("svg"), "a type icon").toHaveCount(1);
 
@@ -87,18 +88,18 @@ test("CMP-5: photos and files share one six-item cap and the size limits are the
   await expect(page.getByTestId("file-chip")).toHaveCount(3);
 
   await input.setInputFiles([pdf(), docx(), numbers()]);
-  await expect(page.getByTestId("preview-row").locator(".preview")).toHaveCount(6);
+  await expect(page.getByTestId("preview-row").locator("[data-testid=preview], [data-testid=file-chip]")).toHaveCount(6);
   await expect(page.locator(".notice")).toHaveText("Only the first 2 added: 6 items at most.");
 
   await input.setInputFiles([pdf()]);
   await expect(page.locator(".notice")).toHaveText("6 items at most.");
-  await expect(page.getByTestId("preview-row").locator(".preview")).toHaveCount(6);
+  await expect(page.getByTestId("preview-row").locator("[data-testid=preview], [data-testid=file-chip]")).toHaveCount(6);
 
   // Remove one to make room, then a file over 20MB is refused with its own notice.
   await page.getByTestId("file-chip").first().getByRole("button").click();
   await input.setInputFiles({ name: "huge.bin", mimeType: "application/octet-stream", buffer: Buffer.alloc(20 * MB + 1) });
   await expect(page.locator(".notice")).toHaveText("That file is over 20MB.");
-  await expect(page.getByTestId("preview-row").locator(".preview")).toHaveCount(5);
+  await expect(page.getByTestId("preview-row").locator("[data-testid=preview], [data-testid=file-chip]")).toHaveCount(5);
 });
 
 test("CMP-3: photos go as images[] and files as files[{b64, mime, name}] in one request; the bubble shows a chip per file", async ({

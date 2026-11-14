@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The share sheet's contents: the staged items as the composer's tiles, an
-/// optional note, Cancel and Send.
+/// optional message, Cancel and Send.
 struct ShareView: View {
     @ObservedObject var model: ShareModel
     let close: () -> Void
@@ -63,12 +63,16 @@ struct ShareView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .composing, .sending, .finished(.sent):
             ScrollView {
+                // Laid out as a message: what is being sent, then what to say
+                // about it, in the composer's own words. "Add a note" read as
+                // annotating the file (Mike, 2026-11-14); this is a message to
+                // Marlow, with the file attached.
                 VStack(alignment: .leading, spacing: 12) {
-                    TextField("Add a note (optional)", text: $model.caption, axis: .vertical)
-                        .lineLimit(1...8)
+                    StagedAttachmentTray(items: model.staged.items) { model.staged.remove(id: $0) }
+                    TextField("Message Marlow", text: $model.caption, axis: .vertical)
+                        .lineLimit(3...8)
                         .textFieldStyle(.roundedBorder)
                         .disabled(model.phase == .sending)
-                    StagedAttachmentTray(items: model.staged.items) { model.staged.remove(id: $0) }
                     if let notice = model.notice {
                         Text(notice)
                             .font(.footnote)

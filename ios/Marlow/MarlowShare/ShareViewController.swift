@@ -3,7 +3,7 @@ import UIKit
 
 /// "Marlow" in the share sheet (docs/tasks/share-and-files.md, Phase 3): share
 /// a PDF from Mail, a page from Safari, a spreadsheet from Files or photos from
-/// Photos, add a note, and send. Everything it decides is in `ShareModel`
+/// Photos, write a message, and send. Everything it decides is in `ShareModel`
 /// (`Shared/`, where the app's tests reach it); this is the container around it.
 ///
 /// A separate process with its own memory limit, no access to the app's

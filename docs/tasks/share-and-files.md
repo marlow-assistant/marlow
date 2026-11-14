@@ -14,7 +14,7 @@ Wanted:
 
 - **Marlow in the share sheet**, on iOS and on Android: share a PDF from
   Mail, a page from Safari, a spreadsheet from Files, or photos from Photos,
-  straight to Marlow with an optional note.
+  straight to Marlow with an optional message.
 - **Wider file types:** text, CSV and PDF, plus Office documents (Word,
   Excel, PowerPoint). Mike's view: accepting a wide range is worth adding a
   few conversion tools to the box, the same way Parakeet speech-to-text

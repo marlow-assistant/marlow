@@ -1,6 +1,7 @@
 #if DEBUG
 import Foundation
 import os
+import UIKit
 
 /// A paired-looking chat with no server, for screenshotting the UI in the
 /// simulator: `-uiFixture empty|idle|working|streaming|interrupted|failed|follow|approval|approvalBash|ideas|markdown` as a launch
@@ -49,7 +50,8 @@ import os
 /// table with alignment, inline formatting and cells too long for the bubble.
 ///
 /// `files` is `idle` plus a message carrying file chips: a PDF, a long Word
-/// name, a type with no reader and an old row with no name or size.
+/// name, a type with no reader and an old row with no name or size, and a
+/// photo and two files staged in the composer.
 ///
 /// `whatsNew` is `idle` plus the "Marlow was updated" card, as on a device
 /// that has never shown it: one scripted server entry and this build's own.
@@ -65,6 +67,22 @@ enum UIFixture {
     }
 
     static let turnId = "fixture-turn"
+
+    /// What `files` stages in the composer: a photo above two file rows, one
+    /// with a name long enough to be cut.
+    @MainActor static func stagedAttachments() -> StagedAttachments {
+        var staged = StagedAttachments()
+        let swatch = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).image { context in
+            UIColor.systemTeal.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+        }
+        if let jpeg = swatch.jpegData(compressionQuality: 0.8) { _ = staged.addPhoto(jpeg) }
+        _ = staged.addFile(StagedFile(name: "Booking confirmation.pdf", mime: "application/pdf", data: Data(count: 52_113)))
+        _ = staged.addFile(StagedFile(
+            name: "Itinerary and notes for the whole family trip in May.docx", mime: "", data: Data(count: 1_240_000)
+        ))
+        return staged
+    }
 
     /// A day and a half of generic activity for the pane behind the avatar.
     /// Times are relative to launch so "Today" and "Yesterday" are real.

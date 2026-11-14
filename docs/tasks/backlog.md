@@ -42,6 +42,9 @@ Tags: *not started*, *specced* (ready for an implementor), *in progress*,
 - **Route permission requests to the right device**
   (`multi-device-permission-routing.md`). Placeholder.
 - **Side chats** (`side-chats.md`). *parked*
+- **Document fidelity** (`document-fidelity.md`): layout, pictures,
+  formulas and changes from Office files, beyond their text. *parked* until
+  Marlow misses something real.
 - **README demo clip** (`readme-demo-clip.md`). *parked*, a maybe.
 - **Hosted Marlow** (`hosted-marlow.md`). Far future.
 

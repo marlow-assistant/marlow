@@ -292,11 +292,31 @@ rollback_reasons() {
     # even when its tree matches: a deletion the target later edited comes
     # out as the target's file (review 2026-11-13). So does a git too old for
     # `merge-tree --write-tree` (2.38).
-    local merged
+    #
+    # A box left partway along the branch fails that check: merging its
+    # commit conflicts wherever a later commit rewrote the same lines (Mike,
+    # 2026-11-14: the server was deployed mid-branch and the rest was
+    # client-only, so it was never redeployed). GitHub keeps every PR's final
+    # commit as refs/pull/N/head after the branch is deleted, so the same
+    # check runs on each one that contains HEAD. It judges content, not who
+    # opened the PR: a head passes only if main already has all of it.
+    # Fetched only on a refusal, into a namespace nothing else reads.
+    local merged tree candidate
+    tree="$(sudo -u "$MARLOW_USER" -H git -C "$repo" rev-parse "$target^{tree}")"
     if [[ "$rc" -eq 1 ]] \
             && merged="$(sudo -u "$MARLOW_USER" -H git -C "$repo" merge-tree --write-tree "$target" "$head" 2>/dev/null)" \
-            && [[ "$merged" == "$(sudo -u "$MARLOW_USER" -H git -C "$repo" rev-parse "$target^{tree}")" ]]; then
+            && [[ "$merged" == "$tree" ]]; then
         rc=0
+    fi
+    if [[ "$rc" -eq 1 ]] \
+            && sudo -u "$MARLOW_USER" -H git -C "$repo" fetch -q origin '+refs/pull/*/head:refs/marlow-pull/*' 2>/dev/null; then
+        while IFS= read -r candidate; do
+            if merged="$(sudo -u "$MARLOW_USER" -H git -C "$repo" merge-tree --write-tree "$target" "$candidate" 2>/dev/null)" \
+                    && [[ "$merged" == "$tree" ]]; then
+                rc=0
+                break
+            fi
+        done < <(sudo -u "$MARLOW_USER" -H git -C "$repo" for-each-ref --contains "$head" --format='%(objectname)' refs/marlow-pull/)
     fi
     if [[ "$rc" -eq 1 ]]; then
         echo "$target does not contain the commit checked out now ($head)"

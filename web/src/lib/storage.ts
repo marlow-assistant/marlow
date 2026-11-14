@@ -12,6 +12,7 @@
 //
 // The service worker imports this file too, so it must not touch `window`.
 
+import { wipeShares } from "./shareTarget";
 import type { ChatMessage } from "./types";
 
 export const DB_NAME = "marlow";
@@ -167,4 +168,7 @@ export async function wipeAll(): Promise<void> {
   tx.objectStore("messages").clear();
   tx.objectStore("images").clear();
   await done(tx);
+  // A share nobody took holds what the user shared, and is no more welcome on
+  // an unpaired browser than the transcript is. Its own database (shareTarget.ts).
+  await wipeShares();
 }

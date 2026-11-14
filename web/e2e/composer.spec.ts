@@ -268,18 +268,21 @@ test.describe("sending under fault injection", () => {
 
 // CMP-9: on a touch device "+" offers the camera through a `capture` input,
 // because a plain image input opens Android's photo picker, which has no
-// camera. A desktop keeps the one-click file dialog. Whether the phone really
+// camera, plus Choose file for anything else. A desktop keeps the one-click
+// file dialog, which takes any file (no `accept`: photos are routed by what the
+// browser can decode, not by the dialog's filter). Whether the phone really
 // opens its camera is [device]; this checks the wiring.
-test("CMP-9: touch gets Take photo / Choose photo; desktop goes straight to the file dialog", async ({
+test("CMP-9: touch gets Take photo / Choose photo / Choose file; desktop goes straight to the file dialog", async ({
   page,
   isMobile,
 }) => {
-  const plus = page.getByRole("button", { name: "Add a photo" });
+  const plus = page.getByRole("button", { name: "Attach" });
   if (!isMobile) {
     const chooser = page.waitForEvent("filechooser");
     await plus.click();
     const fc = await chooser;
     expect(await fc.element().getAttribute("capture")).toBeNull();
+    expect(await fc.element().getAttribute("accept"), "any file, not only images").toBeNull();
     await expect(page.getByTestId("attach-menu")).toHaveCount(0);
     return;
   }
@@ -289,7 +292,7 @@ test("CMP-9: touch gets Take photo / Choose photo; desktop goes straight to the 
   await expect(menu.getByRole("menuitem", { name: "Take photo" })).toBeFocused();
   // Each item is an icon beside one line of text. In the narrow anchored menu
   // the labels once wrapped to two lines (Android, 2026-10-24).
-  for (const name of ["Take photo", "Choose photo"]) {
+  for (const name of ["Take photo", "Choose photo", "Choose file"]) {
     const item = menu.getByRole("menuitem", { name });
     await expect(item.locator("svg")).toHaveCount(1);
     const box = await item.boundingBox();
@@ -322,5 +325,14 @@ test("CMP-9: touch gets Take photo / Choose photo; desktop goes straight to the 
   await plus.click();
   const library = page.waitForEvent("filechooser");
   await menu.getByRole("menuitem", { name: "Choose photo" }).click();
-  expect(await (await library).element().getAttribute("capture")).toBeNull();
+  const libraryInput = (await library).element();
+  expect(await libraryInput.getAttribute("capture")).toBeNull();
+  expect(await libraryInput.getAttribute("accept")).toBe("image/*");
+
+  await plus.click();
+  const anyFile = page.waitForEvent("filechooser");
+  await menu.getByRole("menuitem", { name: "Choose file" }).click();
+  const anyInput = (await anyFile).element();
+  expect(await anyInput.getAttribute("accept"), "Choose file takes anything").toBeNull();
+  expect(await anyInput.getAttribute("capture")).toBeNull();
 });

@@ -292,7 +292,7 @@ The in-app path, and the chips the share flows will reuse.
   - web: the download endpoint, fetched with the token in the header (never
     in a URL), then:
     - **opened inline** in a new tab from a blob URL only when the row's
-      `mime` is `application/pdf`, `text/plain` or a raster image (JPEG,
+      `mime` is `text/plain` or a raster image (JPEG,
       PNG, GIF, WebP). The Blob is built with that `mime` taken from a fixed
       map in the client, never the response's `Content-Type`;
     - **downloaded** with an `<a download="<name>">` click otherwise, from a

@@ -70,10 +70,11 @@ and `X-Content-Type-Options: nosniff`.
     the stored `mime` (`.pdf`, `.txt`, `.docx`, …) or the name's own
     extension for `application/octet-stream`.
   - Web: fetch with the bearer header (never a token in a URL). Open inline
-    in a new tab from a blob URL **only** for `application/pdf`,
-    `text/plain`, `image/jpeg`, `image/png`, `image/gif`, `image/webp`, with
+    in a new tab from a blob URL **only** for `text/plain`,
+    `image/jpeg`, `image/png`, `image/gif`, `image/webp`, with
     the Blob's type taken from a fixed client-side map keyed by the row's
     `mime` (text is `text/plain;charset=utf-8`), never from the response's
-    `Content-Type`. Everything else downloads via `<a download="<name>">`
+    `Content-Type`. Everything else, PDF included (the
+    page CSP's `object-src 'none'` reaches a blob tab), downloads via `<a download="<name>">`
     from a Blob typed `application/octet-stream`. Why: a blob URL runs in
     the web client's origin, beside the device token.

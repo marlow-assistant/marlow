@@ -1,7 +1,8 @@
 /// <reference lib="webworker" />
-// The service worker: Web Push notifications and the app badge. The
-// decisions live in lib/pushNotification.ts, where they are tested; this file
-// only wires them to the worker's events.
+// The service worker: Web Push notifications, the app badge, and the answer to
+// Android's share-target POST. The decisions live in lib/pushNotification.ts
+// and lib/shareTarget.ts, where they are tested; this file only wires them to
+// the worker's events.
 //
 // It does not cache the app for offline use: the chat is useless without the
 // box, and a stale cached shell after a deploy is a worse failure than a
@@ -22,6 +23,7 @@ import {
   settlesPermissionPrompts,
   turnText,
 } from "./lib/pushNotification";
+import { receiveShare } from "./lib/shareTarget";
 import { getToken, kvGet, KV_FACE } from "./lib/storage";
 
 declare const self: ServiceWorkerGlobalScope;
@@ -34,6 +36,23 @@ self.addEventListener("install", () => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+// Android's share sheet POSTs what was shared to the manifest's
+// `share_target` action (docs/tasks/share-and-files.md, Phase 4). A page can't
+// answer a POST, so this does: it keeps the files and text and redirects to
+// `/?share=<id>`, which the app takes. This is the only fetch the worker
+// handles; everything else goes to the network untouched, as before, so the
+// app is still never served from a cache. The box never sees this request:
+// where the worker isn't installed (so the app isn't either, and Chrome only
+// offers an installed app) the POST would reach the box and get its 404.
+const SHARE_TARGET_PATH = "/share-target";
+
+self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+  if (event.request.method === "POST" && url.origin === self.location.origin && url.pathname === SHARE_TARGET_PATH) {
+    event.respondWith(receiveShare(event.request));
+  }
 });
 
 self.addEventListener("push", (event) => {

@@ -9,8 +9,13 @@
 // Swapping the `id` of a message already on screen is a row teardown (a React
 // remount), and mid-stream it would break follow-scroll.
 
-import { sameId } from "./types";
-import type { ChatMessage, MessageStatus, TranscriptRow } from "./types";
+import { imageKeysOf, isPhotoMime, sameId } from "./types";
+import type { ChatMessage, FileAttachment, MessageStatus, TranscriptAttachment, TranscriptRow } from "./types";
+
+/** A row's attachment as a chip. `name` and `size` are null on an old row. */
+function asFile(a: TranscriptAttachment): FileAttachment {
+  return { id: a.id, mime: a.mime, name: a.name ?? null, size: a.size ?? null };
+}
 
 /** What the store must do besides render `messages`. Kept out of the merge
  * because each one touches tasks, queues or the network. */
@@ -91,6 +96,17 @@ function mergeUser(
     // server's reading of the same id, so it only fills a gap.
     const quote = messages[own].quote ?? row.quote ?? undefined;
     messages[own] = { ...messages[own], seq: row.seq, ...(quote ? { quote } : {}) };
+    // The chips the send drew had the client's own guess of the type and no
+    // id. The row's attachments are the photos in `idx` order, then the files
+    // in the order sent, so file i is the entry after the photos: that is the
+    // stored mime the opener's map is keyed by, and the id it fetches with.
+    const local = messages[own].files;
+    if (local && local.length > 0) {
+      const rowFiles = row.attachments.slice(imageKeysOf(messages[own]).length);
+      if (rowFiles.length > 0) {
+        messages[own] = { ...messages[own], files: local.map((f, i) => (rowFiles[i] ? asFile(rowFiles[i]) : f)) };
+      }
+    }
     return;
   }
 
@@ -111,11 +127,15 @@ function mergeUser(
     seq: row.seq,
     ...(row.quote ? { quote: row.quote } : {}),
   };
-  const images = row.attachments.filter((a) => a.mime.startsWith("image/"));
+  const images = row.attachments.filter((a) => isPhotoMime(a.mime));
   if (images.length > 0) {
     user.attachmentIds = images.map((a) => a.id);
     for (const image of images) effects.fetchAttachments.push({ messageId: id, attachmentId: image.id });
   }
+  // Files are not fetched: they can be large and the bubble does not need
+  // them to draw. The chip fetches on tap.
+  const files = row.attachments.filter((a) => !isPhotoMime(a.mime));
+  if (files.length > 0) user.files = files.map(asFile);
   const index = insertionIndex(row.seq, messages);
   messages.splice(index, 0, user);
 

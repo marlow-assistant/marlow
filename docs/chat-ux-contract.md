@@ -892,11 +892,12 @@ release and every odd file a refusal screen (Mike, 2026-11-14). The server decid
 per file with icon, name and size; it downloads on tap, never eagerly. iOS opens it
 in QuickLook from a local copy named with the stored type's extension. The web
 fetches it with the bearer header and opens it in a new tab from a blob URL **only**
-for `application/pdf`, `text/plain` and raster images, typing the Blob from a fixed
-map on the row's `mime`; anything else downloads as `application/octet-stream`. [test]
+for `text/plain` and raster images, typing the Blob from a fixed map on the row's
+`mime`; anything else, PDF included, downloads as `application/octet-stream`. [test]
 *Why:* a blob URL runs in the web client's origin, beside the device token, so an
 HTML or SVG file opened with its own type is script with the token. The server
-already records those as `text/plain`; the map is the second wall.
+already records those as `text/plain`; the map is the second wall. PDF is out because a
+blob document inherits the page CSP, whose `object-src 'none'` can block the viewer.
 
 **CMP-7. Every message carries `timezone` (IANA) and `effort`.** `effort` is the level
 the header shows, sent on **every** message, never sticky, read per attempt so a retry

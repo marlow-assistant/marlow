@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { applyRows } from "./transcriptMerge";
 import { decodePage } from "./types";
-import type { ChatMessage, MessageStatus, Role, TranscriptRow } from "./types";
+import type { ChatMessage, MessageStatus, Role, TranscriptAttachment, TranscriptRow } from "./types";
 
 // `applyRows` is pure, so every rule in docs/tasks/ios-server-transcript.md is
 // pinned here against plain values, with no store, task or clock in the way.
@@ -49,7 +49,7 @@ function serverMessage(seq: number, role: Role = "assistant", turn?: string): Ch
 function userRow(
   seq: number,
   turn: string,
-  opts: { clientMsgId?: string | null; text?: string; attachments?: { id: string; mime: string }[] } = {},
+  opts: { clientMsgId?: string | null; text?: string; attachments?: TranscriptAttachment[] } = {},
 ): TranscriptRow {
   return {
     seq,
@@ -198,6 +198,126 @@ describe("user rows", () => {
     const result = applyRows([row], [], true);
     expect(result.messages[0].attachmentIds).toBeUndefined();
     expect(result.effects.fetchAttachments).toEqual([]);
+  });
+});
+
+// docs/tasks/share-and-files-wire.md: a user row's attachments are
+// {id, mime, name, size}, and an entry with a non-image mime is a file.
+describe("file attachments on user rows", () => {
+  const PDF = "application/pdf";
+  const OCTET = "application/octet-stream";
+
+  test("a foreign row's non-image entries become files, in order, and are not fetched", () => {
+    const [p, o] = [uuid(), uuid()];
+    const photo = uuid();
+    const row = userRow(5, "tX", {
+      attachments: [
+        { id: photo, mime: "image/jpeg", name: null, size: 300 },
+        { id: p, mime: PDF, name: "Plan.pdf", size: 1234 },
+        { id: o, mime: OCTET, name: "Budget.numbers", size: 99 },
+      ],
+    });
+
+    const { messages, effects } = applyRows([row], [], true);
+
+    expect(messages[0].files).toEqual([
+      { id: p, mime: PDF, name: "Plan.pdf", size: 1234 },
+      { id: o, mime: OCTET, name: "Budget.numbers", size: 99 },
+    ]);
+    expect(messages[0].attachmentIds).toEqual([photo]);
+    // Files can be large and aren't needed to draw the bubble: only photos are fetched.
+    expect(effects.fetchAttachments).toEqual([{ messageId: messages[0].id, attachmentId: photo }]);
+  });
+
+  test("an old row (name and size null, or absent) still shows a file, without a name", () => {
+    const [a, b] = [uuid(), uuid()];
+    const row = userRow(5, "tX", {
+      attachments: [
+        { id: a, mime: PDF, name: null, size: null },
+        { id: b, mime: PDF },
+      ],
+    });
+    const { messages } = applyRows([row], [], true);
+    expect(messages[0].files).toEqual([
+      { id: a, mime: PDF, name: null, size: null },
+      { id: b, mime: PDF, name: null, size: null },
+    ]);
+  });
+
+  test("a row of photos only has no files", () => {
+    const row = userRow(5, "tX", { attachments: [{ id: uuid(), mime: "image/png", name: null, size: 1 }] });
+    expect(applyRows([row], [], true).messages[0].files).toBeUndefined();
+  });
+
+  test("a row recorded as text/html or image/svg+xml is a file chip, never a photo: its blob is not drawn or fetched on load", () => {
+    const [h, v] = [uuid(), uuid()];
+    const row = userRow(5, "tX", {
+      attachments: [
+        { id: h, mime: "text/html", name: "page.html", size: 5 },
+        { id: v, mime: "image/svg+xml", name: "x.svg", size: 5 },
+      ],
+    });
+    const { messages, effects } = applyRows([row], [], true);
+    expect(messages[0].files?.map((f) => f.mime)).toEqual(["text/html", "image/svg+xml"]);
+    expect(messages[0].attachmentIds).toBeUndefined();
+    expect(effects.fetchAttachments).toEqual([]);
+  });
+
+  test("an own send's row gives its files their ids and the server's stored mime, matched by position after the photos", () => {
+    const user: ChatMessage = {
+      ...localUser("with things", { imageKeys: ["k0"] }),
+      fileKeys: ["k:f0", "k:f1"],
+      files: [
+        { mime: "", name: "Plan.pdf", size: 10 },
+        { mime: "", name: "Budget.numbers", size: 20 },
+      ],
+    };
+    const [photo, a, b] = [uuid(), uuid(), uuid()];
+    const row = userRow(1, "t1", {
+      clientMsgId: user.id,
+      attachments: [
+        { id: photo, mime: "image/jpeg", name: null, size: 300 },
+        { id: a, mime: PDF, name: "Plan.pdf", size: 10 },
+        { id: b, mime: OCTET, name: "Budget.numbers", size: 20 },
+      ],
+    });
+
+    const { messages, effects } = applyRows([row], [user], true);
+
+    expect(messages[0].files).toEqual([
+      { id: a, mime: PDF, name: "Plan.pdf", size: 10 },
+      { id: b, mime: OCTET, name: "Budget.numbers", size: 20 },
+    ]);
+    expect(messages[0].fileKeys).toEqual(["k:f0", "k:f1"]); // retry still reads its saved copies
+    expect(messages[0].attachmentIds).toBeUndefined(); // photos are not downloaded back
+    expect(effects.fetchAttachments).toEqual([]);
+  });
+
+  test("an own send whose row has no attachments yet keeps its local chips", () => {
+    const user: ChatMessage = { ...localUser(), fileKeys: ["k:f0"], files: [{ mime: "", name: "a.pdf", size: 1 }] };
+    const { messages } = applyRows([userRow(1, "t1", { clientMsgId: user.id })], [user], true);
+    expect(messages[0].files).toEqual([{ mime: "", name: "a.pdf", size: 1 }]);
+  });
+
+  test("the decoder keeps name and size and makes the old shape null, never throwing", () => {
+    const page = decodePage({
+      rows: [
+        {
+          seq: 1,
+          attachments: [
+            { id: "a", mime: PDF, name: "Plan.pdf", size: 12 },
+            { id: "b", mime: PDF },
+            { id: "c", mime: PDF, name: 5, size: "big" },
+          ],
+        },
+      ],
+      latest_seq: 1,
+    });
+    expect(page.rows[0].attachments).toEqual([
+      { id: "a", mime: PDF, name: "Plan.pdf", size: 12 },
+      { id: "b", mime: PDF, name: null, size: null },
+      { id: "c", mime: PDF, name: null, size: null },
+    ]);
   });
 });
 
@@ -515,7 +635,7 @@ describe("decoding", () => {
 
     expect(page.rows.map((r) => r.role)).toEqual(["other", "assistant", "user"]);
     expect(page.rows[1].status).toBe("error"); // an unknown status is an error
-    expect(page.rows[1].attachments).toEqual([{ id: "a1", mime: "image/png" }]);
+    expect(page.rows[1].attachments).toEqual([{ id: "a1", mime: "image/png", name: null, size: null }]);
     expect(page.latest_seq).toBe(3);
     expect(page.has_more).toBe(true);
 

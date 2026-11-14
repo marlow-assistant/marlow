@@ -57,6 +57,32 @@ describe("Settings › layout", () => {
   });
 });
 
+// Android lists only an installed app in its share sheet
+// (docs/tasks/share-and-files.md, Phase 4).
+describe("Settings › install hint", () => {
+  const standalone = (on: boolean) =>
+    vi.stubGlobal("matchMedia", (q: string) => ({ matches: on && q === "(display-mode: standalone)", media: q }));
+
+  it("tells a browser tab how to get into the share sheet", () => {
+    standalone(false);
+    open();
+    expect(screen.getByTestId("install-hint").textContent).toBe("Install Marlow to your home screen to share to it.");
+  });
+
+  it("says nothing in an installed app", () => {
+    standalone(true);
+    open();
+    expect(screen.queryByTestId("install-hint")).toBeNull();
+  });
+
+  it("says nothing in an iOS home-screen app either", () => {
+    standalone(false);
+    vi.stubGlobal("navigator", { ...navigator, standalone: true });
+    open();
+    expect(screen.queryByTestId("install-hint")).toBeNull();
+  });
+});
+
 describe("Settings › panes", () => {
   it("a row opens its pane, with Back in place of Done, and focus on the heading", () => {
     open();

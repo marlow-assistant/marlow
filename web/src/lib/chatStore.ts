@@ -25,6 +25,7 @@ import type { UsageReport } from "./apiModels";
 import type { ChatPersistence, CursorRecord } from "./storage";
 import type {
   ChatMessage,
+  FileAttachment,
   HealthResponse,
   Quote,
   QuoteRef,
@@ -33,7 +34,26 @@ import type {
   PermissionRequestInfo,
   TranscriptRow,
 } from "./types";
-import { attachmentIdsOf, imageKeysOf, ownImageKey, quoteRef, sameId } from "./types";
+import { attachmentIdsOf, imageKeysOf, ownFileKey, ownImageKey, quoteRef, sameId } from "./types";
+
+/** A file to send: the bytes as picked (the File itself, so its type rides
+ * along) and the name to show. */
+export interface OutFile {
+  blob: Blob;
+  name: string;
+}
+
+/** What one send carries. */
+interface Outgoing {
+  images: Blob[];
+  files: OutFile[];
+}
+
+/** What a resend re-reads from the image store. */
+interface Saved {
+  imageKeys: string[];
+  files: { key: string; name: string }[];
+}
 
 export interface PollingPolicy {
   burstInterval: number;
@@ -99,8 +119,10 @@ export const TEXT = {
   // happened and that Retry exists.
   sendExhausted: "Couldn't reach Marlow, so this wasn't sent. Tap retry to try again.",
   movedOn: "Marlow already moved on — that request was no longer open.",
-  photoSaveFailed: "Couldn't save the photo — sending your message without it.",
-  photoMissing: "Couldn't find the photo to resend — sending without it.",
+  // Photos and files are saved together and sent together (CMP-6), so one
+  // text covers both.
+  attachmentSaveFailed: "Couldn't save your attachments — sending your message without them.",
+  attachmentMissing: "Couldn't find your attachments to resend — sending without them.",
 } as const;
 
 /** STA-5, plus the section-16 gap: `trouble` is a server that answers, but
@@ -364,7 +386,10 @@ export class ChatStore {
     // Images no kept message references: dropped by retention, or orphaned
     // by a send that never got persisted.
     const keep = new Set<string>();
-    for (const m of this.state.messages) for (const k of imageKeysOf(m)) keep.add(k);
+    for (const m of this.state.messages) {
+      for (const k of imageKeysOf(m)) keep.add(k);
+      for (const k of m.fileKeys ?? []) keep.add(k);
+    }
     void this.persistence.deleteImages((k) => keep.has(k)).catch(() => {});
   }
 
@@ -416,31 +441,43 @@ export class ChatStore {
 
   // --- sending ---------------------------------------------------------------
 
-  /** CMP-1/CMP-2/SND-1. `images` are already-downscaled JPEGs. Returns false
+  /** CMP-1/CMP-2/SND-1. `images` are already-downscaled JPEGs; `files` are
+   * everything else, as picked (docs/tasks/share-and-files.md). Returns false
    * when there is nothing to send, so the composer can put its draft back. */
-  async send(text: string, images: Blob[] = [], quote?: Quote): Promise<boolean> {
+  async send(text: string, images: Blob[] = [], quote?: Quote, files: OutFile[] = []): Promise<boolean> {
     if (this.stopped) return false;
     const trimmed = text.trim();
-    if (!trimmed && images.length === 0) return false;
+    if (!trimmed && images.length === 0 && files.length === 0) return false;
     const userId = this.newId();
     // Saved for retry before anything is sent: what is sent and what a retry
     // can re-read must agree (CMP-6). If any save fails the message goes
-    // text-only, and says so, rather than carrying some of the images: a
-    // caption about photos Marlow only partly saw is the failure CMP-4 refuses.
-    let imagesToSend: Blob[] = images;
+    // text-only, and says so, rather than carrying some of the attachments: a
+    // caption about photos or files Marlow only partly saw is the failure
+    // CMP-4 refuses.
+    let outgoing: Outgoing = { images, files };
     let imageKeys: string[] | undefined;
-    if (images.length > 0) {
+    let fileKeys: string[] | undefined;
+    let fileChips: FileAttachment[] | undefined;
+    if (images.length > 0 || files.length > 0) {
       try {
         const keys = images.map((_, i) => ownImageKey(userId, i));
+        const fKeys = files.map((_, i) => ownFileKey(userId, i));
         for (const [i, image] of images.entries()) await this.persistence.putImage(keys[i], image);
-        imageKeys = keys;
+        for (const [i, file] of files.entries()) await this.persistence.putImage(fKeys[i], file.blob);
+        if (keys.length > 0) imageKeys = keys;
+        if (fKeys.length > 0) {
+          fileKeys = fKeys;
+          fileChips = files.map((f) => ({ mime: f.blob.type, name: f.name, size: f.blob.size }));
+        }
       } catch {
-        imagesToSend = [];
+        outgoing = { images: [], files: [] };
       }
-      if (imagesToSend.length === 0 && !trimmed) return false;
-      if (imagesToSend.length === 0) this.showNotice(TEXT.photoSaveFailed);
+      if (outgoing.images.length === 0 && outgoing.files.length === 0) {
+        if (!trimmed) return false;
+        this.showNotice(TEXT.attachmentSaveFailed);
+      }
     }
-    this.post(trimmed, userId, imageKeys, imagesToSend, quote, false);
+    this.post(trimmed, userId, { imageKeys, fileKeys, files: fileChips }, outgoing, quote, false);
     return true;
   }
 
@@ -453,7 +490,7 @@ export class ChatStore {
     if (this.stopped) return null;
     const trimmed = text.trim();
     if (!trimmed) return null;
-    return this.post(trimmed, this.newId(), undefined, [], undefined, true);
+    return this.post(trimmed, this.newId(), {}, { images: [], files: [] }, undefined, true);
   }
 
   /** Text the poll loop has received for a running reply, cumulative, with
@@ -469,13 +506,22 @@ export class ChatStore {
   private post(
     trimmed: string,
     userId: string,
-    imageKeys: string[] | undefined,
-    images: Blob[],
+    saved: { imageKeys?: string[]; fileKeys?: string[]; files?: FileAttachment[] },
+    outgoing: Outgoing,
     quote: Quote | undefined,
     spoken: boolean,
   ): string {
     const now = this.clock.now();
-    const user: ChatMessage = { id: userId, role: "user", text: trimmed, createdAt: now, status: "done", imageKeys, ...(quote ? { quote } : {}) };
+    const user: ChatMessage = {
+      id: userId,
+      role: "user",
+      text: trimmed,
+      createdAt: now,
+      status: "done",
+      imageKeys: saved.imageKeys,
+      ...(saved.fileKeys ? { fileKeys: saved.fileKeys, files: saved.files } : {}),
+      ...(quote ? { quote } : {}),
+    };
     const placeholder: ChatMessage = {
       id: this.newId(),
       role: "assistant",
@@ -490,7 +536,7 @@ export class ChatStore {
     this.emit({ kind: "sent", userId, placeholderId: placeholder.id });
     this.setMessages([...this.state.messages, user, placeholder]);
     this.persist();
-    this.startSubmit(trimmed, userId, placeholder.id, images, quoteRef(quote), spoken);
+    this.startSubmit(trimmed, userId, placeholder.id, outgoing, quoteRef(quote), spoken);
     return placeholder.id;
   }
 
@@ -511,46 +557,56 @@ export class ChatStore {
       answers: undefined,
     }));
     this.persist();
-    this.startSubmit(r.text, r.clientMsgId, placeholderId, { keys: r.imageKeys }, quoteRef(r.quote));
+    this.startSubmit(r.text, r.clientMsgId, placeholderId, r.saved, quoteRef(r.quote));
   }
 
-  private resendable(
-    m: ChatMessage,
-  ): { clientMsgId: string; text: string; imageKeys: string[]; quote?: Quote } | null {
+  private resendable(m: ChatMessage): { clientMsgId: string; text: string; saved: Saved; quote?: Quote } | null {
     if (!m.clientMsgId) return null;
     const user = this.state.messages.find((u) => u.role === "user" && sameId(u.id, m.clientMsgId));
     if (!user) return null;
-    return { clientMsgId: m.clientMsgId, text: user.text, imageKeys: imageKeysOf(user), quote: user.quote };
+    // A file's name is read from its chip: a copy saved by an earlier build has
+    // no `fileKeys` at all, and a missing name sends as the server's own
+    // fallback.
+    const fileKeys = user.fileKeys ?? [];
+    const files = fileKeys.map((key, i) => ({ key, name: user.files?.[i]?.name ?? "file" }));
+    return { clientMsgId: m.clientMsgId, text: user.text, saved: { imageKeys: imageKeysOf(user), files }, quote: user.quote };
   }
 
   private startSubmit(
     text: string,
     clientMsgId: string,
     placeholderId: string,
-    images: Blob[] | { keys: string[] },
+    attach: Outgoing | Saved,
     ref?: QuoteRef,
     spoken = false,
   ): void {
     this.runTask(placeholderId, async (signal) => {
-      let blobs: Blob[];
-      if (Array.isArray(images)) blobs = images;
+      let outgoing: Outgoing;
+      if (!("imageKeys" in attach)) outgoing = attach;
       else {
-        // A resend re-reads every saved image. If ANY is gone it sends none
-        // and says so (CMP-6): never the caption with some photos missing.
-        blobs = [];
+        // A resend re-reads every saved photo and file. If ANY is gone it
+        // sends none and says so (CMP-6): never the caption with some of its
+        // attachments missing.
+        outgoing = { images: [], files: [] };
         let missing = false;
-        for (const key of images.keys) {
+        for (const key of attach.imageKeys) {
           const blob = await this.persistence.getImage(key).catch(() => undefined);
           if (signal.aborted) return;
-          if (blob) blobs.push(blob);
+          if (blob) outgoing.images.push(blob);
+          else missing = true;
+        }
+        for (const f of attach.files) {
+          const blob = await this.persistence.getImage(f.key).catch(() => undefined);
+          if (signal.aborted) return;
+          if (blob) outgoing.files.push({ blob, name: f.name });
           else missing = true;
         }
         if (missing) {
-          blobs = [];
-          this.showNotice(TEXT.photoMissing);
+          outgoing = { images: [], files: [] };
+          this.showNotice(TEXT.attachmentMissing);
         }
       }
-      await this.submit(text, clientMsgId, placeholderId, blobs, signal, ref, spoken);
+      await this.submit(text, clientMsgId, placeholderId, outgoing, signal, ref, spoken);
     });
   }
 
@@ -561,13 +617,23 @@ export class ChatStore {
     text: string,
     clientMsgId: string,
     placeholderId: string,
-    images: Blob[],
+    outgoing: Outgoing,
     signal: AbortSignal,
     ref?: QuoteRef,
     spoken = false,
   ): Promise<void> {
     // Encoded once, before the loop (CMP-3).
-    const imagesB64 = await Promise.all(images.map(blobToBase64));
+    const imagesB64 = await Promise.all(outgoing.images.map(blobToBase64));
+    // `mime` is the platform's guess and decides nothing on the server (it
+    // sniffs the bytes); "" when the platform has none.
+    // (Only awaited when there are files: a text send's first request goes out
+    // within the same turn of the event loop as before.)
+    const filesB64 =
+      outgoing.files.length === 0
+        ? []
+        : await Promise.all(
+            outgoing.files.map(async (f) => ({ b64: await blobToBase64(f.blob), mime: f.blob.type, name: f.name })),
+          );
     if (signal.aborted) return;
     let attempt = 0;
     for (;;) {
@@ -586,6 +652,7 @@ export class ChatStore {
             effort: this.state.effort,
             ...(location ? { location } : {}),
             ...(imagesB64.length > 0 ? { images: imagesB64.map((b64) => ({ b64, mime: "image/jpeg" as const })) } : {}),
+            ...(filesB64.length > 0 ? { files: filesB64 } : {}),
             ...(ref ?? {}),
             ...(spoken ? { spoken: true } : {}),
           },
@@ -793,7 +860,7 @@ export class ChatStore {
             continue;
           }
           this.update(m.id, (x) => ({ ...x, seq: undefined, answers: undefined }));
-          this.startSubmit(r.text, r.clientMsgId, m.id, { keys: r.imageKeys }, quoteRef(r.quote));
+          this.startSubmit(r.text, r.clientMsgId, m.id, r.saved, quoteRef(r.quote));
           break;
         }
         default:
@@ -1083,6 +1150,14 @@ export class ChatStore {
       const have = imageKeysOf(m);
       for (const id of attachmentIdsOf(m)) if (!have.includes(`att:${id}`)) this.fetchAttachment(m.id, id);
     }
+  }
+
+  /** A file chip's bytes, fetched when it is tapped and not kept: unlike a
+   * photo, a file isn't needed to draw the bubble and can be large. The Blob's
+   * own `type` is the response's `Content-Type` and must not be trusted
+   * (`openAttachment`). */
+  fetchFile(attachmentId: string): Promise<Blob> {
+    return this.api.attachment(attachmentId);
   }
 
   /** An object URL for a stored image, made once and reused. */

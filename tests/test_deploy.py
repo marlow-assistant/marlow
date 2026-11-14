@@ -1566,6 +1566,55 @@ def test_a_trial_branch_whose_deletion_conflicts_with_main_is_still_a_rollback(t
     assert len(reasons) == 1 and "main does not contain the commit checked out now" in reasons[0]
 
 
+def _box_left_mid_branch(repo: Path, *, pr_head: bool, merged_whole: bool = True) -> None:
+    """The box runs `try` at its first commit; the branch goes on to rewrite
+    that commit's file, then squash-merges. Merging the box's commit into main
+    conflicts where the later commit changed the same lines, so only the PR's
+    final commit, kept by GitHub as refs/pull/N/head, shows main has it all.
+    The repo is its own `origin`, so the fetch of pull heads is local."""
+    _git(repo, "switch", "-q", "-c", "try", "main")
+    (repo / "one.txt").write_text("v1\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "one v1")
+    (repo / "one.txt").write_text("v2\n")
+    (repo / "two.txt").write_text("two\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "one v2, two")
+    if pr_head:
+        _git(repo, "update-ref", "refs/pull/7/head", "try")
+    _git(repo, "switch", "-q", "main")
+    (repo / "one.txt").write_text("v2\n")
+    if merged_whole:
+        (repo / "two.txt").write_text("two\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-qm", "squash")
+    _git(repo, "remote", "add", "origin", str(repo))
+    _git(repo, "switch", "-q", "--detach", "try~1")
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
+def test_a_box_left_partway_along_a_squash_merged_branch_is_not_a_rollback(tmp_path, history) -> None:
+    """Mike, 2026-11-14: the box ran a commit from the middle of
+    share-and-files (later commits were client-only, so it was never
+    redeployed), and the squash check refused it with a conflict."""
+    _box_left_mid_branch(history, pr_head=True)
+    assert _rollback_reasons(tmp_path, history, "main", ["0001-a", "0002-b"]) == []
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
+def test_a_box_mid_branch_with_no_pull_head_is_still_a_rollback(tmp_path, history) -> None:
+    _box_left_mid_branch(history, pr_head=False)
+    reasons = _rollback_reasons(tmp_path, history, "main", ["0001-a", "0002-b"])
+    assert len(reasons) == 1 and "main does not contain the commit checked out now" in reasons[0]
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
+def test_a_box_mid_branch_whose_pr_merged_only_in_part_is_still_a_rollback(tmp_path, history) -> None:
+    _box_left_mid_branch(history, pr_head=True, merged_whole=False)
+    reasons = _rollback_reasons(tmp_path, history, "main", ["0001-a", "0002-b"])
+    assert len(reasons) == 1 and "main does not contain the commit checked out now" in reasons[0]
+
+
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
 def test_no_migration_record_still_checks_ancestry(tmp_path, history) -> None:
     """A fresh install has no record yet; the ancestry check still applies."""

@@ -53,6 +53,7 @@ from typing import Callable
 from urllib.parse import urlsplit
 
 from server import active_turn, onboarding
+from server.attachments import OTHER_LABEL, FileAttachment, human_size
 from server.boundaries import (
     SECRET_PATHS,
     VETTED_BUILTIN_TOOLS,
@@ -1272,6 +1273,26 @@ def _is_dead_session_error(stderr: str, session_id: str) -> bool:
     return _DEAD_SESSION_SIGNATURE in lowered and session_id.lower() in lowered
 
 
+def attachment_lines(
+    attachment_paths: tuple[str, ...], file_attachments: tuple[FileAttachment, ...]
+) -> list[str]:
+    """The prompt's lines for a message's attachments: a photo first (as
+    before), then one per file. The quoted name is the user's; everything after
+    it is the server's, which is why a hostile name cannot say what the file
+    is. A type with no reader always ends `a type you can't read`, the fixed
+    phrase identity/CLAUDE.md keys on."""
+    lines = [f"[image attached: {path}]" for path in attachment_paths]
+    for att in file_attachments:
+        if att.kind_label == OTHER_LABEL:
+            what = f"{human_size(att.size)}, {OTHER_LABEL}"
+        elif att.text_path:
+            what = f"{att.kind_label}; text version: {att.text_path}"
+        else:
+            what = att.kind_label
+        lines.append(f'[file attached: {att.path} — "{att.name}", {what}]')
+    return lines
+
+
 async def run_claude(
     prompt: str,
     *,
@@ -1283,6 +1304,7 @@ async def run_claude(
     queue_wait_seconds: float | None = None,
     require_session: bool = False,
     attachment_paths: tuple[str, ...] = (),
+    file_attachments: tuple[FileAttachment, ...] = (),
     effort: str | None = None,
     spoken: bool = False,
     raw_prompt: bool = False,
@@ -1348,6 +1370,14 @@ async def run_claude(
     decode real pixels. `boundaries.ATTACHMENT_ROOT` /
     `server/file_policy.py` are what let that Read clear without waking the
     phone; this is only the sentence that tells the model the file exists.
+
+    `file_attachments` (docs/tasks/share-and-files.md) are one `[file attached:
+    ...]` line each, after the image lines and in the same block: the path, the
+    user's quoted name, then the server's own word for what the file is
+    (`attachment_lines`). An Office file also names its text version, a type
+    with no reader says so and gives its size, and the identity keys on both
+    phrases. The user's name is display text and is sanitized where the wire
+    request is decoded, so it cannot pose as the line around it.
 
     `effort` is a per-turn client request. Only a chat source
     (`active_turn.CHAT_SOURCES`) may apply it, and _invoke_once validates it
@@ -1419,8 +1449,8 @@ async def run_claude(
         if onboarding_line:
             prompt = f"{onboarding_line}\n\n{prompt}"
         prompt = prepend_turn_context(prompt, session_id=session_id, source=source, resume=resume)
-        if attachment_paths:
-            lines = "\n".join(f"[image attached: {path}]" for path in attachment_paths)
+        if attachment_paths or file_attachments:
+            lines = "\n".join(attachment_lines(attachment_paths, file_attachments))
             prompt = f"{lines}\n{prompt}"
 
     # Publish `source` for the PreToolUse round-trip, which cannot see it: the

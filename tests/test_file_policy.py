@@ -378,3 +378,20 @@ def test_the_todo_migration_report_is_writable_unattended(tool) -> None:
     it belongs beside USER.md, not in memory/, which every turn reads."""
     assert _decide(tool, f"{TREE}/todo-migration-report.md") == ALLOW
     assert _decide(tool, f"{TREE}/todo-migration-report.md.bak") == PROMPT
+
+
+def test_read_of_a_converted_text_version_under_the_attachment_root_is_vetted_locally() -> None:
+    # share-and-files: an Office file's text lives beside the original as
+    # `<n>.md`, in the same turn directory, so the existing read-allow covers
+    # it with no boundary change. The real ATTACHMENT_ROOT, not a stand-in.
+    from server.boundaries import ATTACHMENT_ROOT
+
+    root = ATTACHMENT_ROOT[0]
+    for name in ("3.md", "2.pdf", "4.txt", "5.docx"):
+        verdict, _ = vet_file_tool("Read", {"file_path": f"{root}/some-turn/{name}"}, working_tree=TREE)
+        assert verdict == ALLOW, name
+    # Still read-only.
+    verdict, _ = vet_file_tool(
+        "Write", {"file_path": f"{root}/some-turn/3.md", "content": "x"}, working_tree=TREE,
+    )
+    assert verdict == PROMPT

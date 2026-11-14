@@ -1270,3 +1270,112 @@ def test_step_done_target_keeps_step_and_outcome_only(tool_input, expected):
     from server.invoke import _tool_target
 
     assert _tool_target("mcp__onboarding__step_done", tool_input) == expected
+
+
+# --- file attachment lines (docs/tasks/share-and-files.md) ----------------------------
+
+
+def _file_att(**overrides):
+    from server.attachments import FileAttachment
+
+    fields = dict(
+        path="/home/marlow/.marlow/attachments/t1/2.pdf", name="Booking confirmation.pdf",
+        kind_label="PDF", size=1234, text_path=None, mime="application/pdf",
+    )
+    return FileAttachment(**{**fields, **overrides})
+
+
+def test_attachment_lines_for_every_kind_are_exact():
+    from server.invoke import attachment_lines
+
+    base = "/home/marlow/.marlow/attachments/t1"
+    atts = (
+        _file_att(),
+        _file_att(
+            path=f"{base}/3.docx", name="Trip notes.docx", kind_label="Word document",
+            text_path=f"{base}/3.md", mime="docx",
+        ),
+        _file_att(path=f"{base}/4.txt", name="invite.ics", kind_label="text", mime="text/plain"),
+        _file_att(
+            path=f"{base}/5.bin", name="Budget.numbers", kind_label="a type you can't read",
+            size=int(2.1 * 1024 * 1024), mime="application/octet-stream",
+        ),
+        _file_att(path=f"{base}/6.png", name="shot.png", kind_label="image", mime="image/png"),
+    )
+    assert attachment_lines((f"{base}/0.jpg",), atts) == [
+        f"[image attached: {base}/0.jpg]",
+        f'[file attached: {base}/2.pdf — "Booking confirmation.pdf", PDF]',
+        f'[file attached: {base}/3.docx — "Trip notes.docx", Word document; text version: {base}/3.md]',
+        f'[file attached: {base}/4.txt — "invite.ics", text]',
+        f'[file attached: {base}/5.bin — "Budget.numbers", 2.1 MB, a type you can\'t read]',
+        f'[file attached: {base}/6.png — "shot.png", image]',
+    ]
+
+
+def test_sizes_are_one_decimal_and_kilobytes_under_a_megabyte():
+    from server.attachments import human_size
+
+    assert human_size(300) == "0.3 KB"
+    assert human_size(1024 * 1024 - 1) == "1024.0 KB"
+    assert human_size(1024 * 1024) == "1.0 MB"
+    assert human_size(int(2.14 * 1024 * 1024)) == "2.1 MB"
+
+
+def _echo_cli(tmp_path, monkeypatch):
+    fake_bin = tmp_path / "claude"
+    write_executable(fake_bin, "#!/usr/bin/env python3\nimport json, sys\n"
+        "print(json.dumps({'is_error': False, 'subtype': 'success', 'result': sys.argv[-1],"
+        " 'session_id': 's1', 'permission_denials': []}))\n")
+    _with_claude_bin(monkeypatch, str(fake_bin))
+
+
+def test_file_lines_follow_the_image_lines_ahead_of_turn_context(tmp_path, monkeypatch):
+    _echo_cli(tmp_path, monkeypatch)
+
+    result = asyncio.run(
+        run_claude(
+            "compare", attachment_paths=("/a/t/0.jpg",), file_attachments=(_file_att(path="/a/t/1.pdf"),)
+        )
+    )
+
+    lines = result.result_text.splitlines()
+    assert lines[0] == "[image attached: /a/t/0.jpg]"
+    assert lines[1] == '[file attached: /a/t/1.pdf — "Booking confirmation.pdf", PDF]'
+    assert result.result_text.endswith("compare")
+
+
+def test_a_files_only_message_still_gets_its_lines(tmp_path, monkeypatch):
+    _echo_cli(tmp_path, monkeypatch)
+
+    result = asyncio.run(run_claude("read it", file_attachments=(_file_att(),)))
+
+    assert result.result_text.startswith("[file attached: ")
+
+
+def test_dead_session_retry_still_carries_the_file_lines(tmp_path, monkeypatch):
+    fake_bin = tmp_path / "claude"
+    write_executable(fake_bin, textwrap.dedent(
+            """\
+            #!/usr/bin/env python3
+            import json, sys
+            if any(a.startswith("--resume") for a in sys.argv):
+                sys.stderr.write("No conversation found with session ID: dead-sess\\n")
+                sys.exit(1)
+            print(json.dumps({
+                "is_error": False,
+                "subtype": "success",
+                "result": sys.argv[-1],
+                "session_id": "fresh-sess",
+                "permission_denials": [],
+            }))
+            """
+        ))
+    _with_claude_bin(monkeypatch, str(fake_bin))
+
+    result = asyncio.run(
+        run_claude(
+            "still there?", session_id="dead-sess", resume=True,
+            file_attachments=(_file_att(path="/a/t/0.pdf"),),
+        )
+    )
+    assert result.result_text.startswith('[file attached: /a/t/0.pdf — "Booking confirmation.pdf", PDF]')

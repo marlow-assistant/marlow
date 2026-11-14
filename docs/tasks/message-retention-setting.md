@@ -22,9 +22,9 @@ Every place a message's content is stored, and what removes it:
 
 | Store | Holds | Removed by | Today |
 |---|---|---|---|
-| `transcript.db` + `data/transcript-attachments/` | every message, plus a copy of each image | `transcript.prune()` at startup and every 24h (`queue.py`, `TRANSCRIPT_PRUNE_INTERVAL_SECONDS`) | 30 days, `RETENTION_SECONDS` in `server/transcript.py`. Deletes whole messages: row, attachment rows and files together. |
-| `~/.marlow/attachments/<turn_id>/` | the per-turn upload the CLI reads | `cleanup_attachment` when the turn ends; `sweep_orphaned_attachments` at startup | minutes, or 24h for an orphan |
-| CLI session files `~/.claude/projects/<cwd-slug>/*.jsonl` | prompts, replies, and **every image Marlow Read, as base64** | only the CLI's own history cleanup | about 30 days, the CLI's **default**: nothing in this repo sets it. On Mike's box: 92MB, 40 files, oldest 2026-09-23. |
+| `transcript.db` + `data/transcript-attachments/` | every message, plus a copy of each image and file | `transcript.prune()` at startup and every 24h (`queue.py`, `TRANSCRIPT_PRUNE_INTERVAL_SECONDS`) | 30 days, `RETENTION_SECONDS` in `server/transcript.py`. Deletes whole messages: row, attachment rows and files together. |
+| `~/.marlow/attachments/<turn_id>/` | the per-turn upload the CLI reads, with any converted `.md` text | `cleanup_attachment` when the turn ends; `sweep_orphaned_attachments` at startup | minutes, or 24h for an orphan |
+| CLI session files `~/.claude/projects/<cwd-slug>/*.jsonl` | prompts, replies, and **every image Marlow Read, as base64**, and the text of every file it Read | only the CLI's own history cleanup | about 30 days, the CLI's **default**: nothing in this repo sets it. On Mike's box: 92MB, 40 files, oldest 2026-09-23. |
 | iOS cache (`chat-transcript.json` + attachment files) | the phone's copy | `ChatStore` load filters at `ChatStore.retention` (30 days); `pruneUnreferencedAttachments` at launch | 30 days, hard-coded |
 | Web cache (IndexedDB) | the browser's copy | the `chatStore.ts` load filter at `RETENTION_MS`; `deleteImages` for unreferenced keys | 30 days, hard-coded |
 | Activity log (`server/activity_log.py`) | one line per turn: tools used and their allowlisted targets. **No prompt, no reply.** | whole month files past `RETENTION_MONTHS` | 12 months |

@@ -87,8 +87,8 @@ def test_a_repeated_client_msg_id_writes_one_row_and_returns_the_first():
 def test_a_repeat_does_not_copy_its_attachment_again(tmp_path):
     src = tmp_path / "a.jpg"
     src.write_bytes(b"jpeg")
-    _user(client_msg_id="same", attachments=[(str(src), "image/jpeg")])
-    _user(client_msg_id="same", attachments=[(str(src), "image/jpeg")])
+    _user(client_msg_id="same", attachments=[(str(src), "image/jpeg", None, 4)])
+    _user(client_msg_id="same", attachments=[(str(src), "image/jpeg", None, 4)])
 
     assert len(list(transcript.attachments_dir().iterdir())) == 1
 
@@ -106,10 +106,11 @@ def test_attachments_are_listed_in_order_with_their_mime(tmp_path):
         path.write_bytes(data)
         files.append(str(path))
 
-    row = _user(attachments=[(files[0], "image/jpeg"), (files[1], "application/pdf")])
+    row = _user(attachments=[(files[0], "image/jpeg", None, 1), (files[1], "application/pdf", "b.pdf", 2)])
 
     assert [a["mime"] for a in row["attachments"]] == ["image/jpeg", "application/pdf"]
-    assert set(row["attachments"][0]) == {"id", "mime"}
+    assert set(row["attachments"][0]) == {"id", "mime", "name", "size"}
+    assert [(a["name"], a["size"]) for a in row["attachments"]] == [(None, 1), ("b.pdf", 2)]
     first = transcript.attachment_path(row["attachments"][0]["id"])
     second = transcript.attachment_path(row["attachments"][1]["id"])
     # No extension: the stored mime is the only thing that says what it is.
@@ -118,8 +119,38 @@ def test_attachments_are_listed_in_order_with_their_mime(tmp_path):
     assert _all_rows()[0]["attachments"] == row["attachments"]
 
 
+def test_a_row_from_before_name_and_size_still_serializes_and_the_db_migrates(tmp_path):
+    import sqlite3
+    from contextlib import closing
+
+    # A db as an older box has it: the attachments table without the columns.
+    transcript._initialise(transcript.db_path())
+    with closing(sqlite3.connect(transcript.db_path())) as conn, conn:
+        conn.execute("ALTER TABLE transcript_attachments DROP COLUMN name")
+        conn.execute("ALTER TABLE transcript_attachments DROP COLUMN size")
+        conn.execute(
+            "INSERT INTO transcript (id, role, source, turn_id, text, created_at)"
+            " VALUES ('r1', 'user', 'chat', 't-old', 'old photo', 1.0)"
+        )
+        conn.execute(
+            "INSERT INTO transcript_attachments (id, row_id, idx, mime, created_at)"
+            " VALUES ('00000000-0000-4000-8000-000000000001', 'r1', 0, 'image/jpeg', 1.0)"
+        )
+    transcript._initialised.clear()  # the next process start
+
+    [old] = _all_rows()
+    assert old["attachments"] == [
+        {"id": "00000000-0000-4000-8000-000000000001", "mime": "image/jpeg", "name": None, "size": None}
+    ]
+    # And the migrated table takes a new row with both.
+    src = tmp_path / "f.txt"
+    src.write_bytes(b"hello")
+    new = _user("new", turn_id="t-new", attachments=[(str(src), "text/plain", "f.txt", 5)])
+    assert (new["attachments"][0]["name"], new["attachments"][0]["size"]) == ("f.txt", 5)
+
+
 def test_an_attachment_that_cannot_be_copied_does_not_lose_the_message(tmp_path):
-    row = _user("hello", attachments=[(str(tmp_path / "missing.jpg"), "image/jpeg")])
+    row = _user("hello", attachments=[(str(tmp_path / "missing.jpg"), "image/jpeg", None, None)])
     assert row["text"] == "hello"
     assert row["attachments"] == []
 
@@ -189,10 +220,10 @@ def test_prune_removes_old_rows_and_their_attachments_and_keeps_new_ones(tmp_pat
     src.write_bytes(b"jpeg")
     now = time.time()
     old = _user("old", turn_id="t-old", client_msg_id="c-old",
-                attachments=[(str(src), "image/jpeg")], now=now - 31 * DAY)
+                attachments=[(str(src), "image/jpeg", None, None)], now=now - 31 * DAY)
     _assistant("old reply", turn_id="t-old", now=now - 31 * DAY)
     new = _user("new", turn_id="t-new", client_msg_id="c-new",
-                attachments=[(str(src), "image/jpeg")], now=now - 29 * DAY)
+                attachments=[(str(src), "image/jpeg", None, None)], now=now - 29 * DAY)
     old_file = transcript.attachment_path(old["attachments"][0]["id"])
     new_file = transcript.attachment_path(new["attachments"][0]["id"])
     assert old_file.exists() and new_file.exists()
@@ -377,7 +408,7 @@ def test_an_image_round_trips_as_an_attachment(paired_device_token):
 def test_a_non_image_attachment_is_served_as_a_download(paired_device_token, tmp_path):
     src = tmp_path / "doc"
     src.write_bytes(b"%PDF-1.4")
-    row = _user(attachments=[(str(src), "application/pdf")])
+    row = _user(attachments=[(str(src), "application/pdf", "doc.pdf", 8)])
     headers = _headers(paired_device_token)
     with TestClient(public_app) as client:
         got = client.get(f"/v1/transcript/attachment/{row['attachments'][0]['id']}", headers=headers)
@@ -425,7 +456,7 @@ def test_bad_attachment_ids_are_404_and_never_touch_the_filesystem(paired_device
 def test_a_row_whose_file_is_gone_is_a_404(paired_device_token, tmp_path):
     src = tmp_path / "a.jpg"
     src.write_bytes(b"jpeg")
-    row = _user(attachments=[(str(src), "image/jpeg")])
+    row = _user(attachments=[(str(src), "image/jpeg", None, None)])
     transcript.attachment_path(row["attachments"][0]["id"]).unlink()
     with TestClient(public_app) as client:
         resp = client.get(
@@ -989,7 +1020,7 @@ def test_prune_deletes_in_bounded_batches(monkeypatch, tmp_path):
     now = time.time()
     files = []
     for i in range(8):
-        row = _user(f"old{i}", turn_id=f"t-{i}", attachments=[(str(src), "image/jpeg")] if i % 2 else [],
+        row = _user(f"old{i}", turn_id=f"t-{i}", attachments=[(str(src), "image/jpeg", None, None)] if i % 2 else [],
                     now=now - 40 * DAY)
         files += [transcript.attachment_path(a["id"]) for a in row["attachments"]]
     _user("new", turn_id="t-new", now=now)

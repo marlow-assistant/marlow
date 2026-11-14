@@ -1,5 +1,5 @@
 {
-  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 26.",
+  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 29.",
   "entries": [
     {
       "id": 1,
@@ -168,6 +168,27 @@
       "part": "app",
       "category": "fix",
       "text": "On a computer, Marlow's replies now share one notification. Waking it after a while shows one \"new\" count instead of a toast for every reply you already read on your phone, and opening Marlow clears it."
+    },
+    {
+      "id": 26,
+      "date": "2026-11-14",
+      "part": "server",
+      "category": "feature",
+      "text": "You can attach any file to a message: tap + and choose Choose File. Marlow reads PDFs, Word, Excel and PowerPoint files and anything in plain text, and tells you when it can't open one."
+    },
+    {
+      "id": 27,
+      "date": "2026-11-14",
+      "part": "server",
+      "category": "data",
+      "text": "Files you send are kept with your conversation for 30 days, like photos, so you can open them again from the message. Marlow itself only reads them during the reply."
+    },
+    {
+      "id": 28,
+      "date": "2026-11-14",
+      "part": "app",
+      "category": "feature",
+      "text": "Share to Marlow from other apps. On iPhone, choose Marlow in the share sheet. On Android, install Marlow to your home screen first, then it appears when you share."
     }
   ]
 }

@@ -105,6 +105,12 @@ struct PollingPolicy {
     /// covers text and the app's downscaled images alike.
     var sendAttemptTimeout: TimeInterval = 20
 
+    /// The same bound for a send that carries files (2026-11-14). Up to 25MB
+    /// of them, plus an Office conversion the server runs before it answers,
+    /// cannot fit in 20s on a phone's uplink: every attempt would be cut and
+    /// re-upload from zero. 120s matches the web client's `UPLOAD_TIMEOUT_MS`.
+    var fileSendAttemptTimeout: TimeInterval = 120
+
     static let `default` = PollingPolicy()
 }
 
@@ -825,7 +831,7 @@ final class ChatStore: ObservableObject {
                     text: text, clientMsgId: clientMsgId,
                     imagesBase64: imagesBase64, files: outgoingFiles,
                     ideaId: ideaId, todoId: todoId, spoken: spoken,
-                    timeout: policy.sendAttemptTimeout
+                    timeout: outgoingFiles.isEmpty ? policy.sendAttemptTimeout : policy.fileSendAttemptTimeout
                 )
                 if Task.isCancelled { return }
                 update(placeholderId) {

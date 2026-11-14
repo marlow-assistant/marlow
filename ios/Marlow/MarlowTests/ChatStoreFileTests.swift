@@ -30,6 +30,29 @@ struct ChatStoreFileTests {
 
     // MARK: - Send and the retry save
 
+    @Test func aFileSendGetsTheLongerUploadDeadlineAndATextSendKeepsTwentySeconds() async throws {
+        let fake = FakeChatAPI()
+        await fake.stubTurns([
+            .success(.fixture(status: "done", resultText: "ok")),
+            .success(.fixture(status: "done", resultText: "ok")),
+        ])
+        var policy = PollingPolicy.test()
+        policy.sendAttemptTimeout = PollingPolicy.default.sendAttemptTimeout
+        policy.fileSendAttemptTimeout = PollingPolicy.default.fileSendAttemptTimeout
+        let store = makeStore(fake, policy: policy)
+        defer { store.cancelActiveWork() }
+
+        store.send(text: "read this", files: [StagedFile(name: "a.pdf", mime: "application/pdf", data: Data([1]))])
+        await awaitSettled(store)
+        store.send(text: "and this")
+        await awaitSettled(store)
+
+        let sent = try requireCount(await fake.sentMessages, 2)
+        #expect(sent[0].timeout == 120, "up to 25MB of files plus a conversion: the web client's 120s")
+        #expect(sent[1].timeout == 20, "text keeps Mike's settled 20s bound")
+    }
+
+
     @Test func aSendCarriesTheFilesBesideTheImagesAndSavesEachForRetry() async throws {
         let fake = await settledFake()
         let store = makeStore(fake)

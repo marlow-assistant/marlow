@@ -293,6 +293,43 @@ describe("file attachments on user rows", () => {
     expect(effects.fetchAttachments).toEqual([]);
   });
 
+  test("an own send's files are the row's named entries, so a photo the server failed to copy shifts nothing", () => {
+    const user: ChatMessage = {
+      ...localUser("two photos and a file", { imageKeys: ["k0", "k1"] }),
+      fileKeys: ["k:f0"],
+      files: [{ mime: "", name: "Plan.pdf", size: 10 }],
+    };
+    const [photo, a] = [uuid(), uuid()];
+    // append_user skipped the second photo (its copy failed): one photo, then the file.
+    const row = userRow(1, "t1", {
+      clientMsgId: user.id,
+      attachments: [
+        { id: photo, mime: "image/jpeg", name: null, size: 300 },
+        { id: a, mime: PDF, name: "Plan.pdf", size: 10 },
+      ],
+    });
+    const { messages } = applyRows([row], [user], true);
+    expect(messages[0].files).toEqual([{ id: a, mime: PDF, name: "Plan.pdf", size: 10 }]);
+  });
+
+  test("an own send whose row lost one of its files keeps its local chips rather than guess", () => {
+    const user: ChatMessage = {
+      ...localUser(),
+      fileKeys: ["k:f0", "k:f1"],
+      files: [
+        { mime: "", name: "a.pdf", size: 1 },
+        { mime: "", name: "b.txt", size: 2 },
+      ],
+    };
+    // The first file's copy failed: the one entry left is b.txt, not a.pdf.
+    const row = userRow(1, "t1", {
+      clientMsgId: user.id,
+      attachments: [{ id: uuid(), mime: "text/plain", name: "b.txt", size: 2 }],
+    });
+    const { messages } = applyRows([row], [user], true);
+    expect(messages[0].files).toEqual(user.files);
+  });
+
   test("an own send whose row has no attachments yet keeps its local chips", () => {
     const user: ChatMessage = { ...localUser(), fileKeys: ["k:f0"], files: [{ mime: "", name: "a.pdf", size: 1 }] };
     const { messages } = applyRows([userRow(1, "t1", { clientMsgId: user.id })], [user], true);

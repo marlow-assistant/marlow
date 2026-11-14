@@ -9,7 +9,7 @@
 // Swapping the `id` of a message already on screen is a row teardown (a React
 // remount), and mid-stream it would break follow-scroll.
 
-import { imageKeysOf, isPhotoMime, sameId } from "./types";
+import { isPhotoMime, sameId } from "./types";
 import type { ChatMessage, FileAttachment, MessageStatus, TranscriptAttachment, TranscriptRow } from "./types";
 
 /** A row's attachment as a chip. `name` and `size` are null on an old row. */
@@ -97,13 +97,18 @@ function mergeUser(
     const quote = messages[own].quote ?? row.quote ?? undefined;
     messages[own] = { ...messages[own], seq: row.seq, ...(quote ? { quote } : {}) };
     // The chips the send drew had the client's own guess of the type and no
-    // id. The row's attachments are the photos in `idx` order, then the files
-    // in the order sent, so file i is the entry after the photos: that is the
-    // stored mime the opener's map is keyed by, and the id it fetches with.
+    // id. The row's files, in the order sent, carry the stored mime the
+    // opener's map is keyed by, and the id it fetches with.
+    //
+    // Files are the entries with a name (the server always gives one; photos
+    // sent through `images` have none), not "whatever follows the photos":
+    // append_user skips an attachment whose copy failed, and counting photos
+    // from the local message would then hand every file its neighbour's id.
+    // A row missing a file is not matched at all, rather than guessed at.
     const local = messages[own].files;
     if (local && local.length > 0) {
-      const rowFiles = row.attachments.slice(imageKeysOf(messages[own]).length);
-      if (rowFiles.length > 0) {
+      const rowFiles = row.attachments.filter((a) => a.name != null);
+      if (rowFiles.length === local.length) {
         messages[own] = { ...messages[own], files: local.map((f, i) => (rowFiles[i] ? asFile(rowFiles[i]) : f)) };
       }
     }

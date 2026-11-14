@@ -449,6 +449,15 @@ system share sheet when its manifest declares `share_target`.
 - Sending files *from* Marlow to the user. Separate.
 - A share extension that waits for Marlow's reply. It sends and closes, and
   the reply arrives in the app with a push as usual.
+- Parked from the code review, 2026-11-14, until one is felt:
+  - UTF-16 text has NUL bytes, so it sniffs as Other. Transcoding it to
+    UTF-8 is the fix if a Windows export ever arrives that way.
+  - An image sent as a file is not downscaled, up to 20MB, and may exceed
+    what the CLI's Read accepts. The fix is to downscale it on the server.
+  - A resend under a live `client_msg_id` writes and converts its files
+    again before enqueue discards it. The 120s client deadlines make that a
+    retry after a real transport failure only. The fix is to skip
+    `_store_files` when `reusable_turn_id` matches.
 
 ## Done means (each phase)
 

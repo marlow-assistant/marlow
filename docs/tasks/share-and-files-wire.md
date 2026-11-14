@@ -50,7 +50,10 @@ User rows' `attachments` entries become `{id, mime, name, size}`:
 - `mime` is the stored value above, never the client's.
 - `name` and `size` (bytes, of the original) are `null` on old rows, and on
   photos sent through `images` (`name` null; `size` is filled for new ones).
-- Photos come first in `idx` order, then files, in the order sent.
+- Photos come first in `idx` order, then files, in the order sent. A file
+  entry always has a `name`; that, not its position, tells a client which
+  entries are its own send's files (an attachment whose copy failed is
+  skipped, which shifts the positions).
 
 `GET /v1/transcript/attachment/{id}` is unchanged: it serves the stored
 `mime`, with `Content-Disposition: attachment` for anything not `image/*`,

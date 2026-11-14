@@ -22,8 +22,8 @@ Tags: *not started*, *specced* (ready for an implementor), *in progress*,
 
 - **Friends alpha** (`friends-alpha.md`): the polish pass, then invite the
   first one or two friends. *in progress*
-- **Share and files** (`share-and-files.md`): share sheet in, files out,
-  four phases. *specced*
+- **Share and files** (`share-and-files.md`): share sheet in, any file
+  type, four phases. *specced*
 - **Image viewer** (`image-viewer.md`): full-screen image view. *specced*
 - **Message retention setting** (`message-retention-setting.md`). *specced*
 - **Drive in the approval card** (`tool-approval-ux.md` pieces 2–3): show

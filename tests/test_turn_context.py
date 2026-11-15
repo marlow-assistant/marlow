@@ -343,6 +343,53 @@ def test_the_drift_notice_names_no_individual_jobs(phone_in, store_zone):
         assert job not in out
 
 
+# --- same clock, same name ----------------------------------------------------
+#
+# Found 2026-11-15: Mike's PC is set to America/Regina on purpose, because its
+# OS doesn't know Alberta's permanent UTC-6, and iOS reported America/Resolute
+# for the same reason. Both read the same clock as the store's America/Edmonton,
+# so the time was right, but every turn told Marlow he was in Saskatchewan.
+# Phoenix and Denver stand in for them: Phoenix never changes its clocks, so the
+# two agree in winter and differ in summer under every tzdata version.
+_WINTER = datetime(2027, 1, 15, 18, 0, tzinfo=dt_timezone.utc)
+
+
+def test_a_device_zone_on_the_stores_clock_is_named_as_the_store(phone_in, store_zone):
+    phone_in("America/Phoenix")
+    store_zone("America/Denver")
+    out = build_turn_context(resume=False, source="chat", now=_WINTER)
+    assert "the user's timezone is America/Denver" in out
+    assert "Phoenix" not in out
+
+
+def test_a_device_zone_on_a_different_clock_still_wins(phone_in, store_zone):
+    """Travel must still move Mike: the rename applies only while the two clocks
+    agree, checked on every turn, so the day they part the device is believed."""
+    phone_in("America/Phoenix")
+    store_zone("America/Denver")
+    out = build_turn_context(resume=False, source="chat", now=_SUMMER)
+    assert "the user's timezone is America/Phoenix" in out
+    assert "still says America/Denver" in out
+
+
+def test_without_a_store_the_device_zone_is_used_as_reported(phone_in, store_zone):
+    phone_in("America/Phoenix")
+    store_zone(None)
+    out = build_turn_context(resume=False, source="chat", now=_WINTER)
+    assert "the user's timezone is America/Phoenix" in out
+
+
+def test_todos_read_the_same_resolved_zone(phone_in, store_zone):
+    """A due time and the [Context] line must mean the same zone, so both go
+    through one resolver rather than each reading the pairing store."""
+    from server.todos import user_zone
+
+    phone_in("America/Phoenix")
+    store_zone("America/Denver")
+    assert str(user_zone(now=_WINTER)) == "America/Denver"
+    assert str(user_zone(now=_SUMMER)) == "America/Phoenix"
+
+
 def test_drift_the_other_way_says_earlier(phone_in, store_zone):
     phone_in("America/Edmonton")
     store_zone("America/St_Johns")

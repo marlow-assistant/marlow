@@ -99,17 +99,17 @@ class TodoNotFound(TodoError):
 TODO_QUOTE_EMOJI = "☑️"
 
 
-def user_zone() -> ZoneInfo:
-    """The zone a bare local time means: the phone's, else the schedule
-    store's, else the server's. Never raises."""
-    from server.pairing import pairing_store
-    from server.turn_context import _schedule_zone, is_valid_timezone
+def user_zone(now: datetime | None = None) -> ZoneInfo:
+    """The zone a bare local time means: the phone's (as `turn_context`
+    resolves it), else the schedule store's, else the server's. Never raises."""
+    from server.turn_context import _schedule_zone, user_timezone
 
     try:
-        zone = pairing_store.latest_timezone()
+        # Valid or None: user_timezone checks the name itself.
+        zone = user_timezone(now or datetime.now(timezone.utc))
     except Exception:
         zone = None
-    if not (zone and is_valid_timezone(zone)):
+    if not zone:
         zone = _schedule_zone()
     if zone:
         return ZoneInfo(zone)

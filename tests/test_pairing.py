@@ -238,6 +238,53 @@ def test_latest_timezone_prefers_the_most_recent_report():
     assert pairing_store.latest_timezone() == "Europe/Lisbon"
 
 
+def test_a_device_still_reporting_its_zone_outranks_one_that_changed_later(monkeypatch):
+    """Recency is of the last REPORT, not the last change. Found 2026-11-15:
+    the phone reported the same zone on every message, but its stamp dated from
+    when that zone last changed, so a PC whose zone changed two days later won
+    every turn after, including turns sent from the phone."""
+    import time
+
+    # Ahead of the real clock: the store is shared, and an earlier test's real
+    # stamp must not be what wins.
+    clock = [time.time() + 30 * 86400]
+    monkeypatch.setattr("server.pairing.time.time", lambda: clock[0])
+    phone = _pair("iPhone")
+    pc = _pair("Chrome on Windows")
+
+    pairing_store.set_timezone(phone, "America/Phoenix")
+    clock[0] += 2 * 86400
+    pairing_store.set_timezone(pc, "America/Denver")
+    clock[0] += 3600
+    pairing_store.set_timezone(phone, "America/Phoenix")
+
+    assert pairing_store.latest_timezone() == "America/Phoenix"
+
+
+def test_an_unchanged_zone_restamps_once_its_stamp_is_stale(monkeypatch):
+    """Recency needs the restamp; the disk needs it rare. Inside the window a
+    repeat report writes nothing, past it exactly one write."""
+    import time
+
+    from server.pairing import _TIMEZONE_RESTAMP_SECONDS
+
+    clock = [time.time() + 60 * 86400]
+    monkeypatch.setattr("server.pairing.time.time", lambda: clock[0])
+    token = _pair()
+    pairing_store.set_timezone(token, "America/Phoenix")
+
+    writes = []
+    monkeypatch.setattr(pairing_store, "_save_tokens", lambda: writes.append(1))
+    clock[0] += _TIMEZONE_RESTAMP_SECONDS - 1
+    pairing_store.set_timezone(token, "America/Phoenix")
+    assert writes == []
+    clock[0] += 2
+    pairing_store.set_timezone(token, "America/Phoenix")
+    assert writes == [1]
+    pairing_store.set_timezone(token, "America/Phoenix")
+    assert writes == [1]
+
+
 def test_set_timezone_on_unknown_device_token_is_a_noop():
     pairing_store.set_timezone("not-a-real-device-token", "Europe/Lisbon")
 

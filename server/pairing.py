@@ -32,6 +32,11 @@ import time
 from server.config import settings
 from server.log import get_logger
 
+# How stale an unchanged zone's report stamp may get before a report rewrites
+# it. Short enough that the device in use wins within minutes, long enough that
+# a conversation is not a disk write per message.
+_TIMEZONE_RESTAMP_SECONDS = 300
+
 logger = get_logger(__name__)
 
 _INVITE_TTL_SECONDS = 10 * 60
@@ -248,16 +253,29 @@ class PairingStore:
         out-vote the handset actually in Mike's pocket just by having been
         paired later.
 
+        The stamp is of the last REPORT, not the last change. Until 2026-11-15
+        it moved only when the zone changed, so a phone sending the same zone
+        on every message kept a stamp from days ago, and a PC whose zone had
+        changed since won every turn, the phone's own included. An unchanged
+        zone still skips the disk write unless its stamp is
+        `_TIMEZONE_RESTAMP_SECONDS` old, so recency is that coarse at worst.
+
         Same no-op-on-unknown-token contract as `set_apns_token`.
         """
+        now = time.time()
         with self._lock:
             entry = self._entry(device_token)
             if entry is None:
                 return
             if entry.get("timezone") == timezone:
-                return  # unchanged; skip the disk write on every single turn
+                # Unchanged: rewrite only a stale stamp, not on every turn.
+                if now - entry.get("timezone_reported_at", 0.0) < _TIMEZONE_RESTAMP_SECONDS:
+                    return
+                entry["timezone_reported_at"] = now
+                self._save_tokens()
+                return
             entry["timezone"] = timezone
-            entry["timezone_reported_at"] = time.time()
+            entry["timezone_reported_at"] = now
             self._save_tokens()
             logger.info("device timezone now %s", timezone)
 

@@ -226,6 +226,40 @@ def _schedule_zone() -> str | None:
     return zone if isinstance(zone, str) and is_valid_timezone(zone) else None
 
 
+def user_timezone(moment: datetime) -> str | None:
+    """The user's zone name: the latest device report, renamed to the schedule
+    store's zone while the two read the same clock at `moment`. None when no
+    device has reported. Raises only what the pairing store does.
+
+    Found 2026-11-15: Mike's PC is set to America/Regina on purpose, because
+    its OS doesn't know Alberta's permanent UTC-6, and iOS picked
+    America/Resolute for the same reason. Both read the store's America/Edmonton
+    clock, so the time was right, but every turn told Marlow he was in
+    Saskatchewan, and it reasoned from that. A device's zone NAME can be a
+    workaround or an OS guess; its offset is the clock the user is looking at.
+    The store's zone is the one the user and Marlow chose on purpose, so it is
+    the better name whenever it agrees.
+
+    Agreement is checked at `moment`, every turn, not once: on the day the
+    clocks part (travel, or a guessed zone changing its clocks when the real
+    one doesn't), the device is believed again and the drift sentence says so.
+    The cost is someone really in Regina while the store says Edmonton is named
+    Edmonton; the clock is the same, and the location sentence says where.
+
+    `todos.user_zone` goes through here too, so a due time and the [Context]
+    line can never mean different zones.
+    """
+    zone = pairing_store.latest_timezone()
+    if not (zone and is_valid_timezone(zone)):
+        return None
+    store = _schedule_zone()
+    if store is None or store == zone:
+        return zone
+    if moment.astimezone(ZoneInfo(store)).utcoffset() == moment.astimezone(ZoneInfo(zone)).utcoffset():
+        return store
+    return zone
+
+
 def _rejection_sentence() -> str:
     """Tell Marlow its schedule store is being refused, if it is.
 
@@ -558,8 +592,8 @@ def build_turn_context(
         # pairing store first means a transient read failure can no longer
         # swallow a six-hour gap on its way to the `except` below (review,
         # 2026-08-07). Nothing after this line can raise.
-        zone = pairing_store.latest_timezone()
-        local = moment.astimezone(ZoneInfo(zone)) if zone and is_valid_timezone(zone) else None
+        zone = user_timezone(moment)
+        local = moment.astimezone(ZoneInfo(zone)) if zone else None
         # Also before the gap is consumed, for the same reason: this one reads
         # a file, and a file read that raises must not be able to swallow a
         # six-hour gap.

@@ -1,5 +1,5 @@
 {
-  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 30.",
+  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 31.",
   "entries": [
     {
       "id": 1,
@@ -196,6 +196,13 @@
       "part": "app",
       "category": "feature",
       "text": "Tap a photo in a message to see it full screen, even in older messages. With several photos, swipe between them."
+    },
+    {
+      "id": 30,
+      "date": "2026-11-15",
+      "part": "server",
+      "category": "fix",
+      "text": "When a computer is set to a different timezone that shows the same time as your phone (a common workaround when a system doesn't know your area's rules), Marlow no longer thinks you've travelled. The timezone in your schedules is kept as long as the clocks agree."
     }
   ]
 }

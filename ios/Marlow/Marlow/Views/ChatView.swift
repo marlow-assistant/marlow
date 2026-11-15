@@ -2441,7 +2441,10 @@ private struct MessageRow: View {
 
     private var bubble: some View {
         VStack(alignment: .leading, spacing: 8) {
+            // Its own presenter, apart from the file chips' one: the tap
+            // set photoPreviewURL and nothing showed it (2026-11-15).
             imageGrid
+                .quickLookPreview($photoPreviewURL, in: photoPreviewURLs)
             fileChips
             if let quote = message.quote, isUser {
                 IdeaQuoteBlock(quote: quote)

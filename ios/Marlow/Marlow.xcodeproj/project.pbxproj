@@ -167,6 +167,7 @@
 		E2B7EFA9FA3555E98E5E786A /* WhatsNewSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D42146C2836FFE18A8BFC8D9 /* WhatsNewSheet.swift */; };
 		E4906A726FFA820997C655B3 /* ChatHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 564A70D3D6F42C365F486684 /* ChatHaptics.swift */; };
 		E4B654AC102E3DA16F262701 /* TurnPrefetchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 157A95D833EB44006B55F62E /* TurnPrefetchTests.swift */; };
+		E66F817AF5515FCFDB69178D /* PhotoViewerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D35131E10ECDBE8D4E0AFE1B /* PhotoViewerTests.swift */; };
 		E7EC6672A2284E85D510DB32 /* DictationTranscriptionPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C1D79B042CE651DB8E05CE /* DictationTranscriptionPipeline.swift */; };
 		E8301EDD6FD718D9AB0E63E1 /* FileDisplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79A4FC17F22C37A21A3EB8B3 /* FileDisplay.swift */; };
 		E9320B1669D565C0D5B6C709 /* WhatsNew.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10F71382E76BD272A7115B3F /* WhatsNew.swift */; };
@@ -371,6 +372,7 @@
 		CFFF184C4D40EBA6ED70FFD0 /* notice-vbx.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "notice-vbx.txt"; sourceTree = "<group>"; };
 		D0AECDDE67F0CDF5DBBAFA2B /* DictationOutcomeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationOutcomeTests.swift; sourceTree = "<group>"; };
 		D18A697FB1401792B0B1B0AC /* ShareOutboxDrainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareOutboxDrainTests.swift; sourceTree = "<group>"; };
+		D35131E10ECDBE8D4E0AFE1B /* PhotoViewerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoViewerTests.swift; sourceTree = "<group>"; };
 		D42146C2836FFE18A8BFC8D9 /* WhatsNewSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewSheet.swift; sourceTree = "<group>"; };
 		D5086A5D7241663C6AF0E35E /* PermissionSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionSummaryTests.swift; sourceTree = "<group>"; };
 		D59BE591B8306AD83BFD85EE /* MarlowTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MarlowTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -644,6 +646,7 @@
 				30759200E505FE39E80A0C8F /* OpenSourceNoticesTests.swift */,
 				F5A002261E6D1498D48F1098 /* PairedHostTests.swift */,
 				D5086A5D7241663C6AF0E35E /* PermissionSummaryTests.swift */,
+				D35131E10ECDBE8D4E0AFE1B /* PhotoViewerTests.swift */,
 				0C23E2382D445E1F670304AE /* PreferenceSyncTests.swift */,
 				04208373DDD4C3CAE5EF9F6D /* ReplyFollowTests.swift */,
 				15E8B7C8B4296D538703698D /* ScheduleFormatTests.swift */,
@@ -1004,6 +1007,7 @@
 				CD11B26434A944DCF853CA65 /* OpenSourceNoticesTests.swift in Sources */,
 				C6762685AE0477FF4DA216B6 /* PairedHostTests.swift in Sources */,
 				A7F2713CF4EF3602076A8F45 /* PermissionSummaryTests.swift in Sources */,
+				E66F817AF5515FCFDB69178D /* PhotoViewerTests.swift in Sources */,
 				13822A594F67E1283E8A0B6A /* PreferenceSyncTests.swift in Sources */,
 				8C42B6A03B2DA9620E445D36 /* ReplyFollowTests.swift in Sources */,
 				F2D85B27CC94E19216DC6A92 /* ScheduleFormatTests.swift in Sources */,

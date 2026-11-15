@@ -153,6 +153,13 @@ struct ChatMessage: Identifiable, Codable, Equatable {
         return attachmentId.map { [$0] } ?? []
     }
 
+    /// The bubble's photo slots, as filenames in `ChatStore`'s attachment
+    /// directory: a server row's follow its attachment ids (so a photo still
+    /// downloading keeps its place); this phone's own send has filenames only.
+    var photoSlots: [String] {
+        allAttachmentIds.isEmpty ? allImageFilenames : allAttachmentIds.map { "\($0).jpg" }
+    }
+
     /// Attachment ids whose file this message does not list yet: the ones a
     /// fetch still has to bring down.
     var undownloadedAttachmentIds: [String] {

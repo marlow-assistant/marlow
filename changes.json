@@ -1,5 +1,5 @@
 {
-  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 29.",
+  "_readme": "What the user is told changed. Policy and format: docs/tasks/whats-new.md. Add an entry in the same PR as the change; ids only go up and are never reused. 5 is skipped (a retired device test entry): the next id is 30.",
   "entries": [
     {
       "id": 1,
@@ -189,6 +189,13 @@
       "part": "app",
       "category": "feature",
       "text": "Share to Marlow from other apps. On iPhone, choose Marlow in the share sheet. On Android, install Marlow to your home screen first, then it appears when you share."
+    },
+    {
+      "id": 29,
+      "date": "2026-11-14",
+      "part": "app",
+      "category": "feature",
+      "text": "Tap a photo in a message to see it full screen, even in older messages. With several photos, swipe between them."
     }
   ]
 }

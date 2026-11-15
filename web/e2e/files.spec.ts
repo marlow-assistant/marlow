@@ -170,7 +170,7 @@ interface Att {
   name: string | null;
   size: number | null;
   /** What the (mock) endpoint answers with. */
-  serve: { contentType: string; body: string };
+  serve: { contentType: string; body: string | Buffer };
 }
 
 /** A transcript of one user row from "another device" with these attachments,
@@ -317,6 +317,138 @@ test("a docx and a PDF download under their own names; a text file opens in a ta
   // not a page: the tab's address is the blob and the app's own page is not it.
   await tab.waitForURL(/^blob:/);
   await expectNothingRan(page);
+});
+
+// --- a photo in an old message, full screen (Mike, 2026-11-14) ------------------
+
+const photo = (id: string, rgb: [number, number, number]): Att => ({
+  id,
+  mime: "image/jpeg",
+  name: null,
+  size: null,
+  serve: { contentType: "image/png", body: pngBuffer(64, 48, rgb) },
+});
+const viewer = (page: Page) => page.getByTestId("photo-viewer");
+
+test("tapping a photo in an old message opens it full screen, steps through the message's photos, and Escape closes it", async ({
+  newDevice,
+}) => {
+  const atts = [photo("p-1", [200, 60, 40]), photo("p-2", [40, 200, 60]), photo("p-3", [40, 60, 200])];
+  const { page } = await newDevice({ setup: async (p) => void (await serveFiles(p, atts)) });
+  const user = page.locator(".row[data-role=user]").filter({ hasText: "files from the phone" });
+  const tiles = user.locator("img.bubble-tile");
+  await expect(tiles).toHaveCount(3);
+
+  await tiles.nth(1).click();
+  await expect(viewer(page)).toBeVisible();
+  const shown = viewer(page).locator("img");
+  await expect(shown).toHaveAttribute("src", (await tiles.nth(1).getAttribute("src"))!);
+  await expect(viewer(page)).toContainText("2 of 3");
+  const box = await rectOf(shown);
+  const vp = page.viewportSize()!;
+  expect(box.width, "bigger than its tile").toBeGreaterThan((await rectOf(tiles.nth(1))).width);
+  expect(box.right).toBeLessThanOrEqual(vp.width + 1);
+  expect(box.bottom).toBeLessThanOrEqual(vp.height + 1);
+
+  await page.getByRole("button", { name: "Next photo" }).click();
+  await expect(shown).toHaveAttribute("src", (await tiles.nth(2).getAttribute("src"))!);
+  await expect(viewer(page)).toContainText("3 of 3");
+  await expect(page.getByRole("button", { name: "Next photo" })).toBeDisabled();
+  await page.keyboard.press("ArrowLeft");
+  await expect(viewer(page)).toContainText("2 of 3");
+
+  await page.keyboard.press("Escape");
+  await expect(viewer(page)).toHaveCount(0);
+});
+
+test("a single photo opens with no counter or arrows, and a tap on it closes the viewer", async ({ newDevice }) => {
+  const { page } = await newDevice({ setup: async (p) => void (await serveFiles(p, [photo("p-one", [9, 9, 9])])) });
+  const user = page.locator(".row[data-role=user]").filter({ hasText: "files from the phone" });
+  await user.locator("img.bubble-image").click();
+  await expect(viewer(page)).toBeVisible();
+  await expect(viewer(page)).not.toContainText("of 1");
+  await expect(page.getByRole("button", { name: "Next photo" })).toHaveCount(0);
+  await viewer(page).locator("img").click();
+  await expect(viewer(page)).toHaveCount(0);
+});
+
+test("Back closes the photo viewer and leaves the app where it was", async ({ newDevice }) => {
+  const { page } = await newDevice({ setup: async (p) => void (await serveFiles(p, [photo("p-back", [9, 9, 9])])) });
+  const url = page.url();
+  const user = page.locator(".row[data-role=user]").filter({ hasText: "files from the phone" });
+  await user.locator("img.bubble-image").click();
+  await expect(viewer(page)).toBeVisible();
+  await page.goBack();
+  await expect(viewer(page)).toHaveCount(0);
+  expect(page.url()).toBe(url);
+  await expect(user).toBeVisible();
+  // Closing by Escape takes its history entry with it: a second open and
+  // close leaves Back with nothing of the viewer's to undo.
+  await user.locator("img.bubble-image").click();
+  await page.keyboard.press("Escape");
+  await expect(viewer(page)).toHaveCount(0);
+  expect(await page.evaluate(() => history.state?.photoViewer ?? null)).toBeNull();
+});
+
+test("the ✕ closes the viewer with one step of history, so the app stays put", async ({ newDevice }) => {
+  const { page } = await newDevice({ setup: async (p) => void (await serveFiles(p, [photo("p-x", [9, 9, 9])])) });
+  const url = page.url();
+  const depth = await page.evaluate(() => history.length);
+  const user = page.locator(".row[data-role=user]").filter({ hasText: "files from the phone" });
+  await user.locator("img.bubble-image").click();
+  await expect(page.getByRole("button", { name: "Close" })).toBeFocused();
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(viewer(page)).toHaveCount(0);
+  await page.waitForTimeout(300); // a second, bubbled history.back() would land by now
+  expect(page.url()).toBe(url);
+  await expect(user).toBeVisible();
+  expect(await page.evaluate(() => history.state?.photoViewer ?? null)).toBeNull();
+  expect(await page.evaluate(() => history.length)).toBe(depth + 1); // the popped entry is still forward
+});
+
+test("a photo landing while the viewer is open doesn't change the one on screen", async ({ newDevice }) => {
+  let release!: () => void;
+  const held = new Promise<void>((r) => (release = r));
+  const atts = [photo("p-a", [200, 60, 40]), photo("p-late", [40, 200, 60]), photo("p-c", [40, 60, 200])];
+  const { page } = await newDevice({
+    setup: async (p) => {
+      await serveFiles(p, atts);
+      await p.route("**/v1/transcript/attachment/p-late", async (route) => {
+        await held;
+        await route.fulfill({ status: 200, contentType: "image/png", body: pngBuffer(64, 48, [40, 200, 60]) });
+      });
+    },
+  });
+  const user = page.locator(".row[data-role=user]").filter({ hasText: "files from the phone" });
+  const tiles = user.locator("img.bubble-tile");
+  await expect(tiles).toHaveCount(2);
+  const third = (await tiles.nth(1).getAttribute("src"))!;
+  await tiles.nth(1).click();
+  await expect(viewer(page)).toContainText("2 of 2");
+  release();
+  await expect(tiles).toHaveCount(3);
+  await expect(viewer(page)).toContainText("3 of 3");
+  await expect(viewer(page).locator("img")).toHaveAttribute("src", third);
+});
+
+test("a photo that never arrived stays a grey square that opens nothing", async ({ newDevice }) => {
+  const { page } = await newDevice({
+    setup: async (p) => {
+      await serveFiles(p, [photo("p-ok", [9, 9, 9]), photo("p-404", [9, 9, 9])]);
+      // Registered last, so it wins over serveFiles' route for this one id.
+      await p.route("**/v1/transcript/attachment/p-404", (route) => route.fulfill({ status: 404, body: "gone" }));
+    },
+  });
+  const user = page.locator(".row[data-role=user]").filter({ hasText: "files from the phone" });
+  await expect(user.locator("img.bubble-tile")).toHaveCount(1);
+  const grey = user.locator(".bubble-tile.placeholder-image");
+  await expect(grey).toHaveCount(1);
+  await grey.click({ force: true });
+  await expect(viewer(page)).toHaveCount(0);
+  // The one that did arrive is the only one the viewer steps through.
+  await user.locator("img.bubble-tile").click();
+  await expect(viewer(page)).toBeVisible();
+  await expect(viewer(page)).not.toContainText("of 2");
 });
 
 // --- Android's share target ----------------------------------------------------

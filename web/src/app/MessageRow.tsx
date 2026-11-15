@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useState } from "react";
 import { describesUnseenWork, THINKING, WRITING } from "../lib/activity";
 import type { ChatStore } from "../lib/chatStore";
 import { segments } from "../lib/partialText";
@@ -10,6 +10,7 @@ import { Copyable } from "./CopyMenu";
 import { FileIcon } from "./Icons";
 import { useImageUrl, useStream } from "./hooks";
 import { useReadAloud } from "./ReadAloud";
+import { PhotoViewer } from "./PhotoViewer";
 
 export interface RowProps {
   message: ChatMessage;
@@ -46,22 +47,42 @@ export const MessageRow = memo(function MessageRow(props: RowProps) {
   );
 });
 
-/** One photo, or the grey square it will be. `tile` fills a grid cell. */
+/** One photo, or the grey square it will be. `tile` fills a grid cell. A
+ * loaded photo opens full screen when tapped; the grey square has nothing to
+ * open. The img itself is the control, not a wrapping button, so the bubble's
+ * `:last-child` margins and the grid cells stay as they were. */
 function BubbleImage({
   store,
   imageKey,
   onImageLoad,
+  onOpen,
   tile = false,
 }: {
   store: ChatStore;
   imageKey: string | undefined;
   onImageLoad: () => void;
+  onOpen: () => void;
   tile?: boolean;
 }) {
   const url = useImageUrl(store, imageKey);
   const cls = tile ? "bubble-tile" : "bubble-image";
   return url ? (
-    <img className={cls} src={url} alt="Attached photo" onLoad={onImageLoad} />
+    <img
+      className={`${cls} bubble-photo`}
+      src={url}
+      alt="Attached photo"
+      role="button"
+      tabIndex={0}
+      aria-label="Open photo"
+      onLoad={onImageLoad}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+    />
   ) : (
     <div className={`${cls} placeholder-image`} aria-label="Photo loading" />
   );
@@ -108,6 +129,10 @@ function UserBubble({ message, store, failedReply, onImageLoad }: RowProps) {
   const ids = attachmentIdsOf(message);
   const keys = ids.length > 0 ? ids.map((id) => `att:${id}`) : imageKeysOf(message);
   const have = imageKeysOf(message);
+  // The photos the viewer steps through: the loaded ones, in bubble order.
+  const loaded = keys.filter((key) => have.includes(key));
+  const [viewing, setViewing] = useState<string | null>(null);
+  const open = (key: string) => () => setViewing(key);
   return (
     <>
       <div className="user-line">
@@ -124,7 +149,12 @@ function UserBubble({ message, store, failedReply, onImageLoad }: RowProps) {
         )}
         <div className="bubble bubble-user">
           {keys.length === 1 && (
-            <BubbleImage store={store} imageKey={have.includes(keys[0]) ? keys[0] : undefined} onImageLoad={onImageLoad} />
+            <BubbleImage
+              store={store}
+              imageKey={have.includes(keys[0]) ? keys[0] : undefined}
+              onImageLoad={onImageLoad}
+              onOpen={open(keys[0])}
+            />
           )}
           {keys.length > 1 && (
             <div className={`bubble-grid bubble-grid-${keys.length}`} data-testid="bubble-grid">
@@ -134,6 +164,7 @@ function UserBubble({ message, store, failedReply, onImageLoad }: RowProps) {
                   store={store}
                   imageKey={have.includes(key) ? key : undefined}
                   onImageLoad={onImageLoad}
+                  onOpen={open(key)}
                   tile
                 />
               ))}
@@ -154,6 +185,14 @@ function UserBubble({ message, store, failedReply, onImageLoad }: RowProps) {
         </div>
       </div>
       {failedReply && <ErrorCaption text={failedReply.text} className="failed-caption" />}
+      {viewing !== null && loaded.length > 0 && (
+        <PhotoViewer
+          store={store}
+          keys={loaded}
+          start={viewing}
+          onClose={() => setViewing(null)}
+        />
+      )}
     </>
   );
 }

@@ -2181,6 +2181,17 @@ final class ChatStore: ObservableObject {
         return image
     }
 
+    /// The on-disk JPEG behind a bubble's photo, for QuickLook when it is
+    /// tapped, or nil while it is still downloading. What it opens is the
+    /// downscaled copy that was sent (1568px long edge), not the original;
+    /// there is no other on the box or the phone. Filenames come from our own
+    /// ids, but one that names a path is refused rather than trusted.
+    func photoURL(filename: String) -> URL? {
+        guard !filename.isEmpty, !filename.contains("/"), !filename.contains("..") else { return nil }
+        let url = attachmentsDirectoryURL.appendingPathComponent(filename)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+    }
+
     /// The persisted file: the cursor, the "more on the server" flag, and the
     /// messages — server rows and this phone's own outbox together.
     struct TranscriptCache: Codable {
